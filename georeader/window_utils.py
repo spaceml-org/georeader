@@ -73,3 +73,21 @@ def get_slice_pad(window_data:rasterio.windows.Window,
     pad_width = {"x": (pad_x_0, pad_x_1), "y": (pad_y_0, pad_y_1)}
 
     return slice_dict, pad_width
+
+
+def normalize_bounds(bounds:Tuple[float, float, float, float], margin_add_if_equal:float=.0005) -> Tuple[float, float, float, float]:
+    """ Return bounds with a small margin if it is not a rectangle """
+    xmin = min(bounds[0], bounds[2])
+    ymin = min(bounds[1], bounds[3])
+    xmax = max(bounds[0], bounds[2])
+    ymax = max(bounds[1], bounds[3])
+
+    if xmin >= xmax:
+        xmin-=margin_add_if_equal
+        xmax+=margin_add_if_equal
+
+    if ymin >= ymax:
+        ymin-= margin_add_if_equal
+        ymax+=margin_add_if_equal
+
+    return xmin, ymin, xmax, ymax

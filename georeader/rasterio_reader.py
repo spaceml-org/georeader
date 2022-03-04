@@ -6,6 +6,7 @@ import warnings
 import numbers
 from georeader import geotensor
 from collections.abc import Iterable
+from georeader.window_utils import normalize_bounds
 
 
 class RasterioReader:
@@ -169,7 +170,7 @@ class RasterioReader:
         self.height = self.window_focus.height
         self.width = self.window_focus.width
 
-        self.bounds = rasterio.windows.bounds(self.window_focus, self.real_transform)
+        self.bounds = normalize_bounds(rasterio.windows.bounds(self.window_focus, self.real_transform))
         self.transform = rasterio.windows.transform(self.window_focus, self.real_transform)
 
 

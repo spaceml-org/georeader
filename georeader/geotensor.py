@@ -68,8 +68,8 @@ class GeoTensor:
 
     @property
     def bounds(self) -> Tuple[float, float, float, float]:
-        return rasterio.windows.bounds(rasterio.windows.Window(row_off=0, col_off=0, height=self.height, width=self.width),
-                                       self.transform)
+        return window_utils.normalize_bounds(rasterio.windows.bounds(rasterio.windows.Window(row_off=0, col_off=0, height=self.height, width=self.width),
+                                                                     self.transform))
 
     @property
     def attrs(self) -> Dict[str, Any]:
