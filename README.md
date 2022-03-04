@@ -10,6 +10,7 @@ WIP
 * `read_tile` function + example of serving images
 * `xarray` wrapper (cast function)
 * `RasterioReader` include `descriptions` to retrieve band names.
+* Add extent polygon (out of that area values are invalids)?
 
 Examples folder:
 * Tutorial basic usage
