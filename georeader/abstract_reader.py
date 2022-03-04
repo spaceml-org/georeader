@@ -9,12 +9,8 @@ class AbstractGeoData:
     def __init__(self):
         self.dtype = np.float32
         self.dims = ("y", "x")
+        # TODO replace fill_value_default with nodata
         self.fill_value_default = 0
-
-    @property
-    def values(self) -> np.ndarray:
-        # return np.zeros(self.shape, dtype=self.dtype)
-        raise NotImplementedError("Not implemented")
 
     @property
     def shape(self) -> Tuple:
@@ -47,4 +43,9 @@ class AbstractGeoData:
 
     def load(self, boundless:bool=True)-> GeoTensor:
         # return GeoTensor(values=self.values, transform=self.transform, crs=self.crs)
+        raise NotImplementedError("Not implemented")
+
+    @property
+    def values(self) -> np.ndarray:
+        # return np.zeros(self.shape, dtype=self.dtype)
         raise NotImplementedError("Not implemented")

@@ -10,48 +10,10 @@ import itertools
 from georeader.geotensor import GeoTensor
 from georeader.window_utils import PIXEL_PRECISION, pad_window, round_outer_window
 from georeader import save_cog
+from georeader.abstract_reader import AbstractGeoData
 
 
 # Functions in this module tagged as GeoData must have the following properties and methods
-
-class AbstractGeoData:
-    def __init__(self):
-        self.dtype = np.uint16
-        self.dims = ("y", "x")
-        self.fill_value_default = 0
-
-    @property
-    def values(self) -> np.ndarray:
-        return np.zeros(self.shape, dtype=self.dtype)
-
-    @property
-    def shape(self) -> Tuple:
-        return 1000, 3000
-
-    @property
-    def transform(self) -> rasterio.Affine:
-        return rasterio.Affine(10, 0, 200, 0, 10, 400)
-
-    @property
-    def resolution(self) -> Tuple[float, float]:
-        transform = self.transform
-        return abs(transform.a), abs(transform.e)
-
-    @property
-    def crs(self) -> Any:
-        return "EPSG:4326"
-
-    @property
-    def bounds(self) -> Tuple[float, float, float, float]:
-        return rasterio.windows.bounds(rasterio.windows.Window(col_off=0, row_off=0, width=self.shape[1], height=self.shape[0]),
-                                       self.transform)
-
-    def read_from_window(self, window:rasterio.windows.Window, boundless:bool) -> Union['__class__', GeoTensor]:
-        return GeoTensor(values=self.values, transform=self.transform, crs=self.crs)
-
-    def load(self, boundless:bool=True)-> GeoTensor:
-        return GeoTensor(values=self.values, transform=self.transform, crs=self.crs)
-
 
 GeoData = Union[GeoTensor, AbstractGeoData]
 
