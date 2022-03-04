@@ -76,6 +76,7 @@ class RasterioReader:
             self.real_bounds = src.bounds
             self.resolution = src.res
 
+        # TODO if transform is not rectilinear with b == 0 and d==0 reading boundless does not work
         if not self.real_transform.is_rectilinear:
             warnings.warn(f"transform of {self.paths[0]} is not rectilinear {self.real_transform}. "
                           f"The vast majority of the code expect rectilinear transforms. This transform "
@@ -173,8 +174,6 @@ class RasterioReader:
         self.bounds = normalize_bounds(rasterio.windows.bounds(self.window_focus, self.real_transform))
         self.transform = rasterio.windows.transform(self.window_focus, self.real_transform)
 
-
-
     def tags(self) -> Union[List[Dict[str, str]], Dict[str, str]]:
         """
         Returns a list with the tags for each tiff file.
@@ -190,6 +189,23 @@ class RasterioReader:
             return tags[0]
 
         return tags
+
+    def descriptions(self) -> Union[List[List[str]], List[str]]:
+        """
+        Returns a list with the descriptions for each tiff file. (This is usually the name of the files)
+
+        If stack and len(self.paths) == 1 it returns just the List with the descriptions
+        """
+        descriptions_all = []
+        for i, p in enumerate(self.paths):
+            with rasterio.open(p, "r") as src:
+                desc = src.descriptions
+            descriptions_all.append([desc[i-1] for i in self.indexes])
+
+        if (not self.stack) and (len(descriptions_all) == 1):
+            return descriptions_all[0]
+
+        return descriptions_all
 
     def read_from_window(self, window:rasterio.windows.Window, boundless:bool=True) -> '__class__':
         """
