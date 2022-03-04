@@ -76,9 +76,9 @@ class RasterioReader:
             self.resolution = src.res
 
         if not self.real_transform.is_rectilinear:
-            raise NotImplementedError(f"transform of {self.paths[0]} is not rectilinear {self.real_transform}. "
-                                      f"The vast majority of the code expect rectilinear transforms. This transform "
-                                      f"could cause unexpected behaviours")
+            warnings.warn(f"transform of {self.paths[0]} is not rectilinear {self.real_transform}. "
+                          f"The vast majority of the code expect rectilinear transforms. This transform "
+                          f"could cause unexpected behaviours")
 
         self.attrs = {}
         self.window_focus = rasterio.windows.Window(row_off=0, col_off=0,
