@@ -94,6 +94,10 @@ def window_from_center_coords(data_in: GeoData, center_coords:Tuple[float, float
 
     # The compute of the corner coordinates from the center is the same as in utils.polygon_slices
     transform = data_in.transform
+
+    # TODO does this work if transform is transposed?
+    assert transform.is_rectilinear(), "Transform is not rectilear"
+
     upper_left_coords = (center_coords[0] - (transform.a * shape[1] / 2),
                          center_coords[1] - (transform.e * shape[0] / 2))
     pixel_upper_left = _round_all(~transform * upper_left_coords)
@@ -255,6 +259,7 @@ def read_reproject(data_in: GeoData, bounds: Tuple[float, float, float, float],
     named_shape = OrderedDict(zip(data_in.dims, data_in.shape))
 
     # Compute affine transform out crs
+    # TODO allow for a transform (so that it doesn't force to rectilinear transform)
     dst_transform = rasterio.transform.from_origin(min(bounds[0], bounds[2]),
                                                    max(bounds[1], bounds[3]),
                                                    resolution_dst_crs[0], resolution_dst_crs[1])

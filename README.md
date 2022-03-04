@@ -11,6 +11,7 @@ WIP
 * `xarray` wrapper (cast function)
 * `RasterioReader` include `descriptions` to retrieve band names.
 * Add extent polygon (out of that area values are invalids)?
+* Add plotting
 
 Examples folder:
 * Tutorial basic usage
