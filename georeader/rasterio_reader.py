@@ -6,7 +6,7 @@ import warnings
 import numbers
 from georeader import geotensor
 from collections.abc import Iterable
-from georeader.window_utils import normalize_bounds
+from georeader.window_utils import normalize_bounds, get_slice_pad
 
 
 class RasterioReader:
@@ -85,6 +85,8 @@ class RasterioReader:
         self.attrs = {}
         self.window_focus = rasterio.windows.Window(row_off=0, col_off=0,
                                                     width=self.real_width, height=self.real_height)
+        self.real_window = rasterio.windows.Window(row_off=0, col_off=0,
+                                                   width=self.real_width, height=self.real_height)
         self.set_indexes(self.real_indexes, relative=False)
         self.set_window(window_focus, relative=False)
 
@@ -164,9 +166,7 @@ class RasterioReader:
             self.window_focus = window_focus
 
         if not boundless:
-            window_real = rasterio.windows.Window(row_off=0, col_off=0,
-                                                  width=self.real_width, height=self.real_height)
-            self.window_focus = rasterio.windows.intersection(window_real, self.window_focus)
+            self.window_focus = rasterio.windows.intersection(self.real_window, self.window_focus)
 
         self.height = self.window_focus.height
         self.width = self.window_focus.width
@@ -387,6 +387,12 @@ class RasterioReader:
         if "boundless" not in kwargs:
             kwargs["boundless"] = True
 
+        if not rasterio.windows.intersect([self.real_window, window]) and not kwargs["boundless"]:
+            return None
+
+        if not kwargs["boundless"]:
+            window = window.intersection(self.real_window)
+
         if "fill_value" not in kwargs:
             kwargs["fill_value"] = self.fill_value_default
 
@@ -415,23 +421,22 @@ class RasterioReader:
                 raise NotImplementedError(f"Expected out_shape of len 2 or 3 found out_shape: {kwargs['out_shape']}")
             spatial_shape = kwargs["out_shape"][1:]
         else:
-            if kwargs["boundless"]:
-                spatial_shape = (window.height, window.width)
-            else:
-                start_col = max(window.col_off, 0)
-                end_col = min(window.col_off+window.width, self.real_width)
-                start_row = max(window.row_off, 0)
-                end_row = min(window.row_off+window.height, self.real_height)
-                spatial_shape = (end_row-start_row, end_col-start_col)
+            spatial_shape = (window.height, window.width)
 
         shape = (len(self.paths), n_bands_read) + spatial_shape
 
-        obj_out = np.ndarray(shape, dtype=self.dtype)
+        obj_out = np.zeros(shape, dtype=self.dtype)
+        if not rasterio.windows.intersect([self.real_window, window]):
+            obj_out[...] = kwargs["fill_value"]
+        else:
+            for i, p in enumerate(self.paths):
+                # Avoid using boundless as much as possible because it fails for not standard transforms
+                if kwargs["boundless"]:
+                    kwargs["boundless"] = needs_boundless(self.real_window, window)
 
-        for i, p in enumerate(self.paths):
-            with rasterio.open(p, "r") as src:
-                # rasterio.read API: https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.read
-                obj_out[i] = src.read(**kwargs)
+                with rasterio.open(p, "r") as src:
+                    # rasterio.read API: https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.read
+                    obj_out[i] = src.read(**kwargs)
 
         if flat_channels:
             obj_out = obj_out[:, 0]
@@ -513,3 +518,13 @@ def get_out_shape(shape:Tuple[int, int], size_read:int) -> Tuple[int, int]:
     else:
         out_shape = (int(round(shape[0] / shape[1] * size_read)), size_read)
     return out_shape
+
+
+def needs_boundless(window_data:rasterio.windows.Window,
+                    window_read:rasterio.windows.Window) -> bool:
+    try:
+        slice_, pad = get_slice_pad(window_data, window_read)
+        return any(x != 0 for x in pad["x"]+pad["y"])
+
+    except rasterio.windows.WindowError:
+        return True
