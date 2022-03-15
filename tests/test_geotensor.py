@@ -1,4 +1,4 @@
-from georeader import rasterio_reader, geotensor, geoutils
+from georeader import rasterio_reader, geotensor, read
 import rasterio.windows
 import torch
 import numpy as np
@@ -18,17 +18,14 @@ def test_read_window():
     window = WINDOW_OUT_PLANET
     rst_obj = rasterio_reader.RasterioReader(FILE_TEST_PLANET, window_focus=window)
     # C, H, W = "band", "y", "x"
-    xarray_obj = rst_obj.load()
+    gtobj = rst_obj.load()
 
-    assert rst_obj.shape == (4, window.height, window.width), f"Unexpected shape {xarray_obj.shape} {(1, window.height, window.width)}"
-    assert xarray_obj.shape == (4, window.height, window.width), f"Unexpected shape {xarray_obj.shape} {(1, window.height, window.width)}"
-
-    gtobj = geotensor.GeoTensor.fromxarray(xarray_obj)
-    assert xarray_obj.shape == gtobj.shape, f"Unexpected shape {xarray_obj.shape} {gtobj.shape}"
+    assert rst_obj.shape == (4, window.height, window.width), f"Unexpected shape {gtobj.shape} {(1, window.height, window.width)}"
+    assert gtobj.shape == (4, window.height, window.width), f"Unexpected shape {gtobj.shape} {(1, window.height, window.width)}"
 
     # Convert to torch.Tensor internal object
     gtobj.values = torch.tensor(gtobj.values)
-    assert xarray_obj.shape == gtobj.shape, f"Unexpected shape {xarray_obj.shape} {gtobj.shape}"
+    assert gtobj.shape == gtobj.shape, f"Unexpected shape {gtobj.shape} {rst_obj.shape}"
 
     assert rst_obj.width == gtobj.width, f"Unexpected width {rst_obj.width} {gtobj.width}"
     assert rst_obj.count == gtobj.count, f"Unexpected count {rst_obj.count} {gtobj.count}"
@@ -37,13 +34,13 @@ def test_read_window():
     for subwindow, boundless in itertools.product([WINDOW_NORMAL, WINDOW_OUT_1,
                                                    WINDOW_OUT_2, WINDOW_OUT_3, WINDOW_OUT_4], [True, False]):
 
-        rst_obj_isel = geoutils.read_from_window(rst_obj, window=subwindow, boundless=boundless,
+        rst_obj_isel = read.read_from_window(rst_obj, window=subwindow, boundless=boundless,
                                                      trigger_load=False)
         assert isinstance(rst_obj_isel, rasterio_reader.RasterioReader), f"Incorrect class {rst_obj_isel}"
 
-        xarray_obj_isel = geoutils.read_from_window(xarray_obj, window=subwindow, boundless=boundless)
+        xarray_obj_isel = read.read_from_window(gtobj, window=subwindow, boundless=boundless)
         xarray_obj_isel_from_rst_obj_isel = rst_obj_isel.load(boundless=boundless)
-        gtobj_isel = geoutils.read_from_window(gtobj, window=subwindow, boundless=boundless)
+        gtobj_isel = read.read_from_window(gtobj, window=subwindow, boundless=boundless)
 
         assert xarray_obj_isel.shape == gtobj_isel.shape, f"Different shapes {subwindow} {boundless}"
 
@@ -64,16 +61,3 @@ def test_read_window():
 
         # assert np.allclose(xarray_obj_isel.values,
         #                   xarray_obj_isel_from_rst_obj_isel.values), f"Content of the array is different {subwindow} {boundless}"
-
-
-
-
-
-
-
-
-
-
-
-
-

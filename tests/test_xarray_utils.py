@@ -1,5 +1,5 @@
 import xarray as xr
-from src import xarray_utils, rasterio_reader
+from georeader import read, rasterio_reader
 import rasterio
 import rasterio.windows
 import numpy as np

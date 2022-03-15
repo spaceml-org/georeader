@@ -47,8 +47,14 @@ class GeoTensor:
         return tuple(self.values.shape)
 
     @property
-    def resolution(self) -> Tuple[float, float]:
-        return abs(self.transform.a), abs(self.transform.e)
+    def res(self) -> Tuple[float, float]:
+
+        transform = self.transform
+        z0_0 = np.array(transform * (0, 0))
+        z0_1 = np.array(transform * (0, 1))
+        z1_0 = np.array(transform * (1, 0))
+
+        return np.sqrt(np.sum((z0_0 - z1_0) ** 2)), np.sqrt(np.sum((z0_0 - z0_1) ** 2))
 
     @property
     def dtype(self):
@@ -128,7 +134,7 @@ class GeoTensor:
         return f""" 
          Transform: {self.transform}
          Shape: {self.shape}
-         Resolution: {self.resolution}
+         Resolution: {self.res}
          Bounds: {self.bounds}
          CRS: {self.crs}
          fill_value_default: {self.fill_value_default}
@@ -188,12 +194,15 @@ class GeoTensor:
 
     def read_from_window(self, window:rasterio.windows.Window, boundless:bool=True) -> '__class__':
         """
+        returns a new GeoTensor object with the spatial dimensions sliced
 
         Args:
-            window:
-            boundless:
+            window: window to slice the current GeoTensor
+            boundless: read from window in boundless mode (i.e. if the window is larger or negative it will pad
+                the GeoTensor with `self.fill_value_default`)
 
         Returns:
+            GeoTensor
 
         Raises:
             rasterio.windows.WindowError if `window` does not intersect the data

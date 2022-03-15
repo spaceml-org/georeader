@@ -1,5 +1,5 @@
 
-from georeader import rasterio_reader, geoutils
+from georeader import rasterio_reader, read
 import rasterio
 import rasterio.windows
 import numpy as np
@@ -51,8 +51,8 @@ def test_read_out_shape():
 def test_read_boundless_false():
     window, file = rasterio.windows.Window(col_off=-10, row_off=-10, width=128, height=64), FILE_TEST_PLANET
     reader = rasterio_reader.RasterioReader(file, window_focus=None)
-    reader_subset = geoutils.read_from_window(reader, window=window, boundless=False)
-    xr_subset = geoutils.read_from_window(reader, window=window, boundless=True).load(boundless=False)
+    reader_subset = read.read_from_window(reader, window=window, boundless=False)
+    xr_subset = read.read_from_window(reader, window=window, boundless=True).load(boundless=False)
 
     assert reader_subset.shape == (4, window.height+window.row_off, window.width+window.col_off), \
         f"Unexpected shape {reader_subset.shape} {(4, window.height+window.row_off, window.width+window.col_off)}"

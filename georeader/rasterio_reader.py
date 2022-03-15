@@ -74,7 +74,7 @@ class RasterioReader:
 
             self.nodata = src.nodata
             self.real_bounds = src.bounds
-            self.resolution = src.res
+            self.res = src.res
 
         # TODO if transform is not rectilinear with b == 0 and d==0 reading boundless does not work
         if not self.real_transform.is_rectilinear:
@@ -306,10 +306,10 @@ class RasterioReader:
 
     def load(self, boundless:bool=True) -> geotensor.GeoTensor:
         """
-        Load all raster in memory in an xr.DataArray object
+        Load all raster in memory in an GeoTensor object
 
         Returns:
-            xr.DataArray with geographic info
+            GeoTensor with geographic info
 
         """
         np_data = self.read(boundless=boundless)
@@ -346,7 +346,7 @@ class RasterioReader:
          Paths: {self.paths}
          Transform: {self.transform}
          Shape: {self.shape}
-         Resolution: {self.resolution}
+         Resolution: {self.res}
          Bounds: {self.bounds}
          CRS: {self.crs}
          nodata: {self.nodata}
@@ -471,7 +471,7 @@ def read_out_shape(reader:Union[RasterioReader, rasterio.DatasetReader],
         corresponding GeoTensor
 
     Returns:
-        xr.DataArray with geo metadata
+        GeoTensor with geo metadata
 
     """
 

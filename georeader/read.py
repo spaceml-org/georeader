@@ -9,7 +9,7 @@ from collections import OrderedDict
 import itertools
 from georeader.geotensor import GeoTensor
 from georeader.window_utils import PIXEL_PRECISION, pad_window, round_outer_window
-from georeader import save_cog
+from georeader import save_cog as sc
 from georeader.abstract_reader import AbstractGeoData
 
 
@@ -111,20 +111,20 @@ def read_from_window(data_in: GeoData,
                      trigger_load: bool = False,
                      boundless: bool = True) -> Union[GeoData, np.ndarray, None]:
     """
-    Reads a window from data_in padding with 0 if needed (output dataarray will have window.height, window.width shape
+    Reads a window from data_in padding with 0 if needed (output GeoData will have window.height, window.width shape
     if boundless is `True`).
 
     Args:
-        data_in: xr.DataArray with "x" and "y" coordinates
-        window: window to slice the DataArray with.
+        data_in: GeoData with "x" and "y" coordinates
+        window: window to slice the GeoData with.
         return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
-            returns an xr.DataArray georreferenced object.
+            returns an GeoData georreferenced object.
         trigger_load: defaults to `False`. Trigger loading the data to memory.
         boundless: if `True` data read will always have the shape of the provided window
             (padding with `fill_value_default`)
 
     Returns:
-        xr.DataArray with spatial dimensions of window
+        GeoData object
     """
 
     named_shape = OrderedDict(zip(data_in.dims, data_in.shape))
@@ -176,19 +176,19 @@ def read_from_center_coords(data_in: GeoData, center_coords:Tuple[float, float],
         This function assumes that the transform of data_in is rectilinear. (see `rasterio.Affine.is_rectilinear`).
 
     Args:
-        data_in: xr.DataArray object
+        data_in: GeoData object
         center_coords: x, y tuple of coords in `data_in` crs.
         shape: shape of the window to read
         crs_center_coords: CRS of center coords. If provided will check if it needs to reproject the coords before
             computing the reading window.
         return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
-            returns an xr.DataArray georreferenced object.
+            returns an GeoData georreferenced object.
         trigger_load: defaults to `False`. Trigger loading the data to memory.
         boundless: if `True` data read will always have the shape of the provided window
             (padding with `fill_value_default`)
 
     Returns:
-        xr.DataArray or np.array sliced from `data_in` of shape `shape`.
+        GeoData or np.array sliced from `data_in` of shape `shape`.
 
     """
 
@@ -206,19 +206,19 @@ def read_from_bounds(data_in: GeoData, bounds: Tuple[float, float, float, float]
     Reads a slice of data_in covering the `bounds`.
 
     Args:
-        data_in: xr.DataArray with geographic info (crs and geotransform).
+        data_in: GeoData with geographic info (crs and geotransform).
         bounds:  bounding box to read.
         crs_bounds: if not None will transform the bounds from that crs to the data.crs to read the chip.
         pad_add: pad in pixels to add to the `window` that is read.This is useful when this function is called for
          interpolation/CNN prediction.
         return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
-            returns an xr.DataArray georreferenced object.
+            returns an GeoData georreferenced object.
         trigger_load: defaults to `False`. Trigger loading the data to memory.
         boundless: if `True` data read will always have the shape of the provided window
             (padding with `fill_value_default`)
 
     Returns:
-        sliced xr.DataArray
+        sliced GeoData
     """
     window_in = window_from_bounds(data_in, bounds, crs_bounds)
     if any(p > 0 for p in pad_add):
@@ -245,11 +245,11 @@ def read_reproject(data_in: GeoData, bounds: Tuple[float, float, float, float],
         resampling: specifies how data is reprojected
         dtpye_dst: if None it will be inferred
         return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
-            returns an xr.DataArray georreferenced object.
+            returns an GeoData georreferenced object.
         dst_nodata: dst_nodata value
 
     Returns:
-        xr.DataArray reprojected to dst_crs with resolution_dst_crs
+        GeoTensor reprojected to dst_crs with resolution_dst_crs
 
     """
 
@@ -348,7 +348,7 @@ def save_cog(data_save:GeoData, path_tiff_save:str,
     Save data GeoData object as cloud optimized GeoTIFF
 
     Args:
-        data_save: xr.DataArray C,H,W format with geoinformation (crs and transform).
+        data_save: GeoData C, H, W format with geoinformation (crs and transform).
         descriptions: name of the bands
         path_tiff_save: path to save the COG GeoTIFF
         profile: profile dict to save the data. crs and transform will be updated from data_save.
@@ -365,6 +365,6 @@ def save_cog(data_save:GeoData, path_tiff_save:str,
     profile["crs"] = data_save.crs
     profile["transform"] = data_save.transform
 
-    save_cog.save_cog(np.asanyarray(data_save.values),
-                      path_tiff_save, profile, descriptions=descriptions,
-                      tags=tags)
+    sc.save_cog(np.asanyarray(data_save.values),
+                path_tiff_save, profile, descriptions=descriptions,
+                tags=tags)

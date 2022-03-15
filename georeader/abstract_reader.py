@@ -23,9 +23,14 @@ class AbstractGeoData:
         raise NotImplementedError("Not implemented")
 
     @property
-    def resolution(self) -> Tuple[float, float]:
+    def res(self) -> Tuple[float, float]:
         transform = self.transform
-        return abs(transform.a), abs(transform.e)
+        #  compute resolution for non-rectilinear transforms!
+        z0_0 = np.array(transform * (0, 0))
+        z0_1 = np.array(transform * (0, 1))
+        z1_0 = np.array(transform * (1, 0))
+
+        return np.sqrt(np.sum((z0_0-z1_0)**2)), np.sqrt(np.sum((z0_0-z0_1)**2))
 
     @property
     def crs(self) -> Any:
