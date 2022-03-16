@@ -258,8 +258,8 @@ class ProbaV:
         return rasterio.windows.transform(self.window_focus, self.real_transform)
 
     @property
-    def resolution(self) -> Tuple[float, float]:
-        transform = self.transform
+    def res(self) -> Tuple[float, float]:
+        transform = self.real_transform
         return abs(transform.a), abs(transform.e)
 
     @property
@@ -307,7 +307,7 @@ class ProbaV:
          Resolution name : {self.res_name}
         """
 
-# Class to interface with geoutils functions
+# Class to interface with read functions
 class ProbaVRadiometry(ProbaV):
     def __init__(self, hdf5_file:str,  window:Optional[rasterio.windows.Window]=None,
                  level_name:str="LEVEL2A"):
@@ -334,7 +334,7 @@ class ProbaVRadiometry(ProbaV):
         return ProbaVRadiometry(self.hdf5_file, window=self.window_focus, level_name=self.level_name)
 
 
-# Class to interface with geoutils reading functions
+# Class to interface with read functions
 class ProbaVSM(ProbaV):
     def __init__(self, hdf5_file: str, window: Optional[rasterio.windows.Window] = None,
                  level_name: str = "LEVEL2A"):
