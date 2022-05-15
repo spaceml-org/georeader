@@ -10,6 +10,7 @@ import rasterio
 import rasterio.windows
 from typing import Tuple, List, Optional, Union
 from georeader import window_utils, geotensor
+from numbers import Number
 
 
 FILTERS_HDF5 = { 'gzip': h5z.FILTER_DEFLATE,
@@ -24,7 +25,8 @@ BAND_NAMES = ["BLUE", "RED", "NIR", "SWIR"]
 def read_band_toa(dataset, band:str, slice_to_read:Tuple[slice, slice]):
     attrs = dataset[band].attrs
     if ("OFFSET" in attrs) and ("SCALE" in attrs):
-        return (dataset[band][slice_to_read] - attrs["OFFSET"]) / attrs["SCALE"]
+        if (attrs["OFFSET"] != 0) or (attrs["SCALE"] != 1):
+            return (dataset[band][slice_to_read] - attrs["OFFSET"]) / attrs["SCALE"]
     return dataset[band][slice_to_read]
 
 
@@ -62,7 +64,10 @@ class ProbaV:
                 self.real_transform = Affine(a=valores_blue[2], b=0, c=valores_blue[0],
                                              d=0, e=-valores_blue[3], f=valores_blue[1])
                 self.real_shape = input_f[f"{level_name}/RADIOMETRY/BLUE/{self.toatoc}"].shape
-                self.dtype_radiometry = input_f[f"{level_name}/RADIOMETRY/RED/{self.toatoc}"].dtype
+                # self.dtype_radiometry = input_f[f"{level_name}/RADIOMETRY/RED/{self.toatoc}"].dtype
+
+                # Set to float because we're converting the image to TOA when reading (see read_radiometry function)
+                self.dtype_radiometry = np.float32
                 self.dtype_sm = input_f[f"{level_name}/QUALITY/SM"].dtype
                 self.metadata = dict(input_f.attrs)
         except OSError as e:
@@ -118,7 +123,7 @@ class ProbaV:
         return window_read, pad_list_np
 
     def _load_bands(self, bands_names:Union[List[str],str], boundless:bool=True,
-                    fill_value_default:int=0) -> geotensor.GeoTensor:
+                    fill_value_default:Number=0) -> geotensor.GeoTensor:
         window_read, pad_list_np = self._get_window_pad(boundless=boundless)
         slice_ = window_read.toslices()
         if isinstance(bands_names, str):
@@ -181,7 +186,7 @@ class ProbaV:
         if indexes is None:
             indexes = (0, 1, 2, 3)
         bands_names = [f"{self.level_name}/RADIOMETRY/{BAND_NAMES[i]}/{self.toatoc}" for i in indexes]
-        return self._load_bands(bands_names, boundless=boundless,fill_value_default=0)
+        return self._load_bands(bands_names, boundless=boundless,fill_value_default=-1/2000.)
 
     def load_sm(self, boundless:bool=True) -> geotensor.GeoTensor:
         """
@@ -310,17 +315,24 @@ class ProbaV:
 # Class to interface with read functions
 class ProbaVRadiometry(ProbaV):
     def __init__(self, hdf5_file:str,  window:Optional[rasterio.windows.Window]=None,
-                 level_name:str="LEVEL2A"):
+                 level_name:str="LEVEL2A", indexes:Optional[List[int]] = None):
         super().__init__(hdf5_file=hdf5_file, window=window, level_name=level_name)
         self.dims = ("band", "y", "x")
 
-        # TODO let read only some bands?
-        self.count = 4
+        # let read only some bands?
+        if indexes is None:
+            self.indexes = [0, 1, 2, 3]
+        else:
+            self.indexes = indexes
 
         self.dtype = self.dtype_radiometry
 
+    @property
+    def count(self):
+        return len(self.indexes)
+
     def load(self, boundless:bool=True)->geotensor.GeoTensor:
-        return self.load_radiometry(boundless=boundless)
+        return self.load_radiometry(boundless=boundless, indexes=self.indexes)
 
     @property
     def shape(self) -> Tuple:
@@ -328,10 +340,11 @@ class ProbaVRadiometry(ProbaV):
 
     @property
     def values(self) -> np.ndarray:
-        return self.load_radiometry(boundless=True).values
+        return self.load_radiometry(boundless=True, indexes=self.indexes).values
 
     def __copy__(self) -> '__class__':
-        return ProbaVRadiometry(self.hdf5_file, window=self.window_focus, level_name=self.level_name)
+        return ProbaVRadiometry(self.hdf5_file, window=self.window_focus, level_name=self.level_name,
+                                indexes=self.indexes)
 
 
 # Class to interface with read functions

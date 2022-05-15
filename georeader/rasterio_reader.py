@@ -135,7 +135,26 @@ class RasterioReader:
                    self.indexes), f"Indexes out of real bounds current: {self.indexes} asked: {indexes} number of bands:{self.real_count}"
 
         self.count = len(self.indexes)
-    
+
+    def set_indexes_by_name(self, names:List[str]) -> None:
+        """
+        Function to set the indexes by the name of the band which is stored in the descriptions attribute
+
+        Args:
+            names: List of band names to read
+
+        """
+        descriptions = self.descriptions()
+        if len(self.paths) == 1:
+            if self.stack:
+                descriptions = descriptions[0]
+        else:
+            assert all(d == descriptions[0] for d in descriptions), "There are tiffs with different names"
+            descriptions = descriptions[0]
+
+        bands = [descriptions.index(b) + 1 for b in names]
+        self.set_indexes(bands, relative=False)
+
     @property
     def shape(self):
         if self.stack:
@@ -192,7 +211,7 @@ class RasterioReader:
 
     def descriptions(self) -> Union[List[List[str]], List[str]]:
         """
-        Returns a list with the descriptions for each tiff file. (This is usually the name of the files)
+        Returns a list with the descriptions for each tiff file. (This is usually the name of the bands of the raster)
 
         If stack and len(self.paths) == 1 it returns just the List with the descriptions
         """
