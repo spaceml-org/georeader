@@ -4,11 +4,43 @@ import rasterio.shutil as rasterio_shutil
 import os
 import tempfile
 import numpy as np
+from georeader.abstract_reader import AbstractGeoData
+from georeader.geotensor import GeoTensor
+from typing import Optional, List, Union
 
-from typing import Optional, List
+
+GeoData = Union[AbstractGeoData, GeoTensor]
 
 
-def add_overviews(rst_out, tile_size, verbose=False):
+def save_cog(data_save:GeoData, path_tiff_save:str,
+             profile:Optional[Dict[str, Any]]=None,
+             descriptions:Optional[List[str]] = None, tags:Optional[Dict[str, Any]]=None) -> None:
+    """
+    Save data GeoData object as cloud optimized GeoTIFF
+
+    Args:
+        data_save: GeoData (C, H, W) format with geoinformation (crs and transform).
+        descriptions: name of the bands
+        path_tiff_save: path to save the COG GeoTIFF
+        profile: profile dict to save the data. crs and transform will be updated from data_save.
+        tags: Dict to save as tags of the image
+
+    """
+    if profile is None:
+        profile = {
+            "compress": "lzw",
+            "RESAMPLING": "CUBICSPLINE",  # for pyramids
+        }
+    assert len(data_save.shape) == 3, f"Expected data with 3 dimensions found: {data_save.shape}"
+
+    profile["crs"] = data_save.crs
+    profile["transform"] = data_save.transform
+
+    _save_cog(np.asanyarray(data_save.values),
+              path_tiff_save, profile, descriptions=descriptions,
+              tags=tags)
+
+def _add_overviews(rst_out, tile_size, verbose=False):
     """ Add overviews to be a cog and be displayed nicely in GIS software """
 
     overview_level = rasterio.rio.overview.get_maximum_overview_level(*rst_out.shape, tile_size)
@@ -27,7 +59,7 @@ def add_overviews(rst_out, tile_size, verbose=False):
     rst_out._set_all_offsets([rst_out.offsets[b - 1] for b in rst_out.indexes])
 
 
-def save_cog(out_np: np.ndarray, path_tiff_save: str, profile: dict,
+def _save_cog(out_np: np.ndarray, path_tiff_save: str, profile: dict,
              descriptions:Optional[List[str]] = None,
              tags: Optional[dict] = None,
              dir_tmpfiles:str="."):
@@ -126,7 +158,7 @@ def save_cog(out_np: np.ndarray, path_tiff_save: str, profile: dict,
             for i in range(1, out_np.shape[0] + 1):
                 rst_out.set_band_description(i, descriptions[i - 1])
         
-        add_overviews(rst_out, tile_size=profile["blockysize"])
+        _add_overviews(rst_out, tile_size=profile["blockysize"])
         print("Copying temp file")
         rasterio_shutil.copy(rst_out, path_tiff_save, copy_src_overviews=True, tiled=True,
                              blockxsize=profile["blockxsize"],

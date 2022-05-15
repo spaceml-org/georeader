@@ -9,11 +9,8 @@ from collections import OrderedDict
 import itertools
 from georeader.geotensor import GeoTensor
 from georeader.window_utils import PIXEL_PRECISION, pad_window, round_outer_window
-from georeader import save_cog as sc
 from georeader.abstract_reader import AbstractGeoData
 
-
-# Functions in this module tagged as GeoData must have the following properties and methods
 
 GeoData = Union[GeoTensor, AbstractGeoData]
 
@@ -174,6 +171,7 @@ def read_from_center_coords(data_in: GeoData, center_coords:Tuple[float, float],
 
     Notes:
         This function assumes that the transform of data_in is rectilinear. (see `rasterio.Affine.is_rectilinear`).
+        IT WILL PRODUCE INCORRECT RESULTS OTHERWISE.
 
     Args:
         data_in: GeoData object
@@ -339,32 +337,3 @@ def read_reproject(data_in: GeoData, bounds: Tuple[float, float, float, float],
 
     return GeoTensor(destination, transform=dst_transform, crs=dst_crs,
                      fill_value_default=dst_nodata)
-
-
-def save_cog(data_save:GeoData, path_tiff_save:str,
-             profile:Optional[Dict[str, Any]]=None,
-             descriptions:Optional[List[str]] = None, tags:Optional[Dict[str, Any]]=None) -> None:
-    """
-    Save data GeoData object as cloud optimized GeoTIFF
-
-    Args:
-        data_save: GeoData C, H, W format with geoinformation (crs and transform).
-        descriptions: name of the bands
-        path_tiff_save: path to save the COG GeoTIFF
-        profile: profile dict to save the data. crs and transform will be updated from data_save.
-        tags: Dict to save as tags of the image
-
-    """
-    if profile is None:
-        profile = {
-            "compress": "lzw",
-            "RESAMPLING": "CUBICSPLINE",  # for pyramids
-        }
-    assert len(data_save.shape) == 3, f"Expected data with 3 dimensions found: {data_save.shape}"
-
-    profile["crs"] = data_save.crs
-    profile["transform"] = data_save.transform
-
-    sc.save_cog(np.asanyarray(data_save.values),
-                path_tiff_save, profile, descriptions=descriptions,
-                tags=tags)
