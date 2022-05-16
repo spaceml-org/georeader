@@ -16,6 +16,10 @@ def round_outer_window(window:rasterio.windows.Window)-> rasterio.windows.Window
     return window.round_lengths(op="ceil", pixel_precision=PIXEL_PRECISION).round_offsets(op="floor",
                                                                                           pixel_precision=PIXEL_PRECISION)
 
+# Precision to round the windows before applying ceiling/floor. e.g. 3.0001 will be rounded to 3 but 3.001 will not
+def _is_exact_round(x, precision=PIXEL_PRECISION):
+    return abs(round(x)-x) < precision
+
 
 def get_slice_pad(window_data:rasterio.windows.Window,
                   window_read:rasterio.windows.Window) -> Tuple[Dict[str, slice], Dict[str, Tuple[int, int]]]:

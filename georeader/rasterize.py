@@ -25,8 +25,8 @@ def rasterize_from_geometry(geometry:Union[Polygon, MultiPolygon, LineString],
     Args:
         geometry: geometry to rasterise
         bounds: bounds where the polygons will be rasterised.
-        transform: if transform is provided if will use this for the resolution
-        resolution: spatial resolution of the rasterised array
+        transform: if transform is provided it will use this instead of resolution
+        resolution: spatial resolution of the rasterised array. It won't be used if transform is provided
         value: column to take the values for rasterisation.
         dtype: dtype of the rasterise raster.
         crs_geom_bounds: CRS of geometry and bounds

@@ -6,7 +6,7 @@ import tempfile
 import numpy as np
 from georeader.abstract_reader import AbstractGeoData
 from georeader.geotensor import GeoTensor
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Dict, Any
 
 
 GeoData = Union[AbstractGeoData, GeoTensor]
@@ -31,12 +31,17 @@ def save_cog(data_save:GeoData, path_tiff_save:str,
             "compress": "lzw",
             "RESAMPLING": "CUBICSPLINE",  # for pyramids
         }
-    assert len(data_save.shape) == 3, f"Expected data with 3 dimensions found: {data_save.shape}"
+    if len(data_save.shape) == 3:
+        np_data = np.asanyarray(data_save.values)
+    elif len(data_save.shape) == 2:
+        np_data = np.asanyarray(data_save.values[np.newaxis])
+    else:
+        raise NotImplementedError(f"Expected data with 2 or 3 dimensions found: {data_save.shape}")
 
     profile["crs"] = data_save.crs
     profile["transform"] = data_save.transform
 
-    _save_cog(np.asanyarray(data_save.values),
+    _save_cog(np_data,
               path_tiff_save, profile, descriptions=descriptions,
               tags=tags)
 

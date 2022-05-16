@@ -8,7 +8,7 @@ from typing import Tuple, Union, Optional, Dict, Any, List
 from collections import OrderedDict
 import itertools
 from georeader.geotensor import GeoTensor
-from georeader.window_utils import PIXEL_PRECISION, pad_window, round_outer_window
+from georeader.window_utils import PIXEL_PRECISION, pad_window, round_outer_window, _is_exact_round
 from georeader.abstract_reader import AbstractGeoData
 
 
@@ -16,7 +16,7 @@ GeoData = Union[GeoTensor, AbstractGeoData]
 
 
 def _round_all(x):
-    x = tuple(map(int, x))
+    x = tuple([int(round(xi)) for xi in x])
     return x
 
 def _normalize_crs(a_crs):
@@ -28,10 +28,6 @@ def _normalize_crs(a_crs):
 
 def compare_crs(a_crs:str, b_crs:str) -> bool:
     return _normalize_crs(a_crs) == _normalize_crs(b_crs)
-
-# Precision to round the windows before applying ceiling/floor. e.g. 3.0001 will be rounded to 3 but 3.001 will not
-def _is_exact_round(x, precision=PIXEL_PRECISION):
-    return abs(round(x)-x) < precision
 
 
 def _transform_from_crs(center_coords:Tuple[float, float], crs_input:Union[Dict[str,str],str],
@@ -92,7 +88,7 @@ def window_from_center_coords(data_in: GeoData, center_coords:Tuple[float, float
     # The compute of the corner coordinates from the center is the same as in utils.polygon_slices
     transform = data_in.transform
 
-    # TODO does this work if transform is transposed?
+    # TODO This doesn't work if transform is transposed!
     assert transform.is_rectilinear(), "Transform is not rectilear"
 
     upper_left_coords = (center_coords[0] - (transform.a * shape[1] / 2),
@@ -236,7 +232,7 @@ def read_reproject(data_in: GeoData, bounds: Tuple[float, float, float, float],
     This function slices the data by the bounds and reprojects it to the dst_crs and resolution_dst_crs
 
     Args:
-        data_in: datarray to read and reproject. Expected coords "x" and "y".
+        data_in: GeoData to read and reproject. Expected coords "x" and "y".
         bounds: Bounds in CRS specified by dst_crs
         dst_crs: CRS to reproject.
         resolution_dst_crs: resolution in the CRS specified by dst_crs
@@ -257,7 +253,7 @@ def read_reproject(data_in: GeoData, bounds: Tuple[float, float, float, float],
     named_shape = OrderedDict(zip(data_in.dims, data_in.shape))
 
     # Compute affine transform out crs
-    # TODO allow for a transform (so that it doesn't force to rectilinear transform)
+    # TODO incorporate transform attribute so that it doesn't force to rectilinear transform (similar to rasterize.rasterize_from_geometry)
     dst_transform = rasterio.transform.from_origin(min(bounds[0], bounds[2]),
                                                    max(bounds[1], bounds[3]),
                                                    resolution_dst_crs[0], resolution_dst_crs[1])

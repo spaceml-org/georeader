@@ -1,8 +1,14 @@
+import warnings
+
 import numpy as np
-from typing import Any, Dict, Union, Tuple
+from typing import Any, Dict, Union, Tuple, Optional
 import rasterio
 import rasterio.windows
 from georeader import window_utils
+import numbers
+from math import ceil
+from itertools import product
+from skimage.transform import resize
 
 try:
     import torch
@@ -12,6 +18,12 @@ try:
 except ImportError:
     Tensor =np.ndarray
     torch_installed = False
+
+ORDERS = {
+    'nearest': 0,
+    'bilinear': 1,
+    'bicubic': 2,
+}
 
 
 
@@ -29,7 +41,7 @@ class GeoTensor:
 
     @property
     def dims(self) -> Tuple:
-        # TODO for the future allow different ordering of dimensions
+        # TODO allow different ordering of dimensions?
         shape = self.shape
         if len(shape) == 2:
             dims = ("y", "x")
@@ -191,6 +203,93 @@ class GeoTensor:
         transform_current = rasterio.windows.transform(window_current, transform=self.transform)
         return GeoTensor(values_new, transform_current, self.crs,
                          self.fill_value_default)
+
+    def resize(self, output_shape:Optional[Tuple[int,int]]=None,
+               resolution_dst: Optional[Union[float, Tuple[float, float]]]=None,
+               anti_aliasing:bool=True, interpolation:Optional[str]="bilinear",
+               mode_pad:str="constant")-> '__class__':
+        """
+
+        Args:
+            output_shape:
+            resolution_dst:
+            anti_aliasing:
+            interpolation: – algorithm used for upsampling: 'nearest' | 'bilinear' | ‘bicubic’
+            mode_pad: mode pad for resize function
+
+        Returns:
+             resized GeoTensor
+        """
+        input_shape = self.shape
+        spatial_shape = input_shape
+        resolution_or = self.res
+
+        # TODO a different implementation of this function could be apply gaussian filter if anti_aliasing and use read_reproject
+        #         image = ndi.gaussian_filter(image, anti_aliasing_sigma,
+        #                                     cval=cval, mode=ndi_mode)
+
+        if output_shape is None:
+            if isinstance(resolution_dst, numbers.Number):
+                resolution_dst = (abs(resolution_dst), abs(resolution_dst))
+            else:
+                assert len(resolution_dst) == 2, f"Expected 2 values found {resolution_dst}"
+
+            scale = resolution_or[0]/resolution_dst[0], resolution_or[1]/resolution_dst[1]
+            # scale < 1 => make image smaller (resolution_or < resolution_dst)
+            # scale > 1 => make image larger (resolution_or > resolution_dst)
+            output_shape_exact = spatial_shape[0]*scale[0], spatial_shape[1]*scale[1]
+
+            output_rounded = round(output_shape_exact[0],ndigits=3), round(output_shape_exact[1],ndigits=3)
+            output_shape = ceil(output_rounded[0]), ceil(output_rounded[0])
+
+            resolution_dst_new = spatial_shape[0] * resolution_or[0] / output_shape[0], \
+                                 spatial_shape[1] * resolution_or[1] / output_shape[1]
+
+            if output_shape != output_shape_exact:
+                warnings.warn(f"Change in resolution lead not exact output shape: {output_rounded}."
+                              f"We will use {output_shape} which corresponds to output resolution {resolution_dst_new} (instead of {resolution_dst})")
+
+            resolution_dst = resolution_dst_new
+
+        else:
+            assert len(output_shape) == 2, f"Expected output shape to be the spatial dimensions found: {output_shape}"
+            resolution_dst =  spatial_shape[0]*resolution_or[0]/output_shape[0], \
+                              spatial_shape[1]*resolution_or[1]/output_shape[1]
+
+        # Compute output transform
+        transform_scale = rasterio.Affine.scale(resolution_dst[0]/resolution_or[0], resolution_dst[1]/resolution_or[1])
+        transform = self.transform * transform_scale
+
+        resize_kornia = False
+        if torch_installed:
+            if isinstance(self.values, torch.Tensor):
+                resize_kornia = True
+
+        if resize_kornia:
+            # TODO
+            # https://kornia.readthedocs.io/en/latest/geometry.transform.html#kornia.geometry.transform.resize
+            raise NotImplementedError(f"Not implemented for torch Tensors")
+        else:
+            # https://scikit-image.org/docs/stable/api/skimage.transform.html#skimage.transform.resize
+            output_tensor = np.ndarray(input_shape[:-2]+output_shape, dtype=self.dtype)
+            if len(input_shape) == 4:
+                for i,j in product(range(0,input_shape[0]), range(0, input_shape[1])):
+                    output_tensor[i,j] = resize(self.values[i,j], output_shape, order=ORDERS[interpolation],
+                                                anti_aliasing=anti_aliasing, preserve_range=False,
+                                                cval=self.fill_value_default,mode=mode_pad)
+            elif len(input_shape) == 3:
+                for i in range(0,input_shape[0]):
+                    output_tensor[i] = resize(self.values[i], output_shape, order=ORDERS[interpolation],
+                                              anti_aliasing=anti_aliasing, preserve_range=False,
+                                              cval=self.fill_value_default,mode=mode_pad)
+            else:
+                output_tensor[...] = resize(self.values, output_shape, order=ORDERS[interpolation],
+                                            anti_aliasing=anti_aliasing, preserve_range=False,
+                                            cval=self.fill_value_default,mode=mode_pad)
+
+        return GeoTensor(output_tensor, transform=transform, crs=self.crs,
+                         fill_value_default=self.fill_value_default)
+
 
     def read_from_window(self, window:rasterio.windows.Window, boundless:bool=True) -> '__class__':
         """
