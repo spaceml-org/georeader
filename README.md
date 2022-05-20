@@ -6,7 +6,8 @@ WIP
 
 ## TODOs
  * Fix and run tests.
- * `xarray` wrapper (cast function) (`GeoDataArray`)
+ * ml  `xarray` wrapper (cast function) (finish `GeoDataArray` class)
+ * `GeoTensor.resize` with `kornia` if inner tensor is a `torch.Tensor`.
 
 ## Potential features
 
