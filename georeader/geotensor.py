@@ -221,7 +221,7 @@ class GeoTensor:
              resized GeoTensor
         """
         input_shape = self.shape
-        spatial_shape = input_shape
+        spatial_shape = input_shape[-2:]
         resolution_or = self.res
 
         # TODO a different implementation of this function could be apply gaussian filter if anti_aliasing and use read_reproject
