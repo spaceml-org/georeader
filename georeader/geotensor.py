@@ -89,6 +89,10 @@ class GeoTensor:
         return window_utils.normalize_bounds(rasterio.windows.bounds(rasterio.windows.Window(row_off=0, col_off=0, height=self.height, width=self.width),
                                                                      self.transform))
 
+    def astype(self, dtype):
+        # TODO implement for torch tensor
+        self.values.astype(dtype=dtype)
+
     @property
     def attrs(self) -> Dict[str, Any]:
         return vars(self)
