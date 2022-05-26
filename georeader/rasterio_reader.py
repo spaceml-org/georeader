@@ -246,6 +246,7 @@ class RasterioReader:
                                     stack=self.stack)
 
         rst_reader.set_window(window, relative=True, boundless=boundless)
+        rst_reader.set_indexes(self.indexes, relative=False)
         return rst_reader
 
     def isel(self, sel: Dict[str, Union[slice, List[int], int]], boundless:bool=True) -> '__class__':
