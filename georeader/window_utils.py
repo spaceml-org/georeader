@@ -1,5 +1,7 @@
 import rasterio.windows
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Optional, Union
+import numbers
+import numpy as np
 
 PIXEL_PRECISION = 3
 
@@ -11,6 +13,47 @@ def pad_window(window: rasterio.windows.Window, pad_size: Tuple[int, int]) -> ra
                                    height=window.height + 2 * pad_size[1])
 
 
+def figure_out_transform(transform: Optional[rasterio.Affine] = None,
+                         bounds: Optional[Tuple[float, float, float, float]] = None,
+                         resolution_dst: Optional[Union[float, Tuple[float, float]]] = None) -> rasterio.Affine:
+    """
+    Based on transform, bounds and resolution_dst computes the output transform.
+
+    Args:
+        transform: base transform used as reference. If not provided will return a rectilinear transform.
+        bounds: bounds of the output transform
+        resolution_dst: resolution of the output transform
+
+    Returns:
+        rasterio.Affine object with resolution `resolution_dst` and origin at the bounds
+    """
+    if resolution_dst is not None:
+        if isinstance(resolution_dst, numbers.Number):
+            resolution_dst = (abs(resolution_dst), abs(resolution_dst))
+
+    if transform is None:
+        assert bounds is not None, "Transform and bounds not provided"
+        assert resolution_dst is not None, "Transform and bounds not provided"
+        return rasterio.transform.from_origin(min(bounds[0], bounds[2]),
+                                              max(bounds[1], bounds[3]),
+                                              resolution_dst[0], resolution_dst[1])
+
+    if resolution_dst is None:
+        dst_transform = transform
+    else:
+        resolution_or = res(transform)
+        transform_scale = rasterio.Affine.scale(resolution_dst[0] / resolution_or[0],
+                                                resolution_dst[1] / resolution_or[1])
+        dst_transform = transform * transform_scale
+
+    if bounds is not None:
+        window_current_transform = rasterio.windows.from_bounds(*bounds,
+                                                                transform=transform)
+        dst_transform = rasterio.windows.transform(window_current_transform, dst_transform)
+
+    return dst_transform
+
+
 def round_outer_window(window:rasterio.windows.Window)-> rasterio.windows.Window:
     """ Rounds a rasterio.windows.Window object to outer (larger) window """
     return window.round_lengths(op="ceil", pixel_precision=PIXEL_PRECISION).round_offsets(op="floor",
@@ -19,6 +62,24 @@ def round_outer_window(window:rasterio.windows.Window)-> rasterio.windows.Window
 # Precision to round the windows before applying ceiling/floor. e.g. 3.0001 will be rounded to 3 but 3.001 will not
 def _is_exact_round(x, precision=PIXEL_PRECISION):
     return abs(round(x)-x) < precision
+
+
+def res(transform:rasterio.Affine) -> Tuple[float, float]:
+    """
+    Computes the resolution from a given transform
+
+    Args:
+        transform:
+
+    Returns:
+        resolution (tuple of floats)
+    """
+
+    z0_0 = np.array(transform * (0, 0))
+    z0_1 = np.array(transform * (0, 1))
+    z1_0 = np.array(transform * (1, 0))
+
+    return np.sqrt(np.sum((z0_0 - z1_0) ** 2)), np.sqrt(np.sum((z0_0 - z0_1) ** 2))
 
 
 def get_slice_pad(window_data:rasterio.windows.Window,

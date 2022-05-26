@@ -60,13 +60,7 @@ class GeoTensor:
 
     @property
     def res(self) -> Tuple[float, float]:
-
-        transform = self.transform
-        z0_0 = np.array(transform * (0, 0))
-        z0_1 = np.array(transform * (0, 1))
-        z1_0 = np.array(transform * (1, 0))
-
-        return np.sqrt(np.sum((z0_0 - z1_0) ** 2)), np.sqrt(np.sum((z0_0 - z0_1) ** 2))
+        return window_utils.res(self.transform)
 
     @property
     def dtype(self):

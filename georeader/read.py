@@ -8,6 +8,7 @@ from typing import Tuple, Union, Optional, Dict, Any, List
 from collections import OrderedDict
 import itertools
 from georeader.geotensor import GeoTensor
+from georeader import window_utils
 from georeader.window_utils import PIXEL_PRECISION, pad_window, round_outer_window, _is_exact_round
 from georeader.abstract_reader import AbstractGeoData
 
@@ -223,8 +224,38 @@ def read_from_bounds(data_in: GeoData, bounds: Tuple[float, float, float, float]
                             boundless=boundless)
 
 
-def read_reproject(data_in: GeoData, bounds: Tuple[float, float, float, float],
-                   dst_crs: str, resolution_dst_crs: Union[float, Tuple[float, float]],
+def read_reproject_like(data_in: GeoData, data_like: GeoData,
+                        resampling: rasterio.warp.Resampling = rasterio.warp.Resampling.cubic_spline,
+                        dtpye_dst=None, return_only_data: bool = False,
+                        dst_nodata: Optional[int] = None) -> Union[GeoTensor, np.ndarray]:
+    """
+    Reads from `data_in` and reprojects to have the same extent and resolution than `data_like`.
+
+    Args:
+        data_in: GeoData to read and reproject. Expected coords "x" and "y".
+        data_like: GeoData to get the bounds and resolution to reproject `data_in`.
+        resampling: specifies how data is reprojected
+        dtpye_dst: if None it will be inferred
+        return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
+            returns an GeoTensor object (georreferenced array).
+        dst_nodata: dst_nodata value
+
+    Returns:
+        GeoTensor read from `data_in` with same transform, crs, shape and bounds than `data_like`.
+    """
+
+    shape_out = data_like.shape
+    return read_reproject(data_in, dst_crs=data_like.crs, dst_transform=data_like.transform,
+                          window_out=rasterio.windows.Window(0,0, width=shape_out[-1], height=shape_out[-2]),
+                          resampling=resampling,dtpye_dst=dtpye_dst, return_only_data=return_only_data,
+                          dst_nodata=dst_nodata)
+
+
+def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
+                   bounds: Optional[Tuple[float, float, float, float]]=None,
+                   resolution_dst_crs: Optional[Union[float, Tuple[float, float]]]=None,
+                   dst_transform:Optional[rasterio.Affine]=None,
+                   window_out:Optional[rasterio.windows.Window]=None,
                    resampling: rasterio.warp.Resampling = rasterio.warp.Resampling.cubic_spline,
                    dtpye_dst=None, return_only_data: bool = False, dst_nodata: Optional[int] = None) -> Union[
     GeoTensor, np.ndarray]:
@@ -233,13 +264,16 @@ def read_reproject(data_in: GeoData, bounds: Tuple[float, float, float, float],
 
     Args:
         data_in: GeoData to read and reproject. Expected coords "x" and "y".
-        bounds: Bounds in CRS specified by dst_crs
+        bounds: Bounds in CRS specified by dst_crs.
         dst_crs: CRS to reproject.
         resolution_dst_crs: resolution in the CRS specified by dst_crs
+        dst_transform: Optional dest transform. If not provided the dst_transform is a rectilinear transform computed
+        with the bounds and resolution_dst_crs.
+        window_out: Window out in dst_crs. If not provided it is computed from the bounds.
         resampling: specifies how data is reprojected
         dtpye_dst: if None it will be inferred
         return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
-            returns an GeoData georreferenced object.
+            returns an GeoTensor object (georreferenced array).
         dst_nodata: dst_nodata value
 
     Returns:
@@ -247,23 +281,25 @@ def read_reproject(data_in: GeoData, bounds: Tuple[float, float, float, float],
 
     """
 
-    if isinstance(resolution_dst_crs, numbers.Number):
-        resolution_dst_crs = (abs(resolution_dst_crs), abs(resolution_dst_crs))
-
     named_shape = OrderedDict(zip(data_in.dims, data_in.shape))
 
-    # Compute affine transform out crs
-    # TODO incorporate transform attribute so that it doesn't force to rectilinear transform (similar to rasterize.rasterize_from_geometry)
-    dst_transform = rasterio.transform.from_origin(min(bounds[0], bounds[2]),
-                                                   max(bounds[1], bounds[3]),
-                                                   resolution_dst_crs[0], resolution_dst_crs[1])
+    # Compute output transform
+    dst_transform = window_utils.figure_out_transform(transform=dst_transform, bounds=bounds,
+                                                      resolution_dst=resolution_dst_crs)
 
     # Compute size of window in out crs
-    window_out = rasterio.windows.from_bounds(*bounds,
-                                              transform=dst_transform).round_lengths(op="ceil",
-                                                                                     pixel_precision=PIXEL_PRECISION)
+    if window_out is None:
+        assert bounds is not None, "Both window_out and bounds are None. This is needed to figure out the size of the output array"
+        window_out = rasterio.windows.from_bounds(*bounds,
+                                                  transform=dst_transform).round_lengths(op="ceil",
+                                                                                         pixel_precision=PIXEL_PRECISION)
+
+    # Compute real bounds that are going to be read
+    bounds = window_utils.normalize_bounds(rasterio.windows.bounds(window_out, dst_transform))
 
     crs_data_in = data_in.crs
+    if dst_crs is None:
+        dst_crs = crs_data_in
 
     #  if dst_crs == data_in.crs and the resolution is the same and window is exact return read_from_window
     if compare_crs(dst_crs, crs_data_in):

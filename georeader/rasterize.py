@@ -9,6 +9,7 @@ import numbers
 from georeader.window_utils import PIXEL_PRECISION
 from shapely.geometry import Polygon, MultiPolygon, LineString
 from numbers import Number
+from georeader import window_utils
 
 
 def rasterize_from_geometry(geometry:Union[Polygon, MultiPolygon, LineString],
@@ -17,7 +18,7 @@ def rasterize_from_geometry(geometry:Union[Polygon, MultiPolygon, LineString],
                             resolution:Optional[Union[float, Tuple[float, float]]]=None,
                             value:Number=1,
                             dtype:Any=np.uint8,
-                            crs_geom_bounds:Optional[Any]=None, fill:Number=0, all_touched:bool=False,
+                            crs_geom_bounds:Optional[Any]=None, fill:Union[int, float]=0, all_touched:bool=False,
                             return_only_data:bool=False)-> Union[GeoTensor, np.ndarray]:
     """
     Rasterise the provided geometry over the bounds with the specified resolution.
@@ -38,17 +39,8 @@ def rasterize_from_geometry(geometry:Union[Polygon, MultiPolygon, LineString],
         GeoTensor or np.ndarray with shape (H, W) with the rasterised polygons
     """
 
-    if transform is None:
-        if isinstance(resolution, numbers.Number):
-            resolution = (abs(resolution), abs(resolution))
-        transform = rasterio.transform.from_origin(min(bounds[0], bounds[2]),
-                                                   max(bounds[1], bounds[3]),
-                                                   resolution[0], resolution[1])
-    else:
-        # Shift transform to current window
-        window_current_transform = rasterio.windows.from_bounds(*bounds,
-                                                                transform=transform)
-        transform = rasterio.windows.transform(window_current_transform, transform)
+    transform = window_utils.figure_out_transform(transform=transform, bounds=bounds,
+                                                  resolution_dst=resolution)
 
     window_out = rasterio.windows.from_bounds(*bounds,
                                               transform=transform).round_lengths(op="ceil",

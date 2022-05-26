@@ -76,8 +76,8 @@ class RasterioReader:
             self.real_bounds = src.bounds
             self.res = src.res
 
-        # TODO if transform is not rectilinear with b == 0 and d==0 reading boundless does not work
-        if not self.real_transform.is_rectilinear:
+        # If transform is not rectilinear with b == 0 and d==0 reading boundless does not work
+        if (abs(self.real_transform.b) > 1e-6) or (abs(self.real_transform.d) > 1e-6):
             warnings.warn(f"transform of {self.paths[0]} is not rectilinear {self.real_transform}. "
                           f"The vast majority of the code expect rectilinear transforms. This transform "
                           f"could cause unexpected behaviours")
@@ -144,7 +144,7 @@ class RasterioReader:
             names: List of band names to read
 
         """
-        descriptions = self.descriptions()
+        descriptions = self.descriptions
         if len(self.paths) == 1:
             if self.stack:
                 descriptions = descriptions[0]
@@ -209,6 +209,7 @@ class RasterioReader:
 
         return tags
 
+    @property
     def descriptions(self) -> Union[List[List[str]], List[str]]:
         """
         Returns a list with the descriptions for each tiff file. (This is usually the name of the bands of the raster)
@@ -378,7 +379,7 @@ class RasterioReader:
         Read data from the list of rasters. It reads with boundless=True by default and
         fill_value=self.fill_value_default by default.
 
-        This function is process safe (opens the rasterio object every time is called).
+        This function is process safe (opens and closes the rasterio object every time is called).
 
         For arguments see: https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.read
 
@@ -416,7 +417,7 @@ class RasterioReader:
         if "fill_value" not in kwargs:
             kwargs["fill_value"] = self.fill_value_default
 
-        if ("indexes" in kwargs) and (kwargs["indexes"] is not None):
+        if  kwargs.get("indexes", None) is not None:
             # Indexes are relative to the self.indexes window.
             indexes = kwargs["indexes"]
             if isinstance(indexes, numbers.Number):
@@ -432,7 +433,7 @@ class RasterioReader:
             n_bands_read = self.count
             flat_channels = False
 
-        if ("out_shape" in kwargs) and (kwargs["out_shape"] is not None):
+        if kwargs.get("out_shape", None) is not None:
             if len(kwargs["out_shape"]) == 2:
                 kwargs["out_shape"] = (n_bands_read, ) + kwargs["out_shape"]
             elif len(kwargs["out_shape"]) == 3:
@@ -449,14 +450,36 @@ class RasterioReader:
         if not rasterio.windows.intersect([self.real_window, window]):
             obj_out[...] = kwargs["fill_value"]
         else:
-            for i, p in enumerate(self.paths):
-                # Avoid using boundless as much as possible because it fails for not standard transforms
-                if kwargs["boundless"]:
-                    kwargs["boundless"] = needs_boundless(self.real_window, window)
+            pad = None
+            if kwargs["boundless"]:
+                slice_, pad = get_slice_pad(self.real_window, window)
+                need_pad = any(x != 0 for x in pad["x"] + pad["y"])
 
+                #  read and pad instead of using boundless attribute when transform is not rectilinear (otherwise rasterio fails!)
+                if (abs(self.real_transform.b) > 1e-6) or (abs(self.real_transform.d) > 1e-6):
+                    if need_pad:
+                        assert kwargs.get("out_shape", None) is None, "out_shape not compatible with boundless and non rectilinear transform!"
+                        kwargs["window"] = rasterio.windows.Window.from_slices(slice_["y"], slice_["x"])
+                        kwargs["boundless"] = False
+                    else:
+                        kwargs["boundless"] = False
+                else:
+                    #  if transform is rectilinear read boundless if needed
+                    kwargs["boundless"] = need_pad
+                    pad = None
+
+            for i, p in enumerate(self.paths):
                 with rasterio.open(p, "r") as src:
                     # rasterio.read API: https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.read
-                    obj_out[i] = src.read(**kwargs)
+                    read_data = src.read(**kwargs)
+
+                    # Add pad when reading
+                    if pad is not None and need_pad:
+                        pad_list_np = _get_pad_list(pad)
+                        read_data = np.pad(read_data, tuple(pad_list_np), mode="constant",
+                                           constant_values=self.fill_value_default)
+
+                    obj_out[i] = read_data
 
         if flat_channels:
             obj_out = obj_out[:, 0]
@@ -469,6 +492,15 @@ class RasterioReader:
                                          axis=0)
 
         return obj_out
+
+def _get_pad_list(pad_width:Dict[str,Tuple[int,int]]):
+    pad_list_np = [(0, 0)]
+    for k in ["y", "x"]:
+        if k in pad_width:
+            pad_list_np.append(pad_width[k])
+        else:
+            pad_list_np.append((0, 0))
+    return pad_list_np
 
 
 def read_out_shape(reader:Union[RasterioReader, rasterio.DatasetReader],
@@ -507,7 +539,6 @@ def read_out_shape(reader:Union[RasterioReader, rasterio.DatasetReader],
         assert len(out_shape) == 2, f"Expected 2 dimensions found {out_shape}"
 
     transform = reader.transform if window is None else rasterio.windows.transform(window, reader.transform)
-    assert (transform.b < 1e-5) and (transform.d < 1e-5), f"Expected rectilinear transform found {transform}"
 
     if indexes is None:
         nbands = reader.count
@@ -517,8 +548,9 @@ def read_out_shape(reader:Union[RasterioReader, rasterio.DatasetReader],
     if out_shape is not None:
         input_output_factor = (shape[0] / out_shape[0], shape[1] / out_shape[1])
         out_shape = (nbands,) + out_shape
-        transform = rasterio.Affine(transform.a * input_output_factor[1], transform.b, transform.c,
-                                    transform.d, transform.e * input_output_factor[0], transform.f)
+        transform = transform * rasterio.Affine.scale(input_output_factor[1], input_output_factor[0])
+        # transform = rasterio.Affine(transform.a * input_output_factor[1], transform.b, transform.c,
+        #                             transform.d, transform.e * input_output_factor[0], transform.f)
 
 
     output = reader.read(indexes=indexes, out_shape=out_shape, window=window)
