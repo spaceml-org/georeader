@@ -4,7 +4,6 @@ from typing import Tuple,Any, Union
 import rasterio
 import rasterio.windows
 
-
 class AbstractGeoData:
     def __init__(self):
         self.dtype = np.float32
@@ -54,3 +53,5 @@ class AbstractGeoData:
     def values(self) -> np.ndarray:
         # return np.zeros(self.shape, dtype=self.dtype)
         raise NotImplementedError("Not implemented")
+
+GeoData = Union[GeoTensor, AbstractGeoData]

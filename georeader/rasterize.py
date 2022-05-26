@@ -10,12 +10,26 @@ from georeader.window_utils import PIXEL_PRECISION
 from shapely.geometry import Polygon, MultiPolygon, LineString
 from numbers import Number
 from georeader import window_utils
+from georeader.abstract_reader import GeoData
+
+
+def rasterize_geometry_like(geometry:Union[Polygon, MultiPolygon, LineString], data_like: GeoData, value:Number=1,
+                            dtype:Any=np.uint8,
+                            crs_geom_bounds:Optional[Any]=None, fill:Union[int, float]=0, all_touched:bool=False,
+                            return_only_data:bool=False)-> Union[GeoTensor, np.ndarray]:
+    shape_out = data_like.shape
+    return rasterize_from_geometry(geometry, crs_geom_bounds=crs_geom_bounds,
+                                   transform=data_like.transform,
+                                   window_out=rasterio.windows.Window(0, 0, width=shape_out[-1], height=shape_out[-2]),
+                                   return_only_data=return_only_data,dtype=dtype, value=value,
+                                   fill=fill, all_touched=all_touched)
 
 
 def rasterize_from_geometry(geometry:Union[Polygon, MultiPolygon, LineString],
-                            bounds:Tuple[float, float, float, float],
+                            bounds:Optional[Tuple[float, float, float, float]]=None,
                             transform:Optional[rasterio.Affine]=None,
                             resolution:Optional[Union[float, Tuple[float, float]]]=None,
+                            window_out:Optional[rasterio.windows.Window]=None,
                             value:Number=1,
                             dtype:Any=np.uint8,
                             crs_geom_bounds:Optional[Any]=None, fill:Union[int, float]=0, all_touched:bool=False,
@@ -28,6 +42,7 @@ def rasterize_from_geometry(geometry:Union[Polygon, MultiPolygon, LineString],
         bounds: bounds where the polygons will be rasterised.
         transform: if transform is provided it will use this instead of resolution
         resolution: spatial resolution of the rasterised array. It won't be used if transform is provided
+        window_out: Window out in dst_crs. If not provided it is computed from the bounds.
         value: column to take the values for rasterisation.
         dtype: dtype of the rasterise raster.
         crs_geom_bounds: CRS of geometry and bounds
@@ -41,10 +56,10 @@ def rasterize_from_geometry(geometry:Union[Polygon, MultiPolygon, LineString],
 
     transform = window_utils.figure_out_transform(transform=transform, bounds=bounds,
                                                   resolution_dst=resolution)
-
-    window_out = rasterio.windows.from_bounds(*bounds,
-                                              transform=transform).round_lengths(op="ceil",
-                                                                                 pixel_precision=PIXEL_PRECISION)
+    if window_out is None:
+        window_out = rasterio.windows.from_bounds(*bounds,
+                                                  transform=transform).round_lengths(op="ceil",
+                                                                                     pixel_precision=PIXEL_PRECISION)
 
 
     chip_label = rasterio.features.rasterize(shapes=[(geometry, value)],

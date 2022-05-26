@@ -10,10 +10,7 @@ import itertools
 from georeader.geotensor import GeoTensor
 from georeader import window_utils
 from georeader.window_utils import PIXEL_PRECISION, pad_window, round_outer_window, _is_exact_round
-from georeader.abstract_reader import AbstractGeoData
-
-
-GeoData = Union[GeoTensor, AbstractGeoData]
+from georeader.abstract_reader import GeoData
 
 
 def _round_all(x):
@@ -334,12 +331,7 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
     if cast:
         np_array_in = np_array_in.astype(dtpye_dst)
 
-    nodata = getattr(dataarray_in, "nodata", None)
-    if nodata is not None:
-        if hasattr(nodata, "__getitem__"):
-            nodata = nodata[0]
-
-    dst_nodata = dst_nodata or nodata
+    dst_nodata = dst_nodata or dataarray_in.fill_value_default
 
     index_iter = [[(ns, i) for i in range(s)] for ns, s in named_shape.items() if ns not in ["x", "y"]]
     # e.g. if named_shape = {'time': 4, 'band': 2, 'x':10, 'y': 10} index_iter ->
@@ -360,7 +352,7 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
             src_crs=crs_data_in,
             dst_transform=dst_transform,
             dst_crs=dst_crs,
-            src_nodata=nodata,
+            src_nodata=dataarray_in.fill_value_default,
             dst_nodata=dst_nodata,
             resampling=resampling)
 
