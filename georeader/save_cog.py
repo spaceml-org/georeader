@@ -41,6 +41,9 @@ def save_cog(data_save:GeoData, path_tiff_save:str,
     profile["crs"] = data_save.crs
     profile["transform"] = data_save.transform
 
+    if "nodata" not in profile:
+        profile["nodata"] = data_save.fill_value_default
+
     _save_cog(np_data,
               path_tiff_save, profile, descriptions=descriptions,
               tags=tags)
