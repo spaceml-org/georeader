@@ -34,7 +34,7 @@ class RasterioReader:
     dtype: type of the input.
     count: number of bands of the rasters.
     nodata: rasterio nodata of the first raster in paths
-    resolution: of the rasters
+    res: of the rasters
     width: width of the rasters. If window_focus is not None this will be the width of the window
     height: height of the rasters. If window_focus is not None this will be the height of the window
     bounds: bounds of the rasters. If window_focus is provided these bounds will be relative to the window.
@@ -77,10 +77,10 @@ class RasterioReader:
             self.res = src.res
 
         # If transform is not rectilinear with b == 0 and d==0 reading boundless does not work
-        if (abs(self.real_transform.b) > 1e-6) or (abs(self.real_transform.d) > 1e-6):
-            warnings.warn(f"transform of {self.paths[0]} is not rectilinear {self.real_transform}. "
-                          f"The vast majority of the code expect rectilinear transforms. This transform "
-                          f"could cause unexpected behaviours")
+        # if (abs(self.real_transform.b) > 1e-6) or (abs(self.real_transform.d) > 1e-6):
+        #     warnings.warn(f"transform of {self.paths[0]} is not rectilinear {self.real_transform}. "
+        #                   f"The vast majority of the code expect rectilinear transforms. This transform "
+        #                   f"could cause unexpected behaviours")
 
         self.attrs = {}
         self.window_focus = rasterio.windows.Window(row_off=0, col_off=0,
