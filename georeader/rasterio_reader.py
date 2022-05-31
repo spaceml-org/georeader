@@ -26,6 +26,9 @@ class RasterioReader:
     fill_value_default: value to fill when boundless read. It defaults to nodata if it is not None otherwise it will be
     set to zero.
     stack: if `True` returns 4D tensors otherwise it returns 3D tensors concatenated over the first dim
+    indexes: if not None it will read from each raster only the specified bands. This argument is 1-based as in rasterio
+    overview_level: if not None, it will read from the corresponding pyramid level. This argument 0 based as in rasterio
+     (None-> default resolution and 0 is the first overview).
 
     Attributes
     -------------------
@@ -46,7 +49,8 @@ class RasterioReader:
     def __init__(self, paths:Union[List[str], str], allow_different_shape:bool=False,
                  window_focus:Optional[rasterio.windows.Window]=None,
                  fill_value_default:Optional[Union[int, float]]=None,
-                 stack:bool=True):
+                 stack:bool=True, indexes:Optional[List[int]]=None,
+                 overview_level:Optional[int]=None):
 
         # Syntactic sugar
         if isinstance(paths, str):
@@ -59,8 +63,9 @@ class RasterioReader:
 
         # TODO keep just a global nodata of size (T,C,) and fill with these values?
         self.fill_value_default = fill_value_default
+        self.overview_level = overview_level
 
-        with rasterio.open(self.paths[0], "r") as src:
+        with rasterio.open(self.paths[0], "r", overview_level=overview_level) as src:
             self.real_transform = src.transform
             self.crs = src.crs
             self.dtype = src.profile["dtype"]
@@ -81,7 +86,6 @@ class RasterioReader:
             self.real_bounds = src.bounds
             self.res = src.res
 
-        # If transform is not rectilinear with b == 0 and d==0 reading boundless does not work
         # if (abs(self.real_transform.b) > 1e-6) or (abs(self.real_transform.d) > 1e-6):
         #     warnings.warn(f"transform of {self.paths[0]} is not rectilinear {self.real_transform}. "
         #                   f"The vast majority of the code expect rectilinear transforms. This transform "
@@ -107,7 +111,7 @@ class RasterioReader:
         # Assert all paths have same tranform and crs
         #  (checking width and height will not be needed since we're reading with boundless option but I don't see the point to ignore it)
         for p in self.paths:
-            with rasterio.open(p, "r") as src:
+            with rasterio.open(p, "r", overview_level=overview_level) as src:
                 if not src.transform == self.real_transform:
                     raise ValueError(f"Different transform in {self.paths[0]} and {p}: {self.real_transform} {src.transform}")
                 if not str(src.crs).lower() == str(self.crs).lower():
@@ -123,6 +127,9 @@ class RasterioReader:
                         warnings.warn(f"Different shape in {self.paths[0]} and {p}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width}) Might lead to unexpected behaviour")
                     else:
                         raise ValueError(f"Different shape in {self.paths[0]} and {p}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width})")
+
+        if indexes is not None:
+            self.set_indexes(indexes)
 
     def set_indexes(self, indexes:List[int], relative:bool=True)-> None:
         """
@@ -209,7 +216,7 @@ class RasterioReader:
         """
         tags = []
         for i, p in enumerate(self.paths):
-            with rasterio.open(p, "r") as src:
+            with rasterio.open(p, "r", overview_level=self.overview_level) as src:
                 tags.append(src.tags())
 
         if (not self.stack) and (len(tags) == 1):
@@ -226,7 +233,7 @@ class RasterioReader:
         """
         descriptions_all = []
         for i, p in enumerate(self.paths):
-            with rasterio.open(p, "r") as src:
+            with rasterio.open(p, "r", overview_level=self.overview_level) as src:
                 desc = src.descriptions
             descriptions_all.append([desc[i-1] for i in self.indexes])
 
@@ -252,7 +259,7 @@ class RasterioReader:
         rst_reader = RasterioReader(list(self.paths),
                                     allow_different_shape=self.allow_different_shape,
                                     window_focus=self.window_focus, fill_value_default=self.fill_value_default,
-                                    stack=self.stack)
+                                    stack=self.stack, overview_level=self.overview_level)
 
         rst_reader.set_window(window, relative=True, boundless=boundless)
         rst_reader.set_indexes(self.indexes, relative=False)
@@ -313,7 +320,7 @@ class RasterioReader:
 
         rst_reader = RasterioReader(paths, allow_different_shape=self.allow_different_shape,
                                     window_focus=self.window_focus, fill_value_default=self.fill_value_default,
-                                    stack=stack)
+                                    stack=stack, overview_level=self.overview_level)
         window_current = rasterio.windows.Window.from_slices(*slice_, boundless=boundless,
                                                              width=self.width, height=self.height)
 
@@ -328,7 +335,7 @@ class RasterioReader:
     def __copy__(self) -> '__class__':
         return RasterioReader(self.paths, allow_different_shape=self.allow_different_shape,
                               window_focus=self.window_focus, fill_value_default=self.fill_value_default,
-                              stack=self.stack)
+                              stack=self.stack, overview_level=self.overview_level)
 
     def copy(self) -> '__class__':
         return self.__copy__()
@@ -454,10 +461,8 @@ class RasterioReader:
 
         shape = (len(self.paths), n_bands_read) + spatial_shape
 
-        obj_out = np.zeros(shape, dtype=self.dtype)
-        if not rasterio.windows.intersect([self.real_window, window]):
-            obj_out[...] = kwargs["fill_value"]
-        else:
+        obj_out = np.full(shape, kwargs["fill_value"], dtype=self.dtype)
+        if rasterio.windows.intersect([self.real_window, window]):
             pad = None
             if kwargs["boundless"]:
                 slice_, pad = get_slice_pad(self.real_window, window)
@@ -477,17 +482,23 @@ class RasterioReader:
                     pad = None
 
             for i, p in enumerate(self.paths):
-                with rasterio.open(p, "r") as src:
+                with rasterio.open(p, "r", overview_level=self.overview_level) as src:
                     # rasterio.read API: https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.read
                     read_data = src.read(**kwargs)
 
                     # Add pad when reading
                     if pad is not None and need_pad:
-                        pad_list_np = _get_pad_list(pad)
-                        read_data = np.pad(read_data, tuple(pad_list_np), mode="constant",
-                                           constant_values=self.fill_value_default)
+                        slice_y = slice(pad["y"][0], -pad["y"][1] if pad["y"][1] !=0 else None)
+                        slice_x = slice(pad["x"][0], -pad["x"][1] if pad["x"][1] !=0 else None)
+                        obj_out[i, :, slice_y, slice_x] = read_data
+                    else:
+                        obj_out[i] = read_data
+                        # pad_list_np = _get_pad_list(pad)
+                        #
+                        # read_data = np.pad(read_data, tuple(pad_list_np), mode="constant",
+                        #                    constant_values=self.fill_value_default)
 
-                    obj_out[i] = read_data
+
 
         if flat_channels:
             obj_out = obj_out[:, 0]
