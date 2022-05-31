@@ -23,7 +23,8 @@ class RasterioReader:
     allow_different_shape: if True will allow different shapes to be read (still checks that all rasters have same crs,
         transform and number of bands)
     window_focus: window to read from. If provided all windows in read call will be relative to this window.
-    fill_value_default: value to fill when boundless read
+    fill_value_default: value to fill when boundless read. It defaults to nodata if it is not None otherwise it will be
+    set to zero.
     stack: if `True` returns 4D tensors otherwise it returns 3D tensors concatenated over the first dim
 
     Attributes
@@ -43,7 +44,8 @@ class RasterioReader:
 
     """
     def __init__(self, paths:Union[List[str], str], allow_different_shape:bool=False,
-                 window_focus:Optional[rasterio.windows.Window]=None, fill_value_default:Union[int, float]=0,
+                 window_focus:Optional[rasterio.windows.Window]=None,
+                 fill_value_default:Optional[Union[int, float]]=None,
                  stack:bool=True):
 
         # Syntactic sugar
@@ -73,6 +75,9 @@ class RasterioReader:
             self.real_height = src.height
 
             self.nodata = src.nodata
+            if self.fill_value_default is None:
+                self.fill_value_default = self.nodata if (self.nodata is not None) else 0
+
             self.real_bounds = src.bounds
             self.res = src.res
 
@@ -109,6 +114,9 @@ class RasterioReader:
                     raise ValueError(f"Different CRS in {self.paths[0]} and {p}: {self.crs} {src.crs}")
                 if self.real_count != src.count:
                     raise ValueError(f"Different number of bands in {self.paths[0]} and {p} {self.real_count} {src.count}")
+                if src.nodata != self.nodata:
+                    warnings.warn(
+                        f"Different nodata in {self.paths[0]} and {p}: {self.nodata} {src.nodata}. This might lead to unexpected behaviour")
 
                 if (self.real_width != src.width) or (self.real_height != src.height):
                     if allow_different_shape:
