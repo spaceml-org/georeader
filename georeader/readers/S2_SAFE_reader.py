@@ -170,17 +170,25 @@ class S2Image:
                 has_out_res = False
 
             # figure out which window_focus to set
+
             if band_name == self.band_check:
                 window_focus = self.window_focus
+                set_window_after = False
             elif has_out_res:
                 window_focus = self.window_focus
+                set_window_after = False
             else:
+                set_window_after = True
                 window_focus = None
 
             self.granule_readers[band_name] = RasterioReader(self.granule[band_name],
                                                              window_focus=window_focus,
                                                              fill_value_default=self.fill_value_default,
                                                              overview_level=overview_level)
+            if set_window_after:
+                window_in = read.window_from_bounds(self.granule_readers[band_name], self.bounds)
+                window_in_rounded = read.round_outer_window(window_in)
+                self.granule_readers[band_name].set_window(window_in_rounded)
 
         return self.granule_readers[band_name]
 

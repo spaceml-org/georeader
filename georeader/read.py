@@ -86,12 +86,16 @@ def window_from_center_coords(data_in: GeoData, center_coords:Tuple[float, float
     # The compute of the corner coordinates from the center is the same as in utils.polygon_slices
     transform = data_in.transform
 
-    # TODO This doesn't work if transform is transposed!
-    assert transform.is_rectilinear(), "Transform is not rectilear"
+    pixel_center_coords = ~transform * tuple(center_coords)
+    pixel_upper_left =  _round_all((pixel_center_coords[0] - shape[1] / 2, pixel_center_coords[1] - shape[0] / 2))
 
-    upper_left_coords = (center_coords[0] - (transform.a * shape[1] / 2),
-                         center_coords[1] - (transform.e * shape[0] / 2))
-    pixel_upper_left = _round_all(~transform * upper_left_coords)
+    # OLD CODE that didn't support non-rectilinear transforms
+    # assert transform.is_rectilinear(), "Transform is not rectilear"
+    #
+    # upper_left_coords = (center_coords[0] - (transform.a * shape[1] / 2),
+    #                      center_coords[1] - (transform.e * shape[0] / 2))
+    # pixel_upper_left = _round_all(~transform * upper_left_coords)
+
     window = rasterio.windows.Window(row_off=pixel_upper_left[1], col_off=pixel_upper_left[0],
                                      width=shape[1], height=shape[0])
     return window
