@@ -45,43 +45,24 @@ BANDS_RESOLUTION = OrderedDict({"B01": 60, "B02": 10,
                                 "B12": 20})
 
 
-def process_metadata_msi(xml_file:str) -> Tuple[List[str], Polygon]:
-    """
-    Read the xml metadata and
-    1) It gets the paths of the jp2 files of the SAFE product. It excludes the _TCI files.
-    2) It gets the footprint of the image (polygon where image has valid values)
-    Params:
-        xml_file: description file found in root of .SAFE folder.  xxxx.SAFE/MTD_MSIL1C.xml or xxxx.SAFE/MTD_MSIL2A.xml
-
-    Returns:
-        List of jp2 files in the xml file
-        Polygon with the extent of the image
-    """
-    if xml_file.startswith("gs://"):
-        import fsspec
-        fs = fsspec.filesystem("gs",requester_pays=True)
-        with fs.open(xml_file, "rb") as file_obj:
-            root = ET.fromstring(file_obj.read())
-    else:
-        root = ET.parse(xml_file).getroot()
-
-    bands_elms = root.findall(".//IMAGE_FILE")
-    jp2bands = [b.text+".jp2" for b in bands_elms if not b.text.endswith("_TCI")]
-
-    footprint_txt = root.findall(".//EXT_POS_LIST")[0].text
-    coords_split = footprint_txt.split(" ")[:-1]
-    footprint = Polygon([(float(lngstr), float(latstr)) for latstr, lngstr in zip(coords_split[::2], coords_split[1::2])])
-
-    return jp2bands, footprint
-
-
 class S2Image:
-    def __init__(self, s2_folder:str, out_res:int=10,
+    def __init__(self, s2_folder:str,
+                 all_granules: List[str],
+                 polygon:Polygon,
+                 out_res: int = 10,
                  window_focus:Optional[rasterio.windows.Window]=None,
-                 bands:Optional[List[str]]=None,
-                 granule:Optional[Dict[str,str]]=None):
+                 bands:Optional[List[str]]=None):
         mission, self.producttype, sensing_date_str, pdgs, relorbitnum, tile_number_field, product_discriminator = s2_name_split(
             s2_folder)
+
+        # Remove last trailing slash
+        s2_folder = s2_folder[:-1] if (s2_folder.endswith("/") or s2_folder.endswith("\\")) else s2_folder
+        self.name = os.path.basename(os.path.splitext(s2_folder)[0])
+
+        self.folder = s2_folder
+        self.datetime = datetime.datetime.strptime(sensing_date_str, "%Y%m%dT%H%M%S").replace(
+            tzinfo=datetime.timezone.utc)
+        self.metadata_msi = os.path.join(self.folder, f"MTD_{self.producttype}.xml").replace("\\", "/")
 
         out_res = int(out_res)
 
@@ -92,14 +73,6 @@ class S2Image:
 
         # Default resolution to read
         self.out_res = out_res
-
-        # Remove last trailing slash
-        s2_folder = s2_folder[:-1] if (s2_folder.endswith("/")  or s2_folder.endswith("\\"))  else s2_folder
-        self.name = os.path.basename(os.path.splitext(s2_folder)[0])
-
-        self.datetime = datetime.datetime.strptime(sensing_date_str, "%Y%m%dT%H%M%S").replace(
-            tzinfo=datetime.timezone.utc)
-        self.folder = s2_folder
 
         # load _pol from geometric_info product footprint!
         if bands is None:
@@ -119,41 +92,55 @@ class S2Image:
 
         assert self.band_check is not None, f"Not band found of resolution {self.out_res} in {self.bands}"
 
-        # This dict will be filled by the get_reader function
+        # This dict will be filled by the _get_reader function
         self.granule_readers: Dict[str, RasterioReader] = {}
         self.window_focus = window_focus
+        self.all_granules:List[str] = all_granules
+        self.polygon = polygon
 
-        # Obtain path to jpeg files if not provided
-        self.metadata_msi = os.path.join(self.folder, f"MTD_{self.producttype}.xml").replace("\\", "/")
-        if granule is None:
-            jp2bands, self._pol = process_metadata_msi(self.metadata_msi)
-
-            # L2A bands end with: band_and_res = f"{b}_{res_band}m.jp2"
-            # L1C bands end with: "{b}.jp2"
-            if self.producttype == "MSIL2A":
-                jpeg_bands_dict = {j.split("_")[-2]: j for j in jp2bands}
-            else:
-                jpeg_bands_dict = {j.split("_")[-1].replace(".jp2",""):j for j in jp2bands}
-
-            self.granule_folder = os.path.dirname(os.path.dirname(jp2bands[0]))
-
-            self.granule: Dict[str, str] = {}
-            for b in self.bands:
-                self.granule[b] = os.path.join(self.folder, jpeg_bands_dict[b]).replace("\\","/")
+        self.granule_folder = os.path.dirname(os.path.dirname(self.all_granules[0])).replace(f"{self.folder}/", "")
+        self.granule: Dict[str, str] = {}
+        if self.producttype == "MSIL2A":
+            self.granule = {j.split("_")[-2]: j for j in self.all_granules}
         else:
-            self.granule = granule
-            self.granule_folder = os.path.dirname(os.path.dirname(granule[self.band_check])).replace(f"{self.folder}/","")
+            self.granule = {j.split("_")[-1].replace(".jp2", ""): j for j in self.all_granules}
 
-    def polygon(self):
-        """ Footprint polygon of the image in lng/lat (epsg:4326) """
-        return self._pol
 
-    def get_reader(self, band_name:Optional[str]=None) -> RasterioReader:
+    def get_reader(self, band_names: Union[str,List[str]], overview_level:Optional[int]=None) -> RasterioReader:
+        """
+        Provides a RasterioReader object to read all the bands at the same resolution
+
+        Args:
+            band_names: List of band names or band. raises assertion error if bands have different resolution.
+            overview_level: level of the pyramid to read (same as in rasterio)
+
+        Returns:
+            RasterioReader
+
+        """
+        if isinstance(band_names,str):
+            band_names = [band_names]
+            stack=False
+        else:
+            stack=True
+
+        assert  all(BANDS_RESOLUTION[band_names[0]]==BANDS_RESOLUTION[b] for b in band_names), f"Bands: {band_names} have different resolution"
+
+        reader = RasterioReader([self.granule[band_name] for band_name in band_names],
+                                window_focus=None,stack=stack,
+                                fill_value_default=self.fill_value_default,
+                                overview_level=overview_level)
+        window_in = read.window_from_bounds(reader, self.bounds)
+        window_in_rounded = read.round_outer_window(window_in)
+        reader.set_window(window_in_rounded)
+        return reader
+
+    def _get_reader(self, band_name:Optional[str]=None) -> RasterioReader:
         if band_name is None:
             band_name = self.band_check
 
         if band_name not in self.granule_readers:
-            #
+            # TODO handle different out_res than 10, 20, 60?
             if self.out_res == BANDS_RESOLUTION[band_name]:
                 overview_level = None
                 has_out_res = True
@@ -195,32 +182,32 @@ class S2Image:
     @property
     def dtype(self):
         # This is always np.uint16
-        reader_band_check = self.get_reader()
+        reader_band_check = self._get_reader()
         return reader_band_check.dtype
 
     @property
     def shape(self):
-        reader_band_check = self.get_reader()
+        reader_band_check = self._get_reader()
         return (len(self.granule),) + reader_band_check.shape[-2:]
 
     @property
     def transform(self):
-        reader_band_check = self.get_reader()
+        reader_band_check = self._get_reader()
         return reader_band_check.transform
 
     @property
     def crs(self):
-        reader_band_check = self.get_reader()
+        reader_band_check = self._get_reader()
         return reader_band_check.crs
 
     @property
     def bounds(self):
-        reader_band_check = self.get_reader()
+        reader_band_check = self._get_reader()
         return reader_band_check.bounds
 
     @property
     def res(self) -> Tuple[float, float]:
-        reader_band_check = self.get_reader()
+        reader_band_check = self._get_reader()
         return reader_band_check.res
 
     def __str__(self):
@@ -240,24 +227,24 @@ class S2Image:
     def read_from_window(self, window:rasterio.windows.Window, boundless:bool) -> '__class__':
         # return GeoTensor(values=self.values, transform=self.transform, crs=self.crs)
 
-        reader_ref = self.get_reader()
+        reader_ref = self._get_reader()
         rasterio_reader_ref = reader_ref.read_from_window(window=window, boundless=boundless)
         return __class__(s2_folder=self.folder, out_res=self.out_res, window_focus=rasterio_reader_ref.window_focus,
                          bands=self.bands, granule=self.granule)
 
     def load(self, boundless:bool=True)-> GeoTensor:
-        reader_ref = self.get_reader()
+        reader_ref = self._get_reader()
         geotensor_ref = reader_ref.load(boundless=boundless)
 
-        array_out = np.full((len(self.bands), geotensor_ref.shape[-2:]),fill_value=geotensor_ref.fill_value_default,
+        array_out = np.full((len(self.bands),) + geotensor_ref.shape[-2:],fill_value=geotensor_ref.fill_value_default,
                             dtype=geotensor_ref.dtype)
 
         for idx, b in enumerate(self.bands):
             if b == self.band_check:
                 geotensor_iter = geotensor_ref
             else:
-                reader_iter = self.get_reader(b)
-                if np.abs(np.array(reader_iter.res)-np.array(geotensor_ref.res)) < 1e-6:
+                reader_iter = self._get_reader(b)
+                if np.mean(np.abs(np.array(reader_iter.res)-np.array(geotensor_ref.res))) < 1e-6:
                     geotensor_iter = reader_iter.load(boundless=boundless)
                 else:
                     geotensor_iter = read.read_reproject_like(reader_iter, geotensor_ref)
@@ -273,7 +260,7 @@ class S2Image:
         return self.load().values
 
     def load_mask(self) -> GeoTensor:
-        reader_ref = self.get_reader()
+        reader_ref = self._get_reader()
         geotensor_ref = reader_ref.load(boundless=True)
         geotensor_ref.values = (geotensor_ref.values == 0) | (geotensor_ref.values == (2**16)-1)
         return geotensor_ref
@@ -537,19 +524,61 @@ class S2ImageL1C(S2Image):
         return np.array(vals)
 
 
-def s2loader(s2folder:str, out_res:int=10) -> Union[S2ImageL2A, S2ImageL1C]:
+def process_metadata_msi(xml_file:str) -> Tuple[List[str], Polygon]:
+    """
+    Read the xml metadata and
+    1) It gets the paths of the jp2 files of the SAFE product. It excludes the _TCI files.
+    2) It gets the footprint of the image (polygon where image has valid values)
+    Params:
+        xml_file: description file found in root of .SAFE folder.  xxxx.SAFE/MTD_MSIL1C.xml or xxxx.SAFE/MTD_MSIL2A.xml
+
+    Returns:
+        List of jp2 files in the xml file
+        Polygon with the extent of the image
+    """
+    if xml_file.startswith("gs://"):
+        import fsspec
+        fs = fsspec.filesystem("gs",requester_pays=True)
+        with fs.open(xml_file, "rb") as file_obj:
+            root = ET.fromstring(file_obj.read())
+    else:
+        root = ET.parse(xml_file).getroot()
+
+    bands_elms = root.findall(".//IMAGE_FILE")
+    jp2bands = [b.text+".jp2" for b in bands_elms if not b.text.endswith("_TCI")]
+
+    footprint_txt = root.findall(".//EXT_POS_LIST")[0].text
+    coords_split = footprint_txt.split(" ")[:-1]
+    footprint = Polygon([(float(lngstr), float(latstr)) for latstr, lngstr in zip(coords_split[::2], coords_split[1::2])])
+
+    return jp2bands, footprint
+
+
+def s2loader(s2folder:str, out_res:int=10, all_granules:Optional[List[str]]=None,
+             polygon:Optional[Polygon]=None) -> Union[S2ImageL2A, S2ImageL1C]:
     """
     Loads a S2ImageL2A or S2ImageL1C depending on the product type
 
-    :param s2folder: .SAFE folder. Expected standard ESA naming convention (see s2_name_split fun)
-    :param out_res: default output resolution
+    Args:
+        s2folder: .SAFE folder. Expected standard ESA naming convention (see s2_name_split fun)
+        out_res: default output resolution {10, 20, 60}
+        all_granules:
+        polygon:
 
+    Returns:
+        S2Image reader
     """
+
     _, producttype_nos2, _, _, _, _, _ = s2_name_split(s2folder)
+    metadata_msi = os.path.join(s2folder, f"MTD_{producttype_nos2}.xml").replace("\\", "/")
+
+    jp2bands, polygon = process_metadata_msi(metadata_msi)
+    all_granules = [os.path.join(s2folder, jp2band).replace("\\", "/") for jp2band in jp2bands]
+
     if producttype_nos2 == "MSIL2A":
-        return S2ImageL2A(s2folder, out_res=out_res)
+        return S2ImageL2A(s2folder, all_granules=all_granules, polygon=polygon, out_res=out_res)
     elif producttype_nos2 == "MSIL1C":
-        return S2ImageL1C(s2folder, out_res=out_res)
+        return S2ImageL1C(s2folder, all_granules=all_granules, polygon=polygon, out_res=out_res)
 
     raise NotImplementedError(f"Don't know how to load {producttype_nos2} products")
 
