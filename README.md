@@ -9,7 +9,7 @@ git clone
 cd georeader
 pip install -e .
 ```
-WIP
+This package is work in progress. The API might change without notice. Use it with care.
 
 ## TODOs
  * Fix and run tests.
@@ -18,11 +18,11 @@ WIP
 
 ## Potential features
 
-* Readers of standard format for Sentinel-2 and Landsat-8.
 * `read_tile` function + example of serving images.
 * Add extent polygon (out of that area values are invalids)?
 * Add `matplotlib` plotting functions.
 * Read boundless for non-rectilinear transforms. [Required to read AVIRIS data!]
+* Readers of standard format for Landsat-8?
 
 ## Examples
 
