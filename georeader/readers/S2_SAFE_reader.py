@@ -120,14 +120,11 @@ class S2Image:
         """
         if isinstance(band_names,str):
             band_names = [band_names]
-            stack=False
-        else:
-            stack=True
 
         assert  all(BANDS_RESOLUTION[band_names[0]]==BANDS_RESOLUTION[b] for b in band_names), f"Bands: {band_names} have different resolution"
 
         reader = RasterioReader([self.granule[band_name] for band_name in band_names],
-                                window_focus=None,stack=stack,
+                                window_focus=None, stack=False,
                                 fill_value_default=self.fill_value_default,
                                 overview_level=overview_level)
         window_in = read.window_from_bounds(reader, self.bounds)
@@ -230,7 +227,7 @@ class S2Image:
         reader_ref = self._get_reader()
         rasterio_reader_ref = reader_ref.read_from_window(window=window, boundless=boundless)
         return __class__(s2_folder=self.folder, out_res=self.out_res, window_focus=rasterio_reader_ref.window_focus,
-                         bands=self.bands, granule=self.granule)
+                         bands=self.bands, all_granules=self.all_granules, polygon=self.polygon)
 
     def load(self, boundless:bool=True)-> GeoTensor:
         reader_ref = self._get_reader()
@@ -267,15 +264,16 @@ class S2Image:
 
 
 class S2ImageL2A(S2Image):
-    def __init__(self, s2_folder:str, out_res:int=10,
+    def __init__(self, s2_folder:str, all_granules: List[str],
+                 polygon:Polygon, out_res:int=10,
                  window_focus:Optional[rasterio.windows.Window]=None,
-                 bands:Optional[List[str]]=None,
-                 granule:Optional[Dict[str,str]]=None):
+                 bands:Optional[List[str]]=None):
         if bands is None:
             bands = BANDS_S2_L2A
 
-        super(S2ImageL2A, self).__init__(s2_folder=s2_folder, out_res=out_res, bands=bands,
-                                         window_focus=window_focus, granule=granule)
+        super(S2ImageL2A, self).__init__(s2_folder=s2_folder, all_granules=all_granules, polygon=polygon,
+                                         out_res=out_res, bands=bands,
+                                         window_focus=window_focus)
 
         assert self.producttype == "MSIL2A", f"Unexpected product type {self.producttype} in image {self.folder}"
 
@@ -290,8 +288,14 @@ class S2ImageL2A(S2Image):
 
 
 class S2ImageL1C(S2Image):
-    def __init__(self, s2_folder, out_res:int=10, read_metadata:bool=False):
-        super(S2ImageL1C,self).__init__(s2_folder, out_res=out_res)
+    def __init__(self, s2_folder, all_granules: List[str],
+                 polygon:Polygon, out_res:int=10,
+                 window_focus:Optional[rasterio.windows.Window]=None,
+                 bands:Optional[List[str]]=None,
+                 read_metadata:bool=False):
+        super(S2ImageL1C,self).__init__(s2_folder=s2_folder, all_granules=all_granules, polygon=polygon,
+                                         out_res=out_res, bands=bands,
+                                         window_focus=window_focus)
 
         assert self.producttype == "MSIL1C", f"Unexpected product type {self.producttype} in image {self.folder}"
 
@@ -538,7 +542,7 @@ def process_metadata_msi(xml_file:str) -> Tuple[List[str], Polygon]:
     """
     if xml_file.startswith("gs://"):
         import fsspec
-        fs = fsspec.filesystem("gs",requester_pays=True)
+        fs = fsspec.filesystem("gs", requester_pays=True)
         with fs.open(xml_file, "rb") as file_obj:
             root = ET.fromstring(file_obj.read())
     else:
@@ -572,8 +576,9 @@ def s2loader(s2folder:str, out_res:int=10, all_granules:Optional[List[str]]=None
     _, producttype_nos2, _, _, _, _, _ = s2_name_split(s2folder)
     metadata_msi = os.path.join(s2folder, f"MTD_{producttype_nos2}.xml").replace("\\", "/")
 
-    jp2bands, polygon = process_metadata_msi(metadata_msi)
-    all_granules = [os.path.join(s2folder, jp2band).replace("\\", "/") for jp2band in jp2bands]
+    if all_granules is None or polygon is None:
+        jp2bands, polygon = process_metadata_msi(metadata_msi)
+        all_granules = [os.path.join(s2folder, jp2band).replace("\\", "/") for jp2band in jp2bands]
 
     if producttype_nos2 == "MSIL2A":
         return S2ImageL2A(s2folder, all_granules=all_granules, polygon=polygon, out_res=out_res)
@@ -583,10 +588,25 @@ def s2loader(s2folder:str, out_res:int=10, all_granules:Optional[List[str]]=None
     raise NotImplementedError(f"Don't know how to load {producttype_nos2} products")
 
 
+def s2_public_bucket_path(s2file:str, check_exists:bool=False) -> str:
+    mission, producttype, sensing_date_str, pdgs, relorbitnum, tile_number_field, product_discriminator = s2_name_split(s2file)
+    s2file = s2file[:-1] if s2file.endswith("/") else s2file
+    basename = os.path.basename(s2file)
+    s2folder = f"gs://gcp-public-data-sentinel-2/tiles/{tile_number_field[:2]}/{tile_number_field[2]}/{tile_number_field[3:]}/{basename}"
+    if check_exists:
+        import fsspec
+        fs = fsspec.filesystem("gs", requester_pays=True)
+        if not fs.exists(s2folder):
+            raise FileNotFoundError(f"Sentinel-2 file not found in {s2folder}")
+
+    return s2folder
+
+
 NEW_FORMAT = "(S2\w{1})_(MSIL\w{2})_(\d{4}\d{2}\d{2}T\d{2}\d{2}\d{2})_(\w{5})_(\w{4})_T(\w{5})_(\w{15})"
 OLD_FORMAT = "(S2\w{1})_(\w{4})_(\w{3}_\w{6})_(\w{4})_(\d{8}T\d{6})_(\w{4})_V(\d{4}\d{2}\d{2}T\d{6})_(\d{4}\d{2}\d{2}T\d{6})"
 
-def s2_name_split(s2file):
+
+def s2_name_split(s2file:str) -> Optional[Tuple[str, str, str, str, str, str, str]]:
     """
     https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/naming-convention
 
@@ -605,8 +625,12 @@ def s2_name_split(s2file):
     Txxxxx: Tile Number field
     SAFE: Product Format (Standard Archive Format for Europe)
 
-    :param s2l1c:
-    :return:
+    Args:
+        s2file: name or path to the Sentinel-2 SAFE file
+
+    Returns:
+        mission, producttype, sensing_date_str, pdgs, relorbitnum, tile_number_field, product_discriminator
+
     """
     s2file = s2file[:-1] if s2file.endswith("/") else s2file
     basename = os.path.basename(os.path.splitext(s2file)[0])
@@ -615,7 +639,7 @@ def s2_name_split(s2file):
         return matches.groups()
 
 
-def s2_old_format_name_split(s2file):
+def s2_old_format_name_split(s2file:str) -> Optional[Tuple[str, str, str, str, str, str, str, str]]:
     """
     https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/naming-convention
 
@@ -624,9 +648,13 @@ def s2_old_format_name_split(s2file):
     mission, opertortest, filetype, sitecenter,  creation_date_str, relorbitnum, sensing_time_start, sensing_time_stop = s2_old_format_name_split(s2l1c)
     ```
 
-    :param s2l1c:
-    :return:
+    Args:
+        s2file:
+
+    Returns:
+        mission, opertortest, filetype, sitecenter,  creation_date_str, relorbitnum, sensing_time_start, sensing_time_stop
     """
+
     s2file = s2file[:-1] if s2file.endswith("/") else s2file
     basename = os.path.basename(os.path.splitext(s2file)[0])
     matches = re.match(OLD_FORMAT, basename)
