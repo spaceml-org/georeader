@@ -233,7 +233,7 @@ class RasterioReader:
         """
         descriptions_all = []
         for i, p in enumerate(self.paths):
-            with rasterio.open(p, "r", overview_level=self.overview_level) as src:
+            with rasterio.open(p, "r") as src:
                 desc = src.descriptions
             descriptions_all.append([desc[i-1] for i in self.indexes])
 

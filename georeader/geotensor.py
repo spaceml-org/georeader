@@ -8,7 +8,6 @@ from georeader import window_utils
 import numbers
 from math import ceil
 from itertools import product
-from skimage.transform import resize
 
 try:
     import torch
@@ -203,16 +202,21 @@ class GeoTensor:
                          self.fill_value_default)
 
     def resize(self, output_shape:Optional[Tuple[int,int]]=None,
-               resolution_dst: Optional[Union[float, Tuple[float, float]]]=None,
-               anti_aliasing:bool=True, interpolation:Optional[str]="bilinear",
+               anti_aliasing:bool=True, anti_aliasing_sigma:Optional[float]=None,
+               interpolation:Optional[str]="bilinear",
                mode_pad:str="constant")-> '__class__':
         """
+        Resize the geotensor to match a certain size output_shape. This function works with GeoTensors of 2D, 3D and 4D.
+        The geoinformation of the output tensor is changed accordingly.
 
         Args:
-            output_shape:
-            resolution_dst:
-            anti_aliasing:
-            interpolation: – algorithm used for upsampling: 'nearest' | 'bilinear' | ‘bicubic’
+            output_shape: output spatial shape
+            anti_aliasing: Whether to apply a Gaussian filter to smooth the image prior to downsampling
+            anti_aliasing_sigma:  anti_aliasing_sigma : {float, tuple of floats}, optional
+                Standard deviation for Gaussian filtering used when anti-aliasing.
+                By default, this value is chosen as (s - 1) / 2 where s is the
+                downsampling factor, where s > 1
+            interpolation: – algorithm used for resizing: 'nearest' | 'bilinear' | ‘bicubic’
             mode_pad: mode pad for resize function
 
         Returns:
@@ -222,37 +226,10 @@ class GeoTensor:
         spatial_shape = input_shape[-2:]
         resolution_or = self.res
 
-        # TODO a different implementation of this function could be apply gaussian filter if anti_aliasing and use read_reproject
-        #         image = ndi.gaussian_filter(image, anti_aliasing_sigma,
-        #                                     cval=cval, mode=ndi_mode)
 
-        if output_shape is None:
-            if isinstance(resolution_dst, numbers.Number):
-                resolution_dst = (abs(resolution_dst), abs(resolution_dst))
-            else:
-                assert len(resolution_dst) == 2, f"Expected 2 values found {resolution_dst}"
-
-            scale = resolution_or[0]/resolution_dst[0], resolution_or[1]/resolution_dst[1]
-            # scale < 1 => make image smaller (resolution_or < resolution_dst)
-            # scale > 1 => make image larger (resolution_or > resolution_dst)
-            output_shape_exact = spatial_shape[0]*scale[0], spatial_shape[1]*scale[1]
-
-            output_rounded = round(output_shape_exact[0],ndigits=3), round(output_shape_exact[1],ndigits=3)
-            output_shape = ceil(output_rounded[0]), ceil(output_rounded[0])
-
-            resolution_dst_new = spatial_shape[0] * resolution_or[0] / output_shape[0], \
-                                 spatial_shape[1] * resolution_or[1] / output_shape[1]
-
-            if output_shape != output_shape_exact:
-                warnings.warn(f"Change in resolution lead not exact output shape: {output_rounded}."
-                              f"We will use {output_shape} which corresponds to output resolution {resolution_dst_new} (instead of {resolution_dst})")
-
-            resolution_dst = resolution_dst_new
-
-        else:
-            assert len(output_shape) == 2, f"Expected output shape to be the spatial dimensions found: {output_shape}"
-            resolution_dst =  spatial_shape[0]*resolution_or[0]/output_shape[0], \
-                              spatial_shape[1]*resolution_or[1]/output_shape[1]
+        assert len(output_shape) == 2, f"Expected output shape to be the spatial dimensions found: {output_shape}"
+        resolution_dst =  spatial_shape[0]*resolution_or[0]/output_shape[0], \
+                          spatial_shape[1]*resolution_or[1]/output_shape[1]
 
         # Compute output transform
         transform_scale = rasterio.Affine.scale(resolution_dst[0]/resolution_or[0], resolution_dst[1]/resolution_or[1])
@@ -268,22 +245,26 @@ class GeoTensor:
             # https://kornia.readthedocs.io/en/latest/geometry.transform.html#kornia.geometry.transform.resize
             raise NotImplementedError(f"Not implemented for torch Tensors")
         else:
+            from skimage.transform import resize
             # https://scikit-image.org/docs/stable/api/skimage.transform.html#skimage.transform.resize
             output_tensor = np.ndarray(input_shape[:-2]+output_shape, dtype=self.dtype)
             if len(input_shape) == 4:
                 for i,j in product(range(0,input_shape[0]), range(0, input_shape[1])):
                     output_tensor[i,j] = resize(self.values[i,j], output_shape, order=ORDERS[interpolation],
                                                 anti_aliasing=anti_aliasing, preserve_range=False,
-                                                cval=self.fill_value_default,mode=mode_pad)
+                                                cval=self.fill_value_default,mode=mode_pad,
+                                                anti_aliasing_sigma=anti_aliasing_sigma)
             elif len(input_shape) == 3:
                 for i in range(0,input_shape[0]):
                     output_tensor[i] = resize(self.values[i], output_shape, order=ORDERS[interpolation],
                                               anti_aliasing=anti_aliasing, preserve_range=False,
-                                              cval=self.fill_value_default,mode=mode_pad)
+                                              cval=self.fill_value_default,mode=mode_pad,
+                                              anti_aliasing_sigma=anti_aliasing_sigma)
             else:
                 output_tensor[...] = resize(self.values, output_shape, order=ORDERS[interpolation],
                                             anti_aliasing=anti_aliasing, preserve_range=False,
-                                            cval=self.fill_value_default,mode=mode_pad)
+                                            cval=self.fill_value_default,mode=mode_pad,
+                                            anti_aliasing_sigma=anti_aliasing_sigma)
 
         return GeoTensor(output_tensor, transform=transform, crs=self.crs,
                          fill_value_default=self.fill_value_default)

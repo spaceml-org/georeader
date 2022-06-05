@@ -4,6 +4,7 @@ import rasterio.warp
 import rasterio.features
 import numbers
 import numpy as np
+from math import ceil
 from typing import Tuple, Union, Optional, Dict, Any, List
 from collections import OrderedDict
 import itertools
@@ -11,6 +12,7 @@ from georeader.geotensor import GeoTensor
 from georeader import window_utils
 from georeader.window_utils import PIXEL_PRECISION, pad_window, round_outer_window, _is_exact_round
 from georeader.abstract_reader import GeoData
+from itertools import product
 
 
 def _round_all(x):
@@ -235,7 +237,7 @@ def read_reproject_like(data_in: GeoData, data_like: GeoData,
     Args:
         data_in: GeoData to read and reproject. Expected coords "x" and "y".
         data_like: GeoData to get the bounds and resolution to reproject `data_in`.
-        resampling: specifies how data is reprojected
+        resampling: specifies how data is reprojected from `rasterio.warp.Resampling`.
         dtpye_dst: if None it will be inferred
         return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
             returns an GeoTensor object (georreferenced array).
@@ -250,6 +252,74 @@ def read_reproject_like(data_in: GeoData, data_like: GeoData,
                           window_out=rasterio.windows.Window(0,0, width=shape_out[-1], height=shape_out[-2]),
                           resampling=resampling,dtpye_dst=dtpye_dst, return_only_data=return_only_data,
                           dst_nodata=dst_nodata)
+
+def resize(data_in:GeoData, resolution_dst:Union[float, Tuple[float, float]],
+           window_out:Optional[rasterio.windows.Window]=None,
+           anti_aliasing:bool=True,anti_aliasing_sigma:Optional[float]=None,
+           resampling: rasterio.warp.Resampling = rasterio.warp.Resampling.cubic_spline,
+           return_only_data: bool = False)-> Union[
+    GeoTensor, np.ndarray]:
+    """
+    Change the spatial resolution of data_in to `resolution_dst`. This function is a wrapper of the `read_reproject` function
+    that adds anti_aliasing before reprojecting.
+
+    Args:
+        data_in: GeoData to change the resolution. Expected coords "x" and "y".
+        resolution_dst: spatial resolution in data_in crs
+        window_out: Optional. output size of the fragment to read and reproject. Defaults to the ceiling size
+        anti_aliasing: Whether to apply a Gaussian filter to smooth the image prior to downsampling
+        anti_aliasing_sigma:  anti_aliasing_sigma : {float}, optional
+                Standard deviation for Gaussian filtering used when anti-aliasing.
+                By default, this value is chosen as (s - 1) / 2 where s is the
+                downsampling factor, where s > 1
+        resampling: specifies how data is reprojected from `rasterio.warp.Resampling`.
+        return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
+            returns an GeoTensor object (georreferenced array).
+
+    Returns:
+        GeoTensor with spatial resolution `resolution_dst`
+
+    """
+    resolution_or = data_in.res
+    if isinstance(resolution_dst, numbers.Number):
+        resolution_dst = (abs(resolution_dst), abs(resolution_dst))
+
+    scale = np.array([resolution_or[0] / resolution_dst[0], resolution_or[1] / resolution_dst[1]])
+
+    if window_out is None:
+        spatial_shape = data_in.shape[-2:]
+
+        # scale < 1 => make image smaller (resolution_or < resolution_dst)
+        # scale > 1 => make image larger (resolution_or > resolution_dst)
+        output_shape_exact = spatial_shape[0] * scale[0], spatial_shape[1] * scale[1]
+        output_shape_rounded = round(output_shape_exact[0], ndigits=3), round(output_shape_exact[1], ndigits=3)
+        output_shape = ceil(output_shape_rounded[0]), ceil(output_shape_rounded[1])
+        window_out = rasterio.windows.Window(col_off=0, row_off=0, width=output_shape[1], height=output_shape[0])
+
+    if anti_aliasing and any(s1<s2 for s1,s2 in zip(resolution_or, resolution_dst)):
+        from scipy import ndimage as ndi
+        data_in = data_in.load()
+        if anti_aliasing_sigma is None:
+            anti_aliasing_sigma = np.maximum(0, (scale - 1) / 2)
+
+        input_shape = data_in.shape
+        if len(input_shape) == 4:
+            for i, j in product(range(0, input_shape[0]), range(0, input_shape[1])):
+                data_in.values[i, j] = ndi.gaussian_filter(data_in.values[i, j],
+                                                           anti_aliasing_sigma,cval=0, mode="reflect")
+        elif len(input_shape) == 3:
+            for i in range(0, input_shape[0]):
+                data_in.values[i] = ndi.gaussian_filter(data_in.values[i],
+                                                        anti_aliasing_sigma, cval=0, mode="reflect")
+        else:
+            data_in.values[...] = ndi.gaussian_filter(data_in.values,
+                                                      anti_aliasing_sigma, cval=0, mode="reflect")
+
+
+    return read_reproject(data_in, dst_crs=data_in.crs, resolution_dst_crs=resolution_dst,
+                          dst_transform=data_in.transform, window_out=window_out,
+                          resampling=resampling, return_only_data=return_only_data)
+
 
 
 def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
@@ -271,7 +341,7 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
         dst_transform: Optional dest transform. If not provided the dst_transform is a rectilinear transform computed
         with the bounds and resolution_dst_crs.
         window_out: Window out in dst_crs. If not provided it is computed from the bounds.
-        resampling: specifies how data is reprojected
+        resampling: specifies how data is reprojected from `rasterio.warp.Resampling`.
         dtpye_dst: if None it will be inferred
         return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
             returns an GeoTensor object (georreferenced array).
