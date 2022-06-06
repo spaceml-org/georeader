@@ -32,7 +32,7 @@ from georeader.geotensor import GeoTensor
 BANDS_S2 = ["B01", "B02","B03", "B04", "B05", "B06",
             "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
 
-# TODO ADD SLC band? AOT or WP?
+# TODO ADD SLC band? AOT? WP?
 BANDS_S2_L2A = ["B01", "B02","B03", "B04", "B05", "B06",
                 "B07", "B08", "B8A", "B09", "B11", "B12"]
 
@@ -212,6 +212,7 @@ class S2Image:
 
     def __repr__(self)->str:
         return f""" 
+         {self.folder}
          Transform: {self.transform}
          Shape: {self.shape}
          Resolution: {self.res}
