@@ -28,16 +28,22 @@ RESOLUTIONS_LINKS = {
 
 
 def get_auth():
-    json_file = os.path.join(os.path.dirname(__file__), "auth.json")
-    assert os.path.exists(json_file), f"file: {json_file} not found"
+    home_dir = os.path.join(os.path.expanduser('~'),".georeader")
+    json_file = os.path.join(home_dir, "auth.json")
+    if not os.path.exists(json_file):
+        os.makedirs(home_dir, exist_ok=True)
+        with open(json_file, "w") as fh:
+            json.dump({"user": "SET-USER", "password": "SET-PASSWORD"}, fh)
+
+        raise FileNotFoundError(f"In order to download Proba-V images add user and password to file : {json_file}")
 
     with open(json_file, "r") as fh:
         data = json.load(fh)
     
-    assert data["user"] != "SET-USER", f"You need to register in VITO and modify the file {json_file} to have your credentials"
-        
+    if data["user"] == "SET-USER":
+        raise FileNotFoundError(f"In order to download Proba-V images add user and password to file : {json_file}")
 
-    return HTTPBasicAuth(data["user"],data["password"])
+    return HTTPBasicAuth(data["user"], data["password"])
 
 
 def fetch_products_date_region(date: datetime, bounding_box: Tuple[float, float, float, float],
