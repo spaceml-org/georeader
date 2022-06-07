@@ -47,7 +47,7 @@ data_memory
 from rasterio.plot import  show
 show((data_memory.values-1000)/3500, transform=data_memory.transform)
 ```
-![S2image](notebooks/sample_read.jpeg)
+![S2image](notebooks/images/sample_read.jpeg)
 
 ```python
 # Save the data
