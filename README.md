@@ -59,10 +59,10 @@ save_cog(data_memory, "s2_crop.tif", descriptions=s2obj.bands)
 
 ## Tutorials
 
-* [Tutorial to read overlapping tiles from a GeoTIFF and Sentinel-2 images](https://github.com/spaceml-org/georeader/blob/main/notebooks/reading_overlapping_sentinel2_aviris.ipynb)
-* [Example of reading Proba-V images overlapping with Sentinel-2](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_overlapping_probav_and_sentinel2.ipynb)
+* [Tutorial to read overlapping tiles from a GeoTIFF and a Sentinel-2 image](https://github.com/spaceml-org/georeader/blob/main/notebooks/reading_overlapping_sentinel2_aviris.ipynb)
+* [Example of reading a Proba-V image overlapping with Sentinel-2 forcing same resolution](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_overlapping_probav_and_sentinel2.ipynb)
 * [Reading Sentinel-2 images from the public Google bucket](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_S2_SAFE_from_bucket.ipynb)
-* [Query Sentinel-2 images over a location and time period and plot them](https://github.com/spaceml-org/georeader/blob/main/notebooks/Sentinel-2/query_s2_images.ipynb)
+* [Query Sentinel-2 images over a location and time span and plot them](https://github.com/spaceml-org/georeader/blob/main/notebooks/Sentinel-2/query_s2_images.ipynb)
 
 
 ## TODOs
