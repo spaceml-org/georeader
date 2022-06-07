@@ -80,9 +80,9 @@ class GeoTensor:
         return window_bounds(rasterio.windows.Window(row_off=0, col_off=0, height=self.height, width=self.width),
                              self.transform)
 
-    def astype(self, dtype):
+    def set_dtype(self, dtype):
         # TODO implement for torch tensor
-        self.values.astype(dtype=dtype)
+        self.values = self.values.astype(dtype=dtype)
 
     @property
     def attrs(self) -> Dict[str, Any]:

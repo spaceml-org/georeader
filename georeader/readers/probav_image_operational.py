@@ -304,7 +304,7 @@ class ProbaV:
          File: {self.hdf5_file}
          Transform: {self.transform}
          Shape: {self.height}, {self.width}
-         Resolution: {self.resolution}
+         Resolution: {self.res}
          Bounds: {self.bounds}
          CRS: {self.crs}
          Level: {self.level_name}
