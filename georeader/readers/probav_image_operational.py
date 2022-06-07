@@ -277,7 +277,7 @@ class ProbaV:
 
     @property
     def bounds(self) -> Tuple[float, float, float, float]:
-        return rasterio.windows.bounds(self.window_focus, self.real_transform)
+        return window_utils.window_bounds(self.window_focus, self.real_transform)
 
     def set_window(self, window:rasterio.windows.Window, relative:bool=True, boundless:bool=True):
         if relative:

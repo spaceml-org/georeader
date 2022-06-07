@@ -140,6 +140,38 @@ def get_slice_pad(window_data:rasterio.windows.Window,
     return slice_dict, pad_width
 
 
+def window_bounds(window:rasterio.windows.Window,
+                  transform:rasterio.Affine) -> Tuple[float, float, float, float]:
+    """Get the spatial bounds of a window.
+
+    This is a re-implementation of rasterio.window.bounds that works with non-rectilinear transforms!
+
+    Parameters
+    ----------
+    window: Window
+        The input window.
+    transform: Affine
+        an affine transform matrix.
+
+    Returns
+    -------
+    xmin, ymin, xmax, ymax: float
+        A tuple of spatial coordinate bounding values.
+    """
+
+    row_min = window.row_off
+    row_max = row_min + window.height
+    col_min = window.col_off
+    col_max = col_min + window.width
+    corner_00 = transform * (col_min, row_min)
+    corner_01 = transform * (col_min, row_max)
+    corner_10 = transform * (col_max, row_min)
+    corner_11 = transform * (col_max, row_max)
+    all_corners = [corner_00, corner_01, corner_10, corner_11]
+
+    return min(c[0] for c in all_corners), min(c[1] for c in all_corners), \
+           max(c[0] for c in all_corners), max(c[1] for c in all_corners)
+
 def normalize_bounds(bounds:Tuple[float, float, float, float], margin_add_if_equal:float=.0005) -> Tuple[float, float, float, float]:
     """ Return bounds with a small margin if it is not a rectangle """
     xmin = min(bounds[0], bounds[2])

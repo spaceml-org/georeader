@@ -253,6 +253,7 @@ def read_reproject_like(data_in: GeoData, data_like: GeoData,
                           resampling=resampling,dtpye_dst=dtpye_dst, return_only_data=return_only_data,
                           dst_nodata=dst_nodata)
 
+
 def resize(data_in:GeoData, resolution_dst:Union[float, Tuple[float, float]],
            window_out:Optional[rasterio.windows.Window]=None,
            anti_aliasing:bool=True,anti_aliasing_sigma:Optional[float]=None,
@@ -366,7 +367,7 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
                                                                                          pixel_precision=PIXEL_PRECISION)
 
     # Compute real bounds that are going to be read
-    bounds = window_utils.normalize_bounds(rasterio.windows.bounds(window_out, dst_transform))
+    bounds = window_utils.window_bounds(window_out, dst_transform)
 
     crs_data_in = data_in.crs
     if dst_crs is None:

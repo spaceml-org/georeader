@@ -6,7 +6,7 @@ import warnings
 import numbers
 from georeader import geotensor
 from collections.abc import Iterable
-from georeader.window_utils import normalize_bounds, get_slice_pad
+from georeader.window_utils import window_bounds, get_slice_pad
 
 
 class RasterioReader:
@@ -83,7 +83,6 @@ class RasterioReader:
             if self.fill_value_default is None:
                 self.fill_value_default = self.nodata if (self.nodata is not None) else 0
 
-            self.real_bounds = src.bounds
             self.res = src.res
 
         # if (abs(self.real_transform.b) > 1e-6) or (abs(self.real_transform.d) > 1e-6):
@@ -205,7 +204,7 @@ class RasterioReader:
         self.height = self.window_focus.height
         self.width = self.window_focus.width
 
-        self.bounds = normalize_bounds(rasterio.windows.bounds(self.window_focus, self.real_transform))
+        self.bounds = window_bounds(self.window_focus, self.real_transform)
         self.transform = rasterio.windows.transform(self.window_focus, self.real_transform)
 
     def tags(self) -> Union[List[Dict[str, str]], Dict[str, str]]:

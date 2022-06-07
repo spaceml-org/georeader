@@ -1,12 +1,10 @@
-import warnings
 
 import numpy as np
 from typing import Any, Dict, Union, Tuple, Optional
 import rasterio
 import rasterio.windows
 from georeader import window_utils
-import numbers
-from math import ceil
+from georeader.window_utils import window_bounds
 from itertools import product
 
 try:
@@ -79,8 +77,8 @@ class GeoTensor:
 
     @property
     def bounds(self) -> Tuple[float, float, float, float]:
-        return window_utils.normalize_bounds(rasterio.windows.bounds(rasterio.windows.Window(row_off=0, col_off=0, height=self.height, width=self.width),
-                                                                     self.transform))
+        return window_bounds(rasterio.windows.Window(row_off=0, col_off=0, height=self.height, width=self.width),
+                             self.transform)
 
     def astype(self, dtype):
         # TODO implement for torch tensor

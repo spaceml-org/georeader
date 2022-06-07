@@ -185,7 +185,7 @@ class S2Image:
     @property
     def shape(self):
         reader_band_check = self._get_reader()
-        return (len(self.granule),) + reader_band_check.shape[-2:]
+        return (len(self.bands),) + reader_band_check.shape[-2:]
 
     @property
     def transform(self):
@@ -305,8 +305,6 @@ class S2ImageL1C(S2Image):
 
         if read_metadata:
             self.read_metadata()
-
-        assert len(self.bands) == len(self.granule), f"Expected same but found different {len(self.bands)} {len(self.granule)}"
 
         # Granule in L1C does not include TCI
         # Assert bands in self.granule are ordered as in BANDS_S2
@@ -559,7 +557,10 @@ def process_metadata_msi(xml_file:str) -> Tuple[List[str], Polygon]:
     return jp2bands, footprint
 
 
-def s2loader(s2folder:str, out_res:int=10, all_granules:Optional[List[str]]=None,
+def s2loader(s2folder:str, out_res:int=10,
+             bands:Optional[List[str]] = None,
+             window_focus:Optional[rasterio.windows.Window]=None,
+             all_granules:Optional[List[str]]=None,
              polygon:Optional[Polygon]=None) -> Union[S2ImageL2A, S2ImageL1C]:
     """
     Loads a S2ImageL2A or S2ImageL1C depending on the product type
@@ -567,6 +568,8 @@ def s2loader(s2folder:str, out_res:int=10, all_granules:Optional[List[str]]=None
     Args:
         s2folder: .SAFE folder. Expected standard ESA naming convention (see s2_name_split fun)
         out_res: default output resolution {10, 20, 60}
+        bands: Bands to read. Default to BANDS_S2 or BANDS_S2_L2A depending of the product type
+        window_focus: window to read when creating the object
         all_granules:
         polygon:
 
@@ -582,9 +585,11 @@ def s2loader(s2folder:str, out_res:int=10, all_granules:Optional[List[str]]=None
         all_granules = [os.path.join(s2folder, jp2band).replace("\\", "/") for jp2band in jp2bands]
 
     if producttype_nos2 == "MSIL2A":
-        return S2ImageL2A(s2folder, all_granules=all_granules, polygon=polygon, out_res=out_res)
+        return S2ImageL2A(s2folder, all_granules=all_granules, polygon=polygon, out_res=out_res,
+                          bands=bands, window_focus=window_focus)
     elif producttype_nos2 == "MSIL1C":
-        return S2ImageL1C(s2folder, all_granules=all_granules, polygon=polygon, out_res=out_res)
+        return S2ImageL1C(s2folder, all_granules=all_granules, polygon=polygon, out_res=out_res, bands=bands,
+                          window_focus=window_focus)
 
     raise NotImplementedError(f"Don't know how to load {producttype_nos2} products")
 

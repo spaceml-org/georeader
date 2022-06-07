@@ -33,8 +33,8 @@ class AbstractGeoData:
 
     @property
     def bounds(self) -> Tuple[float, float, float, float]:
-        return rasterio.windows.bounds(rasterio.windows.Window(col_off=0, row_off=0, width=self.shape[-1], height=self.shape[-2]),
-                                       self.transform)
+        return window_utils.window_bounds(rasterio.windows.Window(row_off=0, col_off=0, height=self.shape[0], width=self.shape[1]),
+                                          self.transform)
 
     def load(self, boundless:bool=True)-> GeoTensor:
         # return GeoTensor(values=self.values, transform=self.transform, crs=self.crs)
