@@ -10,7 +10,7 @@ cd georeader
 pip install -e .
 ```
 
-This package is work in progress. The API might change without notice. Use it with care.
+This package is work in progress. The API might change without notice. Use it with caution.
 
 ## Getting started
 
