@@ -14,8 +14,7 @@ https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/document-librar
 
 """
 from rasterio import windows, features, coords
-from shapely.geometry import Polygon, MultiPolygon
-from xml.etree.ElementTree import parse
+from shapely.geometry import Polygon, MultiPolygon, box
 import xml.etree.ElementTree as ET
 import rasterio
 import datetime
@@ -27,6 +26,7 @@ from typing import List, Tuple, Union, Optional, Dict
 from georeader.rasterio_reader import  RasterioReader
 from georeader import read
 from georeader.geotensor import GeoTensor
+import rasterio.warp
 
 
 BANDS_S2 = ["B01", "B02","B03", "B04", "B05", "B06",
@@ -123,7 +123,11 @@ class S2Image:
         return self.root_metadata_msi
 
     @property
-    def polygon(self):
+    def polygon(self) -> Union[MultiPolygon, Polygon]:
+        """
+        Polygon in longlat (EPSG:4326) this takes into account the selected window. This is the intersection of the
+        footprint with the window.
+        """
         if self._pol is None:
             self.load_metadata_msi()
             footprint_txt = self.root_metadata_msi.findall(".//EXT_POS_LIST")[0].text
@@ -131,7 +135,9 @@ class S2Image:
             self._pol = Polygon(
                 [(float(lngstr), float(latstr)) for latstr, lngstr in zip(coords_split[::2], coords_split[1::2])])
 
-        return self._pol
+        pol_bounds_latlng = box(*rasterio.warp.transform_bounds(self.crs, "EPSG:4326", *self.bounds))
+
+        return self._pol.intersection(pol_bounds_latlng)
 
     def radio_add_offsets(self) ->Dict[str,float]:
         if self._radio_add_offsets is None:
@@ -368,6 +374,7 @@ class S2ImageL1C(S2Image):
 
         self.msk_clouds_file = os.path.join(self.folder, self.granule_folder, "MSK_CLOUDS_B00.gml").replace("\\","/")
         self.metadata_tl = os.path.join(self.folder, self.granule_folder, "MTD_TL.xml").replace("\\","/")
+        self.root_metadata_tl = None
 
         # Granule in L1C does not include TCI
         # Assert bands in self.granule are ordered as in BANDS_S2
@@ -378,18 +385,24 @@ class S2ImageL1C(S2Image):
         '''
         Read metadata TILE to parse information about the acquisition and properties of GRANULE bands
         '''
-        self.root_metadata_tl  = read_xml(self.metadata_tl)
+        if self.root_metadata_tl is not None:
+            return
+
+        self.root_metadata_tl = read_xml(self.metadata_tl)
 
             # Stoopid XML namespace prefix
         nsPrefix = self.root_metadata_tl.tag[:self.root_metadata_tl.tag.index('}') + 1]
         nsDict = {'n1': nsPrefix[1:-1]}
+
+        self.mean_sza = float(self.root_metadata_tl.find(".//Mean_Sun_Angle/ZENITH_ANGLE").text)
+        self.mean_saa = float(self.root_metadata_tl.find(".//Mean_Sun_Angle/AZIMUTH_ANGLE").text)
 
         generalInfoNode = self.root_metadata_tl.find('n1:General_Info', nsDict)
         # N.B. I am still not entirely convinced that this SENSING_TIME is really
         # the acquisition time, but the documentation is rubbish.
         sensingTimeNode = generalInfoNode.find('SENSING_TIME')
         sensingTimeStr = sensingTimeNode.text.strip()
-        self.datetime = datetime.datetime.strptime(sensingTimeStr, "%Y-%m-%dT%H:%M:%S.%fZ")
+        # self.datetime = datetime.datetime.strptime(sensingTimeStr, "%Y-%m-%dT%H:%M:%S.%fZ")
         tileIdNode = generalInfoNode.find('TILE_ID')
         tileIdFullStr = tileIdNode.text.strip()
         self.tileId = tileIdFullStr.split('_')[-2]
@@ -399,7 +412,6 @@ class S2ImageL1C(S2Image):
         geomInfoNode = self.root_metadata_tl.find('n1:Geometric_Info', nsDict)
         geocodingNode = geomInfoNode.find('Tile_Geocoding')
         epsgNode = geocodingNode.find('HORIZONTAL_CS_CODE')
-        self.epsg = epsgNode.text.split(':')[1]
 
         # Dimensions of images at different resolutions.
         self.dimsByRes = {}
@@ -471,106 +483,106 @@ class S2ImageL1C(S2Image):
                 angleArrDict[bandId][mask] = angleArr[mask]
         return angleArrDict
 
-    def get_polygons_bqa(self):
-        def polygon_from_coords(coords, fix_geom=False, swap=True, dims=2):
-            """
-            Return Shapely Polygon from coordinates.
-            - coords: list of alterating latitude / longitude coordinates
-            - fix_geom: automatically fix geometry
-            """
-            assert len(coords) % dims == 0
-            number_of_points = int(len(coords) / dims)
-            coords_as_array = np.array(coords)
-            reshaped = coords_as_array.reshape(number_of_points, dims)
-            points = [(float(i[1]), float(i[0])) if swap else ((float(i[0]), float(i[1]))) for i in reshaped.tolist()]
-            polygon = Polygon(points).buffer(0)
-            try:
-                assert polygon.is_valid
-                return polygon
-            except AssertionError:
-                if fix_geom:
-                    return polygon.buffer(0)
-                else:
-                    raise RuntimeError("Geometry is not valid.")
+    # def get_polygons_bqa(self):
+    #     def polygon_from_coords(coords, fix_geom=False, swap=True, dims=2):
+    #         """
+    #         Return Shapely Polygon from coordinates.
+    #         - coords: list of alterating latitude / longitude coordinates
+    #         - fix_geom: automatically fix geometry
+    #         """
+    #         assert len(coords) % dims == 0
+    #         number_of_points = int(len(coords) / dims)
+    #         coords_as_array = np.array(coords)
+    #         reshaped = coords_as_array.reshape(number_of_points, dims)
+    #         points = [(float(i[1]), float(i[0])) if swap else ((float(i[0]), float(i[1]))) for i in reshaped.tolist()]
+    #         polygon = Polygon(points).buffer(0)
+    #         try:
+    #             assert polygon.is_valid
+    #             return polygon
+    #         except AssertionError:
+    #             if fix_geom:
+    #                 return polygon.buffer(0)
+    #             else:
+    #                 raise RuntimeError("Geometry is not valid.")
+    #
+    #
+    #     exterior_str = str("eop:extentOf/gml:Polygon/gml:exterior/gml:LinearRing/gml:posList")
+    #     interior_str = str("eop:extentOf/gml:Polygon/gml:interior/gml:LinearRing/gml:posList")
+    #     root = read_xml(self.msk_clouds_file)
+    #     nsmap = {k: v for k, v in root.nsmap.items() if k}
+    #     try:
+    #         for mask_member in root.iterfind("eop:maskMembers", namespaces=nsmap):
+    #             for feature in mask_member:
+    #                 type = feature.findtext("eop:maskType", namespaces=nsmap)
+    #
+    #                 ext_elem = feature.find(exterior_str, nsmap)
+    #                 dims = int(ext_elem.attrib.get('srsDimension', '2'))
+    #                 ext_pts = ext_elem.text.split()
+    #                 exterior = polygon_from_coords(ext_pts, fix_geom=True, swap=False, dims=dims)
+    #                 try:
+    #                     interiors = [polygon_from_coords(int_pts.text.split(), fix_geom=True, swap=False, dims=dims)
+    #                                  for int_pts in feature.findall(interior_str, nsmap)]
+    #                 except AttributeError:
+    #                     interiors = []
+    #
+    #                 yield dict(geometry=Polygon(exterior, interiors).buffer(0),
+    #                            attributes=dict(maskType=type),
+    #                            interiors=interiors)
+    #
+    #     except StopIteration:
+    #         yield dict(geometry=Polygon(),
+    #                    attributes=dict(maskType=None),
+    #                    interiors=[])
+    #         raise StopIteration()
 
-
-        exterior_str = str("eop:extentOf/gml:Polygon/gml:exterior/gml:LinearRing/gml:posList")
-        interior_str = str("eop:extentOf/gml:Polygon/gml:interior/gml:LinearRing/gml:posList")
-        root = read_xml(self.msk_clouds_file)
-        nsmap = {k: v for k, v in root.nsmap.items() if k}
-        try:
-            for mask_member in root.iterfind("eop:maskMembers", namespaces=nsmap):
-                for feature in mask_member:
-                    type = feature.findtext("eop:maskType", namespaces=nsmap)
-
-                    ext_elem = feature.find(exterior_str, nsmap)
-                    dims = int(ext_elem.attrib.get('srsDimension', '2'))
-                    ext_pts = ext_elem.text.split()
-                    exterior = polygon_from_coords(ext_pts, fix_geom=True, swap=False, dims=dims)
-                    try:
-                        interiors = [polygon_from_coords(int_pts.text.split(), fix_geom=True, swap=False, dims=dims)
-                                     for int_pts in feature.findall(interior_str, nsmap)]
-                    except AttributeError:
-                        interiors = []
-
-                    yield dict(geometry=Polygon(exterior, interiors).buffer(0),
-                               attributes=dict(maskType=type),
-                               interiors=interiors)
-
-        except StopIteration:
-            yield dict(geometry=Polygon(),
-                       attributes=dict(maskType=None),
-                       interiors=[])
-            raise StopIteration()
-
-    def load_clouds_bqa(self, window=None):
-        mask_types = ["OPAQUE", "CIRRUS"]
-        poly_list = list(self.get_polygons_bqa())
-
-        nrows, ncols = self.shape
-        transform_ = self.transform
-
-        def get_mask(mask_type=mask_types[0]):
-            assert mask_type in mask_types, "mask type must be OPAQUE or CIRRUS"
-            fill_value = {m: i+1 for i, m in enumerate(mask_types)}
-            n_polys = np.sum([poly["attributes"]["maskType"] == mask_type for poly in poly_list])
-            msk = np.zeros(shape=(nrows, ncols), dtype=np.float32)
-            if n_polys > 0:
-                # n_interiors = np.sum([len(poly) for poly in poly_list if poly["interiors"]])
-                multi_polygon = MultiPolygon([poly["geometry"]
-                                              for poly in poly_list
-                                              if poly["attributes"]["maskType"] == mask_type]).buffer(0)
-                bounds = multi_polygon.bounds
-                bbox2read = coords.BoundingBox(*bounds)
-                window_read = windows.from_bounds(*bbox2read, transform_)
-                slice_read = tuple(slice(int(round(s.start)), int(round(s.stop))) for s in window_read.toslices())
-                out_shape = tuple([s.stop - s.start for s in slice_read])
-                transform_slice = windows.transform(window_read, transform_)
-
-                shapes = [({"type": "Polygon",
-                            "coordinates": [np.stack([
-                                p_elem["geometry"].exterior.xy[0],
-                                p_elem["geometry"].exterior.xy[1]], axis=1).tolist()]}, fill_value[mask_type])
-                          for p_elem in poly_list if p_elem["attributes"]['maskType'] == mask_type]
-                sub_msk = features.rasterize(shapes=shapes, fill=0,
-                                             out_shape=out_shape, dtype=np.float32,
-                                             transform=transform_slice)
-                msk[slice_read] = sub_msk
-
-            return msk
-
-        if window is None:
-            shape = self.shape
-            window = rasterio.windows.Window(col_off=0, row_off=0,
-                                             width=shape[1], height=shape[0])
-
-        mask = self.load_mask(window=window)
-
-        slice_ = window.toslices()
-
-        msk_op_cirr = [np.ma.MaskedArray(get_mask(mask_type=m)[slice_], mask=mask) for m in mask_types]
-        msk_clouds = np.ma.MaskedArray(np.clip(np.sum(msk_op_cirr, axis=0), 0, 1), mask=mask)
-        return msk_clouds
+    # def load_clouds_bqa(self, window=None):
+    #     mask_types = ["OPAQUE", "CIRRUS"]
+    #     poly_list = list(self.get_polygons_bqa())
+    #
+    #     nrows, ncols = self.shape
+    #     transform_ = self.transform
+    #
+    #     def get_mask(mask_type=mask_types[0]):
+    #         assert mask_type in mask_types, "mask type must be OPAQUE or CIRRUS"
+    #         fill_value = {m: i+1 for i, m in enumerate(mask_types)}
+    #         n_polys = np.sum([poly["attributes"]["maskType"] == mask_type for poly in poly_list])
+    #         msk = np.zeros(shape=(nrows, ncols), dtype=np.float32)
+    #         if n_polys > 0:
+    #             # n_interiors = np.sum([len(poly) for poly in poly_list if poly["interiors"]])
+    #             multi_polygon = MultiPolygon([poly["geometry"]
+    #                                           for poly in poly_list
+    #                                           if poly["attributes"]["maskType"] == mask_type]).buffer(0)
+    #             bounds = multi_polygon.bounds
+    #             bbox2read = coords.BoundingBox(*bounds)
+    #             window_read = windows.from_bounds(*bbox2read, transform_)
+    #             slice_read = tuple(slice(int(round(s.start)), int(round(s.stop))) for s in window_read.toslices())
+    #             out_shape = tuple([s.stop - s.start for s in slice_read])
+    #             transform_slice = windows.transform(window_read, transform_)
+    #
+    #             shapes = [({"type": "Polygon",
+    #                         "coordinates": [np.stack([
+    #                             p_elem["geometry"].exterior.xy[0],
+    #                             p_elem["geometry"].exterior.xy[1]], axis=1).tolist()]}, fill_value[mask_type])
+    #                       for p_elem in poly_list if p_elem["attributes"]['maskType'] == mask_type]
+    #             sub_msk = features.rasterize(shapes=shapes, fill=0,
+    #                                          out_shape=out_shape, dtype=np.float32,
+    #                                          transform=transform_slice)
+    #             msk[slice_read] = sub_msk
+    #
+    #         return msk
+    #
+    #     if window is None:
+    #         shape = self.shape
+    #         window = rasterio.windows.Window(col_off=0, row_off=0,
+    #                                          width=shape[1], height=shape[0])
+    #
+    #     mask = self.load_mask(window=window)
+    #
+    #     slice_ = window.toslices()
+    #
+    #     msk_op_cirr = [np.ma.MaskedArray(get_mask(mask_type=m)[slice_], mask=mask) for m in mask_types]
+    #     msk_clouds = np.ma.MaskedArray(np.clip(np.sum(msk_op_cirr, axis=0), 0, 1), mask=mask)
+    #     return msk_clouds
 
     @staticmethod
     def makeValueArray(valuesListNode):
@@ -598,6 +610,37 @@ def read_xml(xml_file:str) -> ET.Element:
     else:
         root = ET.parse(xml_file).getroot()
     return root
+
+
+def DN_to_radiance(dn_data:GeoTensor, s2file: S2ImageL1C) -> GeoTensor:
+    """
+    Function to convert Digital numbers (DN) to radiance.
+
+    Important: this function assumes that radio correction has been applied
+     otherwise images after 2022-01-25 shifted (PROCESSING_BASELINE '04.00' or above)
+     by default this is applied in the S2Image class.
+
+     toaBandX = dn_dataBandX / 10000
+     radianceBandX = (toaBandX * cos(SZA) * solarIrradianceBandX * U) / pi
+
+    Args:
+        dn_data: data read from an S2Image class with digital numbers
+        s2file: s2file where data has been read
+
+    Returns:
+        geotensor with radiances
+    """
+    data_values_new = dn_data.values / 10_000
+    s2file.read_metadata_tl()
+    solar_irr = s2file.solar_irradiance()
+    U = s2file.scale_factor_U()
+    for i,b in enumerate(s2file.bands):
+        mask = dn_data.values[i] == dn_data.fill_value_default
+        data_values_new[i] = data_values_new[i] * np.cos(s2file.mean_sza/180*np.pi) * solar_irr[b] * U / np.pi
+        data_values_new[i][mask] = dn_data.fill_value_default
+
+    return GeoTensor(data_values_new, transform=dn_data.transform, crs=dn_data.crs,
+                     fill_value_default=dn_data.fill_value_default)
 
 
 def s2loader(s2folder:str, out_res:int=10,
