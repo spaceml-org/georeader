@@ -13,7 +13,7 @@ It has several enhancements:
 https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/document-library
 
 """
-from rasterio import windows, features, coords
+from rasterio import windows
 from shapely.geometry import Polygon, MultiPolygon, box
 import xml.etree.ElementTree as ET
 import rasterio
