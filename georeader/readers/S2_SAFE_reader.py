@@ -97,7 +97,7 @@ class S2Image:
             else:
                 self.bands = list(BANDS_S2)
         else:
-            self.bands = bands
+            self.bands = normalize_band_names(bands)
 
         self.dims = ("band", "y", "x")
         self.fill_value_default = 0
@@ -171,10 +171,16 @@ class S2Image:
         return self._radio_add_offsets
 
     def solar_irradiance(self) -> Dict[str, float]:
+        """
+        Returns solar irradiance per nanometer: W/m²/nm
+
+        Reads solar irradiance from metadata_msi:
+            <SOLAR_IRRADIANCE bandId="0" unit="W/m²/µm">1874.3</SOLAR_IRRADIANCE>
+        """
         if self._solar_irradiance is None:
             self.load_metadata_msi()
             sr = self.root_metadata_msi.findall(".//SOLAR_IRRADIANCE")
-            self._solar_irradiance = {BANDS_S2[int(r.attrib["bandId"])]: float(r.text) for r in sr}
+            self._solar_irradiance = {BANDS_S2[int(r.attrib["bandId"])]: float(r.text)/1_000 for r in sr}
 
         return self._solar_irradiance
 
@@ -186,6 +192,7 @@ class S2Image:
         return self._scale_factor_U
 
     def quantification_value(self) -> int:
+        """ Returns the quantification value stored in the metadata msi file (this is always: 10_000) """
         if self._quantification_value is None:
             self.load_metadata_msi()
             self._quantification_value = int(self.root_metadata_msi.find(".//QUANTIFICATION_VALUE").text)
