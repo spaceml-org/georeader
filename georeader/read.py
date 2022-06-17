@@ -285,7 +285,7 @@ def resize(data_in:GeoData, resolution_dst:Union[float, Tuple[float, float]],
     if isinstance(resolution_dst, numbers.Number):
         resolution_dst = (abs(resolution_dst), abs(resolution_dst))
 
-    scale = np.array([resolution_or[0] / resolution_dst[0], resolution_or[1] / resolution_dst[1]])
+    scale = np.array([resolution_dst[0] / resolution_or[0], resolution_dst[1] / resolution_or[1]])
 
     if window_out is None:
         spatial_shape = data_in.shape[-2:]
