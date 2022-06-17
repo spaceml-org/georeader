@@ -345,6 +345,7 @@ class S2Image:
                 else:
                     geotensor_iter = read.read_reproject_like(reader_iter, geotensor_ref)
 
+            # TODO deal with NODATA values
             # Important: Adds radio correction! otherwise images after 2022-01-25 shifted (PROCESSING_BASELINE '04.00' or above)
             array_out[idx] = geotensor_iter.values[0] + radio_add[b]
 
@@ -353,7 +354,6 @@ class S2Image:
 
     @property
     def values(self) -> np.ndarray:
-        # return np.zeros(self.shape, dtype=self.dtype)
         return self.load().values
 
     def load_mask(self) -> GeoTensor:
@@ -656,7 +656,7 @@ def DN_to_radiance(dn_data:GeoTensor, s2file: S2ImageL1C) -> GeoTensor:
     Returns:
         geotensor with radiances
     """
-    data_values_new = dn_data.values / 10_000
+    data_values_new = dn_data.values.astype(np.float32) / 10_000
     s2file.read_metadata_tl()
     solar_irr = s2file.solar_irradiance()
     U = s2file.scale_factor_U()
