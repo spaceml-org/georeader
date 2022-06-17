@@ -256,7 +256,7 @@ def read_reproject_like(data_in: GeoData, data_like: GeoData,
 
 def resize(data_in:GeoData, resolution_dst:Union[float, Tuple[float, float]],
            window_out:Optional[rasterio.windows.Window]=None,
-           anti_aliasing:bool=True,anti_aliasing_sigma:Optional[float]=None,
+           anti_aliasing:bool=True, anti_aliasing_sigma:Optional[Union[float,np.ndarray]]=None,
            resampling: rasterio.warp.Resampling = rasterio.warp.Resampling.cubic_spline,
            return_only_data: bool = False)-> Union[
     GeoTensor, np.ndarray]:
@@ -306,12 +306,21 @@ def resize(data_in:GeoData, resolution_dst:Union[float, Tuple[float, float]],
         input_shape = data_in.shape
         if len(input_shape) == 4:
             for i, j in product(range(0, input_shape[0]), range(0, input_shape[1])):
+                if isinstance(anti_aliasing_sigma, numbers.Number):
+                    anti_aliasing_sigma_iter = anti_aliasing_sigma
+                else:
+                    anti_aliasing_sigma_iter = anti_aliasing_sigma[i, j]
                 data_in.values[i, j] = ndi.gaussian_filter(data_in.values[i, j],
-                                                           anti_aliasing_sigma,cval=0, mode="reflect")
+                                                           anti_aliasing_sigma_iter,cval=0, mode="reflect")
         elif len(input_shape) == 3:
             for i in range(0, input_shape[0]):
+                if isinstance(anti_aliasing_sigma, numbers.Number):
+                    anti_aliasing_sigma_iter = anti_aliasing_sigma
+                else:
+                    anti_aliasing_sigma_iter = anti_aliasing_sigma[i]
+
                 data_in.values[i] = ndi.gaussian_filter(data_in.values[i],
-                                                        anti_aliasing_sigma, cval=0, mode="reflect")
+                                                        anti_aliasing_sigma_iter, cval=0, mode="reflect")
         else:
             data_in.values[...] = ndi.gaussian_filter(data_in.values,
                                                       anti_aliasing_sigma, cval=0, mode="reflect")
