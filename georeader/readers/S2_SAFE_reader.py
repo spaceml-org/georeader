@@ -44,6 +44,23 @@ BANDS_RESOLUTION = OrderedDict({"B01": 60, "B02": 10,
                                 "B10": 60, "B11": 20,
                                 "B12": 20})
 
+BANDS_S2_NO_ZERO = ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9"]
+
+
+def normalize_band_names(bands:List[str]) -> List[str]:
+    """ Adds zero before band name for reading """
+    bands_out = []
+    for b in bands:
+        lb = len(b)
+        if lb == 2:
+            bands_out.append(f"B0{b[-1]}")
+        elif lb == 3:
+            bands_out.append(b)
+        else:
+            raise NotImplementedError(f"Unknown band {b} with different number of expected characters")
+
+    return bands_out
+
 
 class S2Image:
     def __init__(self, s2_folder:str,
@@ -74,9 +91,11 @@ class S2Image:
         # Default resolution to read
         self.out_res = out_res
 
-        # load _pol from geometric_info product footprint!
         if bands is None:
-            self.bands = list(BANDS_S2)
+            if self.producttype == "MSIL2A":
+                self.bands = list(BANDS_S2_L2A)
+            else:
+                self.bands = list(BANDS_S2)
         else:
             self.bands = bands
 
@@ -187,6 +206,8 @@ class S2Image:
         """
         if isinstance(band_names,str):
             band_names = [band_names]
+
+        band_names = normalize_band_names(band_names)
 
         assert  all(BANDS_RESOLUTION[band_names[0]]==BANDS_RESOLUTION[b] for b in band_names), f"Bands: {band_names} have different resolution"
 
@@ -311,6 +332,11 @@ class S2Image:
         radio_add = self.radio_add_offsets()
         for idx, b in enumerate(self.bands):
             if b == self.band_check:
+
+                # Avoid bug of band names without zero before
+                if len(b) == 2:
+                    b = f"B0{b[-1]}"
+
                 geotensor_iter = geotensor_ref
             else:
                 reader_iter = self._get_reader(b)
