@@ -59,8 +59,9 @@ def window_from_bounds(data_in: GeoData, bounds:Tuple[float, float, float, float
                                                    data_in.crs, *bounds)
     else:
         bounds_in = bounds
-    transform = data_in.transform
-    window_in = rasterio.windows.from_bounds(*bounds_in, transform=transform)
+
+    window_in = rasterio.windows.from_bounds(*bounds_in, transform=data_in.transform)
+
     return window_in
 
 
@@ -69,8 +70,6 @@ def window_from_center_coords(data_in: GeoData, center_coords:Tuple[float, float
     """
      Compute window to read in `data_in` from the coordinates of the center pixel. If `crs_center_coords` is None it assumes
      `center_coords` are in the crs of `data_in`.
-
-     THIS FUNCTION ASSUMES data_in.transform.is_rectilinear IT WILL PRODUCE INCORRECT RESULTS OTHERWISE.
 
     Args:
         data_in: Reader with crs and transform attributes
@@ -168,10 +167,6 @@ def read_from_center_coords(data_in: GeoData, center_coords:Tuple[float, float],
                             boundless:bool=True) -> Union[GeoData, np.ndarray]:
     """
     Returns a chip of `data_in` centered on `center_coords` of shape `shape`.
-
-    Notes:
-        This function assumes that the transform of data_in is rectilinear. (see `rasterio.Affine.is_rectilinear`).
-        IT WILL PRODUCE INCORRECT RESULTS OTHERWISE.
 
     Args:
         data_in: GeoData object
@@ -292,16 +287,26 @@ def resize(data_in:GeoData, resolution_dst:Union[float, Tuple[float, float]],
 
         # scale < 1 => make image smaller (resolution_or < resolution_dst)
         # scale > 1 => make image larger (resolution_or > resolution_dst)
-        output_shape_exact = spatial_shape[0] * scale[0], spatial_shape[1] * scale[1]
+        output_shape_exact = spatial_shape[0] / scale[0], spatial_shape[1] / scale[1]
         output_shape_rounded = round(output_shape_exact[0], ndigits=3), round(output_shape_exact[1], ndigits=3)
         output_shape = ceil(output_shape_rounded[0]), ceil(output_shape_rounded[1])
         window_out = rasterio.windows.Window(col_off=0, row_off=0, width=output_shape[1], height=output_shape[0])
 
     if anti_aliasing and any(s1<s2 for s1,s2 in zip(resolution_or, resolution_dst)):
+        # If we are downscaling the image and requested anti_aliasing
+
         from scipy import ndimage as ndi
-        data_in = data_in.load()
+
+        # Copy or load the tensor in memory
+        if isinstance(data_in, GeoTensor):
+            data_in = data_in.copy()
+        else:
+            data_in = data_in.load()
+
         if anti_aliasing_sigma is None:
             anti_aliasing_sigma = np.maximum(0, (scale - 1) / 2)
+
+        # TODO if data_in.values is a torch.Tensor use kornia gaussian filter instead of ndi
 
         input_shape = data_in.shape
         if len(input_shape) == 4:
@@ -311,7 +316,7 @@ def resize(data_in:GeoData, resolution_dst:Union[float, Tuple[float, float]],
                 else:
                     anti_aliasing_sigma_iter = anti_aliasing_sigma[i, j]
                 data_in.values[i, j] = ndi.gaussian_filter(data_in.values[i, j],
-                                                           anti_aliasing_sigma_iter,cval=0, mode="reflect")
+                                                           anti_aliasing_sigma_iter, cval=0, mode="reflect")
         elif len(input_shape) == 3:
             for i in range(0, input_shape[0]):
                 if isinstance(anti_aliasing_sigma, numbers.Number):
@@ -405,17 +410,21 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
     shape_out = tuple([named_shape[s] if s not in ["x", "y"] else dict_shape_window_out[s] for s in named_shape])
     destination = np.zeros(shape_out, dtype=dtpye_dst)
 
-    # Read a padded window of the input data. This data will be then used for reprojection
-    dataarray_in = read_from_bounds(data_in, bounds, dst_crs,
-                                    pad_add=(3, 3), return_only_data=False,
-                                    trigger_load=True)
+    if not isinstance(data_in, GeoTensor):
+        # Read a padded window of the input data. This data will be then used for reprojection
+        geotensor_in = read_from_bounds(data_in, bounds, dst_crs,
+                                        pad_add=(3, 3), return_only_data=False,
+                                        trigger_load=True)
+    else:
+        geotensor_in = data_in
+
     # Trigger load makes that fill_value_default goes to nodata
 
-    np_array_in = np.asanyarray(dataarray_in.values)
+    np_array_in = np.asanyarray(geotensor_in.values)
     if cast:
         np_array_in = np_array_in.astype(dtpye_dst)
 
-    dst_nodata = dst_nodata or dataarray_in.fill_value_default
+    dst_nodata = dst_nodata or geotensor_in.fill_value_default
 
     index_iter = [[(ns, i) for i in range(s)] for ns, s in named_shape.items() if ns not in ["x", "y"]]
     # e.g. if named_shape = {'time': 4, 'band': 2, 'x':10, 'y': 10} index_iter ->
@@ -432,11 +441,11 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
         rasterio.warp.reproject(
             np_array_iter,
             dst_iter_write,
-            src_transform=dataarray_in.transform,
+            src_transform=geotensor_in.transform,
             src_crs=crs_data_in,
             dst_transform=dst_transform,
             dst_crs=dst_crs,
-            src_nodata=dataarray_in.fill_value_default,
+            src_nodata=geotensor_in.fill_value_default,
             dst_nodata=dst_nodata,
             resampling=resampling)
 

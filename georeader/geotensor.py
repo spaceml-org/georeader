@@ -94,6 +94,9 @@ class GeoTensor:
     def __copy__(self) -> '__class__':
         return GeoTensor(self.values.copy(), self.transform, self.crs, self.fill_value_default)
 
+    def copy(self) -> '__class__':
+        return self.__copy__()
+
     def isel(self, sel: Dict[str, slice]) -> '__class__':
         """
         Slicing with dict. It doesn't work with negative indexes!
