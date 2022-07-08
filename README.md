@@ -45,7 +45,8 @@ data_memory
     fill_value_default: 0
 
 from rasterio.plot import  show
-show((data_memory.values-1000)/3500, transform=data_memory.transform)
+show(data_memory.values/3500, transform=data_memory.transform)
+
 ```
 ![S2image](notebooks/images/sample_read.jpeg)
 
