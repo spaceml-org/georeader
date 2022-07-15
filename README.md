@@ -32,10 +32,10 @@ data = read.read_from_bounds(s2obj, bounds_read, crs_bounds=crs_bounds,
                              pad_add=(20,20))
 
 data_memory = data.load()
-
 data_memory
-
-    Transform: | 10.00, 0.00, 759560.00|
+```
+```
+>>  Transform: | 10.00, 0.00, 759560.00|
                | 0.00,-10.00, 3960420.00|
                | 0.00, 0.00, 1.00|
     Shape: (3, 2040, 4040)
@@ -43,7 +43,8 @@ data_memory
     Bounds: (759560.0, 3940020.0, 799960.0, 3960420.0)
     CRS: EPSG:32649
     fill_value_default: 0
-
+```
+```python
 from rasterio.plot import  show
 show(data_memory.values/3500, transform=data_memory.transform)
 
@@ -67,17 +68,18 @@ save_cog(data_memory, "s2_crop.tif", descriptions=s2obj.bands)
 
 
 ## TODOs
+
  * Fix and run tests.
  * Finish `xarray` wrapper (cast function) (finish `GeoDataArray` class)
  * `GeoTensor.resize` with `kornia` if inner tensor is a `torch.Tensor`.
 
-## Potential features
+### Potential features
 
 * `read_tile` function + example of serving images.
 * Add `matplotlib` plotting functions.
 * Readers of standard format for Landsat-8? Read from s3 Landsat bucket?
 
-## Examples
+### Potential Examples
 
 * Tutorial basic usage
 * Show MISR dataset
