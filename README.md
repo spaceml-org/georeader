@@ -31,7 +31,8 @@ s2obj = S2_SAFE_reader.s2loader("gs://gcp-public-data-sentinel-2/tiles/13/S/ER/S
 data = read.read_from_bounds(s2obj, bounds_read, crs_bounds=crs_bounds, 
                              pad_add=(20,20))
 
-data_memory = data.load()
+data_memory = data.load() # this triggers downloading the data
+
 data_memory
 ```
 ```
@@ -44,6 +45,9 @@ data_memory
     CRS: EPSG:32649
     fill_value_default: 0
 ```
+
+In the `.values` attribute we have the plain numpy array that we can plot with `show`:
+
 ```python
 from rasterio.plot import  show
 show(data_memory.values/3500, transform=data_memory.transform)
@@ -51,8 +55,9 @@ show(data_memory.values/3500, transform=data_memory.transform)
 ```
 ![S2image](notebooks/images/sample_read.jpeg)
 
+Saving the `GeoTensor` as a COG GeoTIFF: 
+
 ```python
-# Save the data
 from georeader.save_cog import save_cog
 
 # Supports writing in bucket location (gs://bucket-name/s2_crop.tif)
