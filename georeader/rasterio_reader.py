@@ -228,16 +228,16 @@ class RasterioReader:
         """
         Returns a list with the descriptions for each tiff file. (This is usually the name of the bands of the raster)
 
-        If stack and len(self.paths) == 1 it returns just the List with the descriptions
+        If stack it returns just the List with the descriptions
         """
         descriptions_all = []
         for i, p in enumerate(self.paths):
             with rasterio.open(p, "r") as src:
                 desc = src.descriptions
-            descriptions_all.append([desc[i-1] for i in self.indexes])
-
-        if (not self.stack) and (len(descriptions_all) == 1):
-            return descriptions_all[0]
+            if self.stack:
+                descriptions_all.append([desc[i-1] for i in self.indexes])
+            else:
+                descriptions_all.extend([desc[i-1] for i in self.indexes])
 
         return descriptions_all
 
