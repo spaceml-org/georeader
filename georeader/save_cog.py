@@ -14,7 +14,8 @@ GeoData = Union[AbstractGeoData, GeoTensor]
 
 def save_cog(data_save:GeoData, path_tiff_save:str,
              profile:Optional[Dict[str, Any]]=None,
-             descriptions:Optional[List[str]] = None, tags:Optional[Dict[str, Any]]=None) -> None:
+             descriptions:Optional[List[str]] = None, tags:Optional[Dict[str, Any]]=None,
+             dir_tmpfiles:str=".") -> None:
     """
     Save data GeoData object as cloud optimized GeoTIFF
 
@@ -24,6 +25,7 @@ def save_cog(data_save:GeoData, path_tiff_save:str,
         path_tiff_save: path to save the COG GeoTIFF
         profile: profile dict to save the data. crs and transform will be updated from data_save.
         tags: Dict to save as tags of the image
+        dir_tmpfiles: dir to create tempfiles if needed
 
     """
     if profile is None:
@@ -46,7 +48,7 @@ def save_cog(data_save:GeoData, path_tiff_save:str,
 
     _save_cog(np_data,
               path_tiff_save, profile, descriptions=descriptions,
-              tags=tags)
+              tags=tags, dir_tmpfiles=dir_tmpfiles)
 
 def _add_overviews(rst_out, tile_size, verbose=False):
     """ Add overviews to be a cog and be displayed nicely in GIS software """
