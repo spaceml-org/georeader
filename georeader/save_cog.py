@@ -7,6 +7,7 @@ import numpy as np
 from georeader.abstract_reader import AbstractGeoData
 from georeader.geotensor import GeoTensor
 from typing import Optional, List, Union, Dict, Any
+import time
 
 
 GeoData = Union[AbstractGeoData, GeoTensor]
@@ -137,6 +138,7 @@ def _save_cog(out_np: np.ndarray, path_tiff_save: str, profile: dict,
 
         if path_tiff_save.startswith("gs://"):
             fs = fsspec.filesystem("gs", requester_pays=True)
+            time.sleep(5)
             fs.put_file(name_save, path_tiff_save)
             # subprocess.run(["gsutil", "-m", "mv", name_save, path_tiff_save])
             if os.path.exists(name_save):
