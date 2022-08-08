@@ -138,7 +138,9 @@ def _save_cog(out_np: np.ndarray, path_tiff_save: str, profile: dict,
 
         if path_tiff_save.startswith("gs://"):
             fs = fsspec.filesystem("gs", requester_pays=True)
-            time.sleep(5)
+            time.sleep(1)
+            if not os.path.exists(name_save):
+                raise FileNotFoundError(f"File {name_save} have not been created")
             fs.put_file(name_save, path_tiff_save)
             # subprocess.run(["gsutil", "-m", "mv", name_save, path_tiff_save])
             if os.path.exists(name_save):
