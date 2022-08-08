@@ -282,7 +282,7 @@ class RasterioReader:
                 raise NotImplementedError(f"Axis {k} not in dims: {self.dims}")
 
         stack = self.stack
-        if "time" in sel:
+        if "time" in sel: # time allowed only if self.stack (would have raised error above)
             if isinstance(sel["time"], Iterable):
                 paths = [self.paths[i] for i in sel["time"]]
             elif isinstance(sel["time"], slice):
@@ -295,18 +295,36 @@ class RasterioReader:
         else:
             paths = self.paths
 
+        # Band slicing
         if "band" in sel:
-            if isinstance(sel["band"], Iterable):
-                indexes = [self.indexes[i] for i in sel["band"]] # indexes relative to current indexes
-            elif isinstance(sel["band"], slice):
-                indexes = self.indexes[sel["band"]]
-            elif isinstance(sel["band"], numbers.Number):
-                raise NotImplementedError(f"Slicing band with a single number is not supported (use a list)")
+            if not self.stack:
+                # if `True` returns 4D tensors otherwise it returns 3D tensors concatenated over the first dim
+                assert (len(self.paths) == 1) or (len(self.indexes) == 1), f"Dont know how to slice {self.paths} and {self.indexes}"
+
+            if self.stack or (len(self.paths) == 1):
+                if isinstance(sel["band"], Iterable):
+                    indexes = [self.indexes[i] for i in sel["band"]] # indexes relative to current indexes
+                elif isinstance(sel["band"], slice):
+                    indexes = self.indexes[sel["band"]]
+                elif isinstance(sel["band"], numbers.Number):
+                    raise NotImplementedError(f"Slicing band with a single number is not supported (use a list)")
+                else:
+                    raise NotImplementedError(f"Don't know how to slice {sel['band']} in dim band")
             else:
-                raise NotImplementedError(f"Don't know how to slice {sel['band']} in dim band")
+                indexes = self.indexes
+                # len(indexes) == 1 and not self.stack in this case band slicing correspond to paths
+                if isinstance(sel["band"], Iterable):
+                    paths = [self.paths[i] for i in sel["band"]]
+                elif isinstance(sel["band"], slice):
+                    paths = self.paths[sel["band"]]
+                elif isinstance(sel["band"], numbers.Number):
+                    paths = [self.paths[sel["band"]]]
+                else:
+                    raise NotImplementedError(f"Don't know how to slice {sel['time']} in dim time")
         else:
             indexes = self.indexes
 
+        # Spatial slicing
         slice_ = []
         spatial_shape = (self.height, self.width)
         for _i, spatial_name in enumerate(["y", "x"]):
