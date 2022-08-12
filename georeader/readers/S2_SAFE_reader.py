@@ -69,7 +69,7 @@ class S2Image:
                  out_res: int = 10,
                  window_focus:Optional[rasterio.windows.Window]=None,
                  bands:Optional[List[str]]=None):
-        mission, self.producttype, sensing_date_str, pdgs, relorbitnum, tile_number_field, product_discriminator = s2_name_split(
+        self.mission, self.producttype, sensing_date_str, self.pdgs, self.relorbitnum, self.tile_number_field, self.product_discriminator = s2_name_split(
             s2_folder)
 
         # Remove last trailing slash
