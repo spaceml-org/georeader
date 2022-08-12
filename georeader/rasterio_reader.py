@@ -29,6 +29,7 @@ class RasterioReader:
     indexes: if not None it will read from each raster only the specified bands. This argument is 1-based as in rasterio
     overview_level: if not None, it will read from the corresponding pyramid level. This argument 0 based as in rasterio
      (None-> default resolution and 0 is the first overview).
+    check: check all paths are OK
 
     Attributes
     -------------------
@@ -50,7 +51,7 @@ class RasterioReader:
                  window_focus:Optional[rasterio.windows.Window]=None,
                  fill_value_default:Optional[Union[int, float]]=None,
                  stack:bool=True, indexes:Optional[List[int]]=None,
-                 overview_level:Optional[int]=None):
+                 overview_level:Optional[int]=None,check:bool=True):
 
         # Syntactic sugar
         if isinstance(paths, str):
@@ -109,23 +110,24 @@ class RasterioReader:
 
         # Assert all paths have same tranform and crs
         #  (checking width and height will not be needed since we're reading with boundless option but I don't see the point to ignore it)
-        for p in self.paths:
-            with rasterio.open(p, "r", overview_level=overview_level) as src:
-                if not src.transform == self.real_transform:
-                    raise ValueError(f"Different transform in {self.paths[0]} and {p}: {self.real_transform} {src.transform}")
-                if not str(src.crs).lower() == str(self.crs).lower():
-                    raise ValueError(f"Different CRS in {self.paths[0]} and {p}: {self.crs} {src.crs}")
-                if self.real_count != src.count:
-                    raise ValueError(f"Different number of bands in {self.paths[0]} and {p} {self.real_count} {src.count}")
-                if src.nodata != self.nodata:
-                    warnings.warn(
-                        f"Different nodata in {self.paths[0]} and {p}: {self.nodata} {src.nodata}. This might lead to unexpected behaviour")
+        if check:
+            for p in self.paths:
+                with rasterio.open(p, "r", overview_level=overview_level) as src:
+                    if not src.transform == self.real_transform:
+                        raise ValueError(f"Different transform in {self.paths[0]} and {p}: {self.real_transform} {src.transform}")
+                    if not str(src.crs).lower() == str(self.crs).lower():
+                        raise ValueError(f"Different CRS in {self.paths[0]} and {p}: {self.crs} {src.crs}")
+                    if self.real_count != src.count:
+                        raise ValueError(f"Different number of bands in {self.paths[0]} and {p} {self.real_count} {src.count}")
+                    if src.nodata != self.nodata:
+                        warnings.warn(
+                            f"Different nodata in {self.paths[0]} and {p}: {self.nodata} {src.nodata}. This might lead to unexpected behaviour")
 
-                if (self.real_width != src.width) or (self.real_height != src.height):
-                    if allow_different_shape:
-                        warnings.warn(f"Different shape in {self.paths[0]} and {p}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width}) Might lead to unexpected behaviour")
-                    else:
-                        raise ValueError(f"Different shape in {self.paths[0]} and {p}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width})")
+                    if (self.real_width != src.width) or (self.real_height != src.height):
+                        if allow_different_shape:
+                            warnings.warn(f"Different shape in {self.paths[0]} and {p}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width}) Might lead to unexpected behaviour")
+                        else:
+                            raise ValueError(f"Different shape in {self.paths[0]} and {p}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width})")
 
         if indexes is not None:
             self.set_indexes(indexes)
