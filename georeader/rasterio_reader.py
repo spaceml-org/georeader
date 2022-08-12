@@ -129,6 +129,7 @@ class RasterioReader:
                         else:
                             raise ValueError(f"Different shape in {self.paths[0]} and {p}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width})")
 
+        self.check = check
         if indexes is not None:
             self.set_indexes(indexes)
 
@@ -260,7 +261,8 @@ class RasterioReader:
         rst_reader = RasterioReader(list(self.paths),
                                     allow_different_shape=self.allow_different_shape,
                                     window_focus=self.window_focus, fill_value_default=self.fill_value_default,
-                                    stack=self.stack, overview_level=self.overview_level)
+                                    stack=self.stack, overview_level=self.overview_level,
+                                    check=False)
 
         rst_reader.set_window(window, relative=True, boundless=boundless)
         rst_reader.set_indexes(self.indexes, relative=False)
@@ -339,7 +341,8 @@ class RasterioReader:
 
         rst_reader = RasterioReader(paths, allow_different_shape=self.allow_different_shape,
                                     window_focus=self.window_focus, fill_value_default=self.fill_value_default,
-                                    stack=stack, overview_level=self.overview_level)
+                                    stack=stack, overview_level=self.overview_level,
+                                    check=False)
         window_current = rasterio.windows.Window.from_slices(*slice_, boundless=boundless,
                                                              width=self.width, height=self.height)
 
@@ -354,7 +357,8 @@ class RasterioReader:
     def __copy__(self) -> '__class__':
         return RasterioReader(self.paths, allow_different_shape=self.allow_different_shape,
                               window_focus=self.window_focus, fill_value_default=self.fill_value_default,
-                              stack=self.stack, overview_level=self.overview_level)
+                              stack=self.stack, overview_level=self.overview_level,
+                              check=False)
 
     def copy(self) -> '__class__':
         return self.__copy__()
