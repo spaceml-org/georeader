@@ -653,8 +653,17 @@ def DN_to_radiance(dn_data:GeoTensor, s2file: S2ImageL1C) -> GeoTensor:
      otherwise images after 2022-01-25 shifted (PROCESSING_BASELINE '04.00' or above)
      by default this is applied in the S2Image class.
 
+     Here they say U should be in the numerator
+     https://gis.stackexchange.com/questions/285996/convert-sentinel-2-1c-product-from-reflectance-to-radiance
+
      toaBandX = dn_dataBandX / 10000
      radianceBandX = (toaBandX * cos(SZA) * solarIrradianceBandX * U) / pi
+
+     U should be:
+        U = 1. / (1-0.01673*cos(0.0172*(t-4)))^2
+
+     0.0172 = 360/365.256363 * np.pi/180.
+     t = datenum(Y,M,D) - datenum(Y,1,1) + 1;
 
     Args:
         dn_data: data read from an S2Image class with digital numbers
