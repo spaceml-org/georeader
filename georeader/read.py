@@ -5,7 +5,7 @@ import rasterio.features
 import numbers
 import numpy as np
 from math import ceil
-from typing import Tuple, Union, Optional, Dict, Any, List
+from typing import Tuple, Union, Optional, Dict, Any
 from collections import OrderedDict
 import itertools
 from georeader.geotensor import GeoTensor
@@ -13,6 +13,7 @@ from georeader import window_utils
 from georeader.window_utils import PIXEL_PRECISION, pad_window, round_outer_window, _is_exact_round
 from georeader.abstract_reader import GeoData
 from itertools import product
+from shapely.geometry import Polygon, MultiPolygon, shape, mapping
 
 
 def _round_all(x):
@@ -37,6 +38,56 @@ def _transform_from_crs(center_coords:Tuple[float, float], crs_input:Union[Dict[
     coords_transformed = rasterio.warp.transform(crs_input, crs_output, [center_coords[0]], [center_coords[1]])
     return coords_transformed[0][0], coords_transformed[1][0]
 
+
+def polygon_to_crs(polygon:Union[Polygon, MultiPolygon], crs_polygon:Any, crs_dst:Any) -> Union[Polygon, MultiPolygon]:
+    return shape(rasterio.warp.transform_geom(crs_polygon, crs_dst, mapping(polygon)))
+
+
+def window_from_polygon(data_in: GeoData,
+                        polygon:Union[Polygon, MultiPolygon], crs_polygon:Optional[str]=None) -> rasterio.windows.Window:
+    """
+    Obtains the data window that surrounds the polygon
+
+    Args:
+        data_in: Reader with crs and transform attributes
+        polygon: Polygon or MultiPolygon
+        crs_polygon: Optional coordinate reference system of the bounds. If not provided assumes same crs as `data_in`
+
+    Returns:
+        Window object with location in pixel coordinates relative to `data_in` of the polygon
+
+    """
+    # convert polygon to GeoData crs
+    if (crs_polygon is not None) and not compare_crs(crs_polygon, data_in.crs):
+        "https://rasterio.readthedocs.io/en/latest/api/rasterio.warp.html#rasterio.warp.transform_geom"
+        polygon_crs_data = polygon_to_crs(polygon, crs_polygon, data_in.crs)
+    else:
+        polygon_crs_data = polygon
+
+    if isinstance(polygon_crs_data, MultiPolygon):
+        polygons = polygon_crs_data.geoms
+    elif isinstance(polygon_crs_data, Polygon):
+        polygons = [polygon]
+    else:
+        raise NotImplementedError(f"Received shape of type {type(polygon)} different from {Polygon} or {MultiPolygon}")
+
+    # Collect all the pixel coordinates of the exterior polygons
+    coords = []
+    transform_inv = ~data_in.transform
+    for pol in polygons:
+        for pcoord in pol.exterior.coords:
+            coords.append(transform_inv * pcoord)
+
+    # Figure out min max rows and cols to build window
+    row_off = min(c[1] for c in coords)
+    col_off = min(c[0] for c in coords)
+
+    row_max = max(c[1] for c in coords)
+    col_max = max(c[0] for c in coords)
+
+    return rasterio.windows.Window(row_off=row_off, col_off=col_off,
+                                   width=col_max-col_off+1,
+                                   height=row_max-row_off+1)
 
 def window_from_bounds(data_in: GeoData, bounds:Tuple[float, float, float, float],
                        crs_bounds:Optional[str]=None) -> rasterio.windows.Window:
@@ -214,6 +265,36 @@ def read_from_bounds(data_in: GeoData, bounds: Tuple[float, float, float, float]
         sliced GeoData
     """
     window_in = window_from_bounds(data_in, bounds, crs_bounds)
+    if any(p > 0 for p in pad_add):
+        window_in = pad_window(window_in, pad_add)  # Add padding for bicubic int or for co-registration
+    window_in = round_outer_window(window_in)
+
+    return read_from_window(data_in, window_in, return_only_data=return_only_data, trigger_load=trigger_load,
+                            boundless=boundless)
+
+def read_from_polygon(data_in: GeoData, polygon: Union[Polygon, MultiPolygon],
+                      crs_polygon: Optional[str] = None, pad_add=(0, 0),
+                      return_only_data: bool = False, trigger_load: bool = False,
+                      boundless: bool = True) -> Union[GeoData, np.ndarray]:
+    """
+    Reads a slice of data_in covering the `polygon`.
+
+    Args:
+        data_in: GeoData with geographic info (crs and geotransform).
+        polygon: Polygon or MultiPolygon that specifies the region to read.
+        crs_polygon: if not None will transform the polygon from that crs to the data.crs to read the chip.
+        pad_add: pad in pixels to add to the `window` that is read.This is useful when this function is called for
+         interpolation/CNN prediction.
+        return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
+            returns an GeoData georreferenced object.
+        trigger_load: defaults to `False`. Trigger loading the data to memory.
+        boundless: if `True` data read will always have the shape of the provided window
+            (padding with `fill_value_default`)
+
+    Returns:
+        sliced GeoData
+    """
+    window_in = window_from_polygon(data_in, polygon, crs_polygon)
     if any(p > 0 for p in pad_add):
         window_in = pad_window(window_in, pad_add)  # Add padding for bicubic int or for co-registration
     window_in = round_outer_window(window_in)
@@ -412,6 +493,7 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
 
     if not isinstance(data_in, GeoTensor):
         # Read a padded window of the input data. This data will be then used for reprojection
+        # TODO change read_from_bounds from read_from_polygon!
         geotensor_in = read_from_bounds(data_in, bounds, dst_crs,
                                         pad_add=(3, 3), return_only_data=False,
                                         trigger_load=True)

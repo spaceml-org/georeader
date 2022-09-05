@@ -6,8 +6,8 @@ It has several enhancements:
 * It can read directly images from a GCP bucket (for example data from  [here](https://cloud.google.com/storage/docs/public-datasets/sentinel-2))
 * Windowed read and read and reproject in the same function (see `load_bands_bbox`)
 * Creation of the image only involves reading one metadata file (`xxx.SAFE/MTD_{self.producttype}.xml`)
-* Compatible with georeader.read functions
-* Read from pyramid if possible
+* Compatible with `georeader.read` functions
+* It reads from pyramid if possible
 
 
 https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/document-library
@@ -164,7 +164,6 @@ class S2Image:
             radio_add_offsets = self.root_metadata_msi.findall(".//RADIO_ADD_OFFSET")
             if len(radio_add_offsets) == 0:
                 self._radio_add_offsets = {b : 0 for b in BANDS_S2}
-
             else:
                 self._radio_add_offsets = {BANDS_S2[int(r.attrib["band_id"])]: float(r.text) for r in radio_add_offsets}
 
@@ -652,6 +651,9 @@ def DN_to_radiance(dn_data:GeoTensor, s2file: S2ImageL1C) -> GeoTensor:
     Important: this function assumes that radio correction has been applied
      otherwise images after 2022-01-25 shifted (PROCESSING_BASELINE '04.00' or above)
      by default this is applied in the S2Image class.
+
+     ToA formula from ESA:
+     https://sentinels.copernicus.eu/web/sentinel/technical-guides/sentinel-2-msi/level-1c/algorithm
 
      Here they say U should be in the numerator
      https://gis.stackexchange.com/questions/285996/convert-sentinel-2-1c-product-from-reflectance-to-radiance

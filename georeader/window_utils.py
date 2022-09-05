@@ -2,6 +2,7 @@ import rasterio.windows
 from typing import Tuple, Dict, Optional, Union
 import numbers
 import numpy as np
+from shapely.geometry import Polygon
 
 PIXEL_PRECISION = 3
 
@@ -138,6 +139,25 @@ def get_slice_pad(window_data:rasterio.windows.Window,
     pad_width = {"x": (pad_x_0, pad_x_1), "y": (pad_y_0, pad_y_1)}
 
     return slice_dict, pad_width
+
+def window_polygon(window:rasterio.windows.Window, transform:rasterio.Affine) -> Polygon:
+    """
+    Computes the Polygon that contains the window
+
+    Args:
+        window:
+        transform:
+
+    Returns:
+
+    """
+    row_off = window.row_off
+    col_off = window.col_off
+    row_max = window.height - window.row_off - 1
+    col_max = window.width - window.col_off - 1
+    polygon_idx = [(col_off, row_off), (col_off, row_max), (col_max, row_max), (col_max, row_off), (col_off, row_off)]
+
+    return Polygon([transform * coord for coord in polygon_idx])
 
 
 def window_bounds(window:rasterio.windows.Window,

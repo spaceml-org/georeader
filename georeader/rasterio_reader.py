@@ -359,6 +359,24 @@ class RasterioReader:
                               window_focus=self.window_focus, fill_value_default=self.fill_value_default,
                               stack=self.stack, overview_level=self.overview_level,
                               check=False)
+    
+    def block_windows(self, bidx:int=1, time_idx:int=0) -> List[Tuple[int, rasterio.windows.Window]]:
+        """
+        return the block windows within the object
+        (see https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.block_windows)
+
+        Args:
+            bidx: band index to read (1-based)
+            time_idx: time index to read (0-based)
+
+        Returns:
+            list of (block_idx, window)
+
+        """
+        with rasterio.open(self.paths[time_idx]) as src:
+            windows_return = [(block_idx, rasterio.windows.intersection(window, self.window_focus)) for block_idx, window in src.block_windows(bidx) if rasterio.windows.intersect(self.window_focus, window)]
+
+        return windows_return
 
     def copy(self) -> '__class__':
         return self.__copy__()
