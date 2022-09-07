@@ -65,10 +65,11 @@ def normalize_band_names(bands:List[str]) -> List[str]:
 class S2Image:
     def __init__(self, s2_folder:str,
                  polygon:Optional[Polygon]=None,
-                 all_granules: Optional[List[str]]=None,
+                 granules: Optional[Dict[str, str]]=None,
                  out_res: int = 10,
                  window_focus:Optional[rasterio.windows.Window]=None,
-                 bands:Optional[List[str]]=None):
+                 bands:Optional[List[str]]=None,
+                 metadata_msi:Optional[str]=None):
         self.mission, self.producttype, sensing_date_str, self.pdgs, self.relorbitnum, self.tile_number_field, self.product_discriminator = s2_name_split(
             s2_folder)
 
@@ -79,7 +80,10 @@ class S2Image:
         self.folder = s2_folder
         self.datetime = datetime.datetime.strptime(sensing_date_str, "%Y%m%dT%H%M%S").replace(
             tzinfo=datetime.timezone.utc)
-        self.metadata_msi = os.path.join(self.folder, f"MTD_{self.producttype}.xml").replace("\\", "/")
+        if metadata_msi is None:
+            self.metadata_msi = os.path.join(self.folder, f"MTD_{self.producttype}.xml").replace("\\", "/")
+        else:
+            self.metadata_msi = metadata_msi
 
         out_res = int(out_res)
 
@@ -121,20 +125,19 @@ class S2Image:
         self._quantification_value = None
 
         # The code below could be only triggered if required
-        if all_granules is None:
+        if granules is None:
             self.load_metadata_msi()
             bands_elms = self.root_metadata_msi.findall(".//IMAGE_FILE")
             all_granules = [os.path.join(self.folder, b.text + ".jp2").replace("\\", "/")  for b in bands_elms]
+            if self.producttype == "MSIL2A":
+                self.granules = {j.split("_")[-2]: j for j in all_granules}
+            else:
+                self.granules = {j.split("_")[-1].replace(".jp2", ""): j for j in all_granules}
+        else:
+            self.granules = granules
 
-        self.all_granules:List[str] = all_granules
         self._pol = polygon
 
-        self.granule_folder = os.path.dirname(os.path.dirname(self.all_granules[0])).replace(f"{self.folder}/", "")
-        self.granule: Dict[str, str] = {}
-        if self.producttype == "MSIL2A":
-            self.granule = {j.split("_")[-2]: j for j in self.all_granules}
-        else:
-            self.granule = {j.split("_")[-1].replace(".jp2", ""): j for j in self.all_granules}
 
     def load_metadata_msi(self):
         if self.root_metadata_msi is None:
@@ -217,7 +220,7 @@ class S2Image:
 
         assert  all(BANDS_RESOLUTION[band_names[0]]==BANDS_RESOLUTION[b] for b in band_names), f"Bands: {band_names} have different resolution"
 
-        reader = RasterioReader([self.granule[band_name] for band_name in band_names],
+        reader = RasterioReader([self.granules[band_name] for band_name in band_names],
                                 window_focus=None, stack=False,
                                 fill_value_default=self.fill_value_default,
                                 overview_level=overview_level)
@@ -259,7 +262,7 @@ class S2Image:
                 set_window_after = True
                 window_focus = None
 
-            self.granule_readers[band_name] = RasterioReader(self.granule[band_name],
+            self.granule_readers[band_name] = RasterioReader(self.granules[band_name],
                                                              window_focus=window_focus,
                                                              fill_value_default=self.fill_value_default,
                                                              overview_level=overview_level)
@@ -322,7 +325,8 @@ class S2Image:
         reader_ref = self._get_reader()
         rasterio_reader_ref = reader_ref.read_from_window(window=window, boundless=boundless)
         s2obj =  __class__(s2_folder=self.folder, out_res=self.out_res, window_focus=rasterio_reader_ref.window_focus,
-                           bands=self.bands, all_granules=self.all_granules, polygon=self.polygon)
+                           bands=self.bands, granules=self.granules, polygon=self.polygon,
+                           metadata_msi=self.metadata_msi)
 
         s2obj.root_metadata_msi = self.root_metadata_msi
 
@@ -370,16 +374,18 @@ class S2Image:
 
 
 class S2ImageL2A(S2Image):
-    def __init__(self, s2_folder:str, all_granules: List[str],
+    def __init__(self, s2_folder:str, granules: Dict[str, str],
                  polygon:Polygon, out_res:int=10,
                  window_focus:Optional[rasterio.windows.Window]=None,
-                 bands:Optional[List[str]]=None):
+                 bands:Optional[List[str]]=None,
+                 metadata_msi:Optional[str]=None):
         if bands is None:
             bands = BANDS_S2_L2A
 
-        super(S2ImageL2A, self).__init__(s2_folder=s2_folder, all_granules=all_granules, polygon=polygon,
+        super(S2ImageL2A, self).__init__(s2_folder=s2_folder, granules=granules, polygon=polygon,
                                          out_res=out_res, bands=bands,
-                                         window_focus=window_focus)
+                                         window_focus=window_focus,
+                                         metadata_msi=metadata_msi)
 
         assert self.producttype == "MSIL2A", f"Unexpected product type {self.producttype} in image {self.folder}"
 
@@ -394,16 +400,20 @@ class S2ImageL2A(S2Image):
 
 
 class S2ImageL1C(S2Image):
-    def __init__(self, s2_folder, all_granules: List[str],
+    def __init__(self, s2_folder, granules: Dict[str, str],
                  polygon:Polygon, out_res:int=10,
                  window_focus:Optional[rasterio.windows.Window]=None,
-                 bands:Optional[List[str]]=None):
-        super(S2ImageL1C,self).__init__(s2_folder=s2_folder, all_granules=all_granules, polygon=polygon,
+                 bands:Optional[List[str]]=None,
+                 metadata_msi:Optional[str]=None):
+        super(S2ImageL1C,self).__init__(s2_folder=s2_folder, granules=granules, polygon=polygon,
                                          out_res=out_res, bands=bands,
-                                         window_focus=window_focus)
+                                         window_focus=window_focus,
+                                        metadata_msi=metadata_msi)
 
         assert self.producttype == "MSIL1C", f"Unexpected product type {self.producttype} in image {self.folder}"
 
+        first_granule = self.granules[list(self.granules.keys())[0]]
+        self.granule_folder = os.path.dirname(os.path.dirname(first_granule)).replace(f"{self.folder}/", "")
         self.msk_clouds_file = os.path.join(self.folder, self.granule_folder, "MSK_CLOUDS_B00.gml").replace("\\","/")
         self.metadata_tl = os.path.join(self.folder, self.granule_folder, "MTD_TL.xml").replace("\\","/")
         self.root_metadata_tl = None
@@ -634,10 +644,9 @@ class S2ImageL1C(S2Image):
 
 def read_xml(xml_file:str) -> ET.Element:
     """Reads xml with xml package """
-    if xml_file.startswith("gs://"):
+    if "://" in xml_file:
         import fsspec
-        fs = fsspec.filesystem("gs", requester_pays=True)
-        with fs.open(xml_file, "rb") as file_obj:
+        with fsspec.open(xml_file, "rb") as file_obj:
             root = ET.fromstring(file_obj.read())
     else:
         root = ET.parse(xml_file).getroot()
@@ -690,8 +699,9 @@ def DN_to_radiance(dn_data:GeoTensor, s2file: S2ImageL1C) -> GeoTensor:
 def s2loader(s2folder:str, out_res:int=10,
              bands:Optional[List[str]] = None,
              window_focus:Optional[rasterio.windows.Window]=None,
-             all_granules:Optional[List[str]]=None,
-             polygon:Optional[Polygon]=None) -> Union[S2ImageL2A, S2ImageL1C]:
+             granules:Optional[Dict[str,str]]=None,
+             polygon:Optional[Polygon]=None,
+             metadata_msi:Optional[str]=None) -> Union[S2ImageL2A, S2ImageL1C]:
     """
     Loads a S2ImageL2A or S2ImageL1C depending on the product type
 
@@ -700,8 +710,9 @@ def s2loader(s2folder:str, out_res:int=10,
         out_res: default output resolution {10, 20, 60}
         bands: Bands to read. Default to BANDS_S2 or BANDS_S2_L2A depending of the product type
         window_focus: window to read when creating the object
-        all_granules:
+        granules:
         polygon:
+        metadata_msi:
 
     Returns:
         S2Image reader
@@ -710,11 +721,11 @@ def s2loader(s2folder:str, out_res:int=10,
     _, producttype_nos2, _, _, _, _, _ = s2_name_split(s2folder)
 
     if producttype_nos2 == "MSIL2A":
-        return S2ImageL2A(s2folder, all_granules=all_granules, polygon=polygon, out_res=out_res,
-                          bands=bands, window_focus=window_focus)
+        return S2ImageL2A(s2folder, granules=granules, polygon=polygon, out_res=out_res,
+                          bands=bands, window_focus=window_focus, metadata_msi=metadata_msi)
     elif producttype_nos2 == "MSIL1C":
-        return S2ImageL1C(s2folder, all_granules=all_granules, polygon=polygon, out_res=out_res, bands=bands,
-                          window_focus=window_focus)
+        return S2ImageL1C(s2folder, granules=granules, polygon=polygon, out_res=out_res, bands=bands,
+                          window_focus=window_focus, metadata_msi=metadata_msi)
 
     raise NotImplementedError(f"Don't know how to load {producttype_nos2} products")
 
