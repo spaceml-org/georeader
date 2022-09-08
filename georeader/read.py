@@ -39,8 +39,8 @@ def _transform_from_crs(center_coords:Tuple[float, float], crs_input:Union[Dict[
     return coords_transformed[0][0], coords_transformed[1][0]
 
 
-def polygon_to_crs(polygon:Union[Polygon, MultiPolygon], crs_polygon:Any, crs_dst:Any) -> Union[Polygon, MultiPolygon]:
-    return shape(rasterio.warp.transform_geom(crs_polygon, crs_dst, mapping(polygon)))
+def polygon_to_crs(polygon:Union[Polygon, MultiPolygon], crs_polygon:Any, dst_crs:Any) -> Union[Polygon, MultiPolygon]:
+    return shape(rasterio.warp.transform_geom(crs_polygon, dst_crs, mapping(polygon)))
 
 
 def window_from_polygon(data_in: GeoData,
@@ -59,7 +59,7 @@ def window_from_polygon(data_in: GeoData,
     """
     # convert polygon to GeoData crs
     if (crs_polygon is not None) and not compare_crs(crs_polygon, data_in.crs):
-        "https://rasterio.readthedocs.io/en/latest/api/rasterio.warp.html#rasterio.warp.transform_geom"
+        # https://rasterio.readthedocs.io/en/latest/api/rasterio.warp.html#rasterio.warp.transform_geom
         polygon_crs_data = polygon_to_crs(polygon, crs_polygon, data_in.crs)
     else:
         polygon_crs_data = polygon
