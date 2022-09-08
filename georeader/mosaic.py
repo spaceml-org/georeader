@@ -55,6 +55,7 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
         if bounds is not None:
             polygon = box(*bounds)
         else:
+            # Polygon is the Union of the polygons of all the data
             for data in data_list:
                 if isinstance(data, tuple):
                     data = data[0]
@@ -93,7 +94,7 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
                                                                     height=window_polygon.height),
                                  dst_nodata=dst_nodata)
 
-    # TODO invalid_values of spatial locations only
+    # TODO invalid_values of spatial locations only  -> any
     invalid_values = data_return.values == dst_nodata
 
     if first_mask_object is not None:
@@ -109,7 +110,7 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
         assert len(invalid_geotensor.shape) == 2, f"Expected two dims, found {invalid_geotensor.shape}"
         invalid_values|= invalid_geotensor.values
 
-    # TODO mask only has spatial locations!
+    # TODO mask only has spatial locations! -> unsqueeze
     data_return.values[invalid_values] = data_return.fill_value_default
 
     if not np.any(invalid_values):
@@ -166,14 +167,15 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
             data_read = read_reproject(geodata, dst_crs=dst_crs, window_out=window_reproject_iter,
                                        dst_transform=dst_transform_iter, resampling=resampling,
                                        dst_nodata=dst_nodata)
-            # TODO data_read could have more dims
+
+            # TODO data_read could have more dims -> any
             masked_values_read = data_read.values == dst_nodata
             if geomask is not None:
                 invalid_values_iter |= masked_values_read
             else:
                 invalid_values_iter = masked_values_read
 
-            # TODO mask only has spatial locations!
+            # TODO mask only has spatial locations  -> unsqueeze
             mask_values_copy_out = invalid_values_window & ~invalid_values_iter
 
             data_return.values[slice_obj][mask_values_copy_out] = data_read.values[mask_values_copy_out]
