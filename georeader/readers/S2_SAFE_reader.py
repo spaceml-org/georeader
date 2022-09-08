@@ -22,11 +22,12 @@ from collections import OrderedDict
 import numpy as np
 import os
 import re
-from typing import List, Tuple, Union, Optional, Dict
+from typing import List, Tuple, Union, Optional, Dict, Any
 from georeader.rasterio_reader import  RasterioReader
 from georeader import read
 from georeader.geotensor import GeoTensor
 import rasterio.warp
+from shapely.geometry import shape
 
 
 BANDS_S2 = ["B01", "B02","B03", "B04", "B05", "B06",
@@ -708,11 +709,11 @@ def s2loader(s2folder:str, out_res:int=10,
     Args:
         s2folder: .SAFE folder. Expected standard ESA naming convention (see s2_name_split fun)
         out_res: default output resolution {10, 20, 60}
-        bands: Bands to read. Default to BANDS_S2 or BANDS_S2_L2A depending of the product type
+        bands: Bands to read. Default to BANDS_S2 or BANDS_S2_L2A depending on the product type
         window_focus: window to read when creating the object
-        granules:
-        polygon:
-        metadata_msi:
+        granules: Dict where keys are the band names and values are paths to the band location
+        polygon: polygon with the footprint of the object
+        metadata_msi: path to metadata file
 
     Returns:
         S2Image reader
@@ -728,6 +729,32 @@ def s2loader(s2folder:str, out_res:int=10,
                           window_focus=window_focus, metadata_msi=metadata_msi)
 
     raise NotImplementedError(f"Don't know how to load {producttype_nos2} products")
+
+
+def s2_load_from_fearure(feature:Dict[str, Any], bands:Optional[List[str]]=None) -> Union[S2ImageL2A, S2ImageL1C]:
+    """
+    Loads a S2 image from an element feature returned by sat-search
+
+    Args:
+        feature: dictionary as produced by satsearch API
+        bands: Bands to read. Default to BANDS_S2 or BANDS_S2_L2A depending on the product type
+
+    Returns:
+        S2Image reader
+
+    """
+    granules = {}
+    for k, v in feature["assets"].items():
+        if v["href"].endswith(".tif"):
+            granules[k] = v["href"]
+
+    polygon = shape(feature["geometry"])
+
+    metadata_msi = feature["assets"]["metadata"]["href"]
+    s2_folder = feature["properties"]["sentinel:product_id"] + ".SAFE"
+
+    return s2loader(s2folder=s2_folder, granules=granules, polygon=polygon, metadata_msi=metadata_msi,
+                    bands=bands)
 
 
 def s2_public_bucket_path(s2file:str, check_exists:bool=False) -> str:
