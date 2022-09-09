@@ -11,7 +11,7 @@ def pad_window(window: rasterio.windows.Window, pad_size: Tuple[int, int]) -> ra
     Add the provided pad to a rasterio window object
 
     Args:
-        window:
+        window: input window
         pad_size: Tuple,
             `pad_size[0]` pad to add in rows (in both sides).
             `pad_size[1]` pad to add in columns (in both sides).
@@ -27,14 +27,15 @@ def pad_window(window: rasterio.windows.Window, pad_size: Tuple[int, int]) -> ra
 
 def pad_window_to_size(window: rasterio.windows.Window, size: Tuple[int, int]) -> rasterio.windows.Window:
     """
-    Center pad the given window to the given size
+    Center pad the given window to the given size. if `size` is smaller than the size of the window it returns
+    the center pad of that window of the requested size.
 
     Args:
-        window:
-        size: Tuple. size to pad
+        window: input window
+        size: Tuple. size of the output image
 
     Returns:
-         window with width `size[1]` and height `size[0]`
+         window centered in `window` with width `size[1]` and height `size[0]`
 
     """
     pad_add_rows = size[0] - window.height
