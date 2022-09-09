@@ -7,11 +7,46 @@ from shapely.geometry import Polygon
 PIXEL_PRECISION = 3
 
 def pad_window(window: rasterio.windows.Window, pad_size: Tuple[int, int]) -> rasterio.windows.Window:
-    """ Add the provided pad to a rasterio window object """
+    """
+    Add the provided pad to a rasterio window object
+
+    Args:
+        window:
+        pad_size: Tuple,
+            `pad_size[0]` pad to add in rows (in both sides).
+            `pad_size[1]` pad to add in columns (in both sides).
+
+    Returns:
+        window with width `window.width + 2*pad_size[1]` and height `window.height + 2 * pad_size[0]`
+    """
+
     return rasterio.windows.Window(window.col_off - pad_size[1],
                                    window.row_off - pad_size[0],
                                    width=window.width + 2 * pad_size[1],
-                                   height=window.height + 2 * pad_size[1])
+                                   height=window.height + 2 * pad_size[0])
+
+def pad_window_to_size(window: rasterio.windows.Window, size: Tuple[int, int]) -> rasterio.windows.Window:
+    """
+    Center pad the given window to the given size
+
+    Args:
+        window:
+        size: Tuple. size to pad
+
+    Returns:
+         window with width `size[1]` and height `size[0]`
+
+    """
+    pad_add_rows = size[0] - window.height
+    pad_add_cols = size[1] - window.width
+
+    pad_rows_half = pad_add_rows // 2
+    pad_cols_half = pad_add_cols // 2
+
+    return rasterio.windows.Window(window.col_off - pad_rows_half,
+                                   window.row_off - pad_cols_half,
+                                   width=window.width + pad_add_cols,
+                                   height=window.height + pad_add_rows)
 
 
 def figure_out_transform(transform: Optional[rasterio.Affine] = None,
