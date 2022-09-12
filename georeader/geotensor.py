@@ -280,12 +280,12 @@ class GeoTensor:
 
         slice_dict, pad_width = window_utils.get_slice_pad(window_data, window)
         slice_list = self._slice_tuple(slice_dict)
-        need_pad = any(p != 0 for p in pad_width["x"] + pad_width["y"])
-        if need_pad:
-            slice_data_spatial_x = slice(pad_width["x"][0], None if pad_width["x"][1] == 0 else -pad_width["x"][1])
-            slice_data_spatial_y = slice(pad_width["y"][0], None if pad_width["y"][1] == 0 else -pad_width["y"][1])
-            slice_data = self._slice_tuple({"x": slice_data_spatial_x, "y" : slice_data_spatial_y})
-            self.values[slice_list] = data[slice_data]
+        # need_pad = any(p != 0 for p in pad_width["x"] + pad_width["y"])
+
+        slice_data_spatial_x = slice(pad_width["x"][0], None if pad_width["x"][1] == 0 else -pad_width["x"][1])
+        slice_data_spatial_y = slice(pad_width["y"][0], None if pad_width["y"][1] == 0 else -pad_width["y"][1])
+        slice_data = self._slice_tuple({"x": slice_data_spatial_x, "y" : slice_data_spatial_y})
+        self.values[slice_list] = data[slice_data]
 
     def read_from_window(self, window:rasterio.windows.Window, boundless:bool=True) -> '__class__':
         """
