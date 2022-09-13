@@ -340,6 +340,9 @@ class S2Image:
         array_out = np.full((len(self.bands),) + geotensor_ref.shape[-2:],fill_value=geotensor_ref.fill_value_default,
                             dtype=geotensor_ref.dtype)
 
+        # Deal with NODATA values
+        invalids = (geotensor_ref.values == 0) | (geotensor_ref.values == (2 ** 16) - 1)
+
         radio_add = self.radio_add_offsets()
         for idx, b in enumerate(self.bands):
             if b == self.band_check:
@@ -360,8 +363,6 @@ class S2Image:
             # Important: Adds radio correction! otherwise images after 2022-01-25 shifted (PROCESSING_BASELINE '04.00' or above)
             array_out[idx] = geotensor_iter.values[0] + radio_add[b]
 
-        # Deal with NODATA values
-        invalids = (geotensor_ref.values == 0) | (geotensor_ref.values == (2 ** 16) - 1)
         array_out[:, invalids[0]] = self.fill_value_default
 
         return GeoTensor(values=array_out, transform=geotensor_ref.transform,crs=geotensor_ref.crs,
