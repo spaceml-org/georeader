@@ -356,9 +356,13 @@ class S2Image:
                 else:
                     geotensor_iter = read.read_reproject_like(reader_iter, geotensor_ref)
 
-            # TODO deal with NODATA values
+
             # Important: Adds radio correction! otherwise images after 2022-01-25 shifted (PROCESSING_BASELINE '04.00' or above)
             array_out[idx] = geotensor_iter.values[0] + radio_add[b]
+
+        # Deal with NODATA values
+        invalids = (geotensor_ref.values == 0) | (geotensor_ref.values == (2 ** 16) - 1)
+        array_out[:, invalids[0]] = self.fill_value_default
 
         return GeoTensor(values=array_out, transform=geotensor_ref.transform,crs=geotensor_ref.crs,
                          fill_value_default=self.fill_value_default)
