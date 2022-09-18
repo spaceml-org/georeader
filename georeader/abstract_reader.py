@@ -1,7 +1,8 @@
 import numpy as np
 from georeader.geotensor import GeoTensor
 from georeader import window_utils
-from typing import Tuple,Any, Union
+from typing import Tuple, Any, Union, Optional
+from shapely.geometry import Polygon
 import rasterio
 import rasterio.windows
 
@@ -33,7 +34,7 @@ class AbstractGeoData:
 
     @property
     def bounds(self) -> Tuple[float, float, float, float]:
-        return window_utils.window_bounds(rasterio.windows.Window(row_off=0, col_off=0, height=self.shape[0], width=self.shape[1]),
+        return window_utils.window_bounds(rasterio.windows.Window(row_off=0, col_off=0, height=self.shape[-2], width=self.shape[-1]),
                                           self.transform)
 
     def load(self, boundless:bool=True)-> GeoTensor:
@@ -43,6 +44,14 @@ class AbstractGeoData:
     def read_from_window(self, window:rasterio.windows.Window, boundless:bool) -> Union['__class__', GeoTensor]:
         # return GeoTensor(values=self.values, transform=self.transform, crs=self.crs)
         return self.load(boundless=True).read_from_window(window=window, boundless=boundless)
+
+    def footprint(self, crs:Optional[str]=None) -> Polygon:
+        pol = window_utils.window_polygon(rasterio.windows.Window(row_off=0, col_off=0, height=self.shape[-2], width=self.shape[-1]),
+                                          self.transform)
+        if (crs is None) or window_utils.compare_crs(self.crs, crs):
+            return pol
+
+        return window_utils.polygon_to_crs(pol, self.crs, crs)
 
     @property
     def values(self) -> np.ndarray:

@@ -25,6 +25,7 @@ import re
 from typing import List, Tuple, Union, Optional, Dict, Any
 from georeader.rasterio_reader import  RasterioReader
 from georeader import read
+from georeader import window_utils
 from georeader.geotensor import GeoTensor
 import rasterio.warp
 from shapely.geometry import shape
@@ -145,22 +146,23 @@ class S2Image:
             self.root_metadata_msi = read_xml(self.metadata_msi)
         return self.root_metadata_msi
 
-    @property
-    def polygon(self) -> Union[MultiPolygon, Polygon]:
-        """
-        Polygon in longlat (EPSG:4326) this takes into account the selected window. This is the intersection of the
-        footprint with the window.
-        """
+    def footprint(self, crs:Optional[str]=None) -> Polygon:
         if self._pol is None:
             self.load_metadata_msi()
             footprint_txt = self.root_metadata_msi.findall(".//EXT_POS_LIST")[0].text
             coords_split = footprint_txt.split(" ")[:-1]
             self._pol = Polygon(
                 [(float(lngstr), float(latstr)) for latstr, lngstr in zip(coords_split[::2], coords_split[1::2])])
+            self._pol = window_utils.polygon_to_crs(self._pol, "EPSG:4326", self.crs)
 
-        pol_bounds_latlng = box(*rasterio.warp.transform_bounds(self.crs, "EPSG:4326", *self.bounds))
+        pol_window = window_utils.window_polygon(self.window_focus, self.transform)
 
-        return self._pol.intersection(pol_bounds_latlng)
+        pol = self._pol.intersection(pol_window)
+
+        if (crs is None) or window_utils.compare_crs(self.crs, crs):
+            return pol
+
+        return window_utils.polygon_to_crs(pol, self.crs, crs)
 
     def radio_add_offsets(self) ->Dict[str,float]:
         if self._radio_add_offsets is None:

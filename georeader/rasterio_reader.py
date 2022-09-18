@@ -6,11 +6,20 @@ import warnings
 import numbers
 from georeader import geotensor
 from collections.abc import Iterable
+from georeader import window_utils
 from georeader.window_utils import window_bounds, get_slice_pad
+from shapely.geometry import Polygon
 
+# https://developmentseed.org/titiler/advanced/performance_tuning/#aws-configuration
+RIO_ENV_OPTIONS_DEFAULT = dict(
+    GDAL_DISABLE_READDIR_ON_OPEN='EMPTY_DIR',
+    GDAL_HTTP_MERGE_CONSECUTIVE_RANGES="YES",
+    GDAL_CACHEMAX="200",
+    GDAL_HTTP_MULTIPLEX="YES"
+)
 
 class RasterioReader:
-    """
+    f"""
     Class to read a set of rasters files (``paths``). the `read` method will return a 4D np.ndarray with
     shape (len(paths), C, H, W).
 
@@ -30,6 +39,7 @@ class RasterioReader:
     overview_level: if not None, it will read from the corresponding pyramid level. This argument 0 based as in rasterio
      (None-> default resolution and 0 is the first overview).
     check: check all paths are OK
+    rio_env_options: GDAL options for reading. Defaults to: {RIO_ENV_OPTIONS_DEFAULT}
 
     Attributes
     -------------------
@@ -51,12 +61,18 @@ class RasterioReader:
                  window_focus:Optional[rasterio.windows.Window]=None,
                  fill_value_default:Optional[Union[int, float]]=None,
                  stack:bool=True, indexes:Optional[List[int]]=None,
-                 overview_level:Optional[int]=None,check:bool=True):
+                 overview_level:Optional[int]=None, check:bool=True,
+                 rio_env_options:Optional[Dict[str, str]]=None):
 
         # Syntactic sugar
         if isinstance(paths, str):
             paths = [paths]
             stack = False
+
+        if rio_env_options is None:
+            self.rio_env_options = RIO_ENV_OPTIONS_DEFAULT
+        else:
+            self.rio_env_options = rio_env_options
 
         self.paths = paths
 
@@ -65,26 +81,26 @@ class RasterioReader:
         # TODO keep just a global nodata of size (T,C,) and fill with these values?
         self.fill_value_default = fill_value_default
         self.overview_level = overview_level
+        with rasterio.Env(**self.rio_env_options):
+            with rasterio.open(self.paths[0], "r", overview_level=overview_level) as src:
+                self.real_transform = src.transform
+                self.crs = src.crs
+                self.dtype = src.profile["dtype"]
+                self.real_count = src.count
+                self.real_indexes = list(range(1, self.real_count + 1))
+                if self.stack:
+                    self.real_shape = (len(self.paths), src.count,) + src.shape
+                else:
+                    self.real_shape = (len(self.paths) * self.real_count, ) + src.shape
 
-        with rasterio.open(self.paths[0], "r", overview_level=overview_level) as src:
-            self.real_transform = src.transform
-            self.crs = src.crs
-            self.dtype = src.profile["dtype"]
-            self.real_count = src.count
-            self.real_indexes = list(range(1, self.real_count + 1))
-            if self.stack:
-                self.real_shape = (len(self.paths), src.count,) + src.shape
-            else:
-                self.real_shape = (len(self.paths) * self.real_count, ) + src.shape
+                self.real_width = src.width
+                self.real_height = src.height
 
-            self.real_width = src.width
-            self.real_height = src.height
+                self.nodata = src.nodata
+                if self.fill_value_default is None:
+                    self.fill_value_default = self.nodata if (self.nodata is not None) else 0
 
-            self.nodata = src.nodata
-            if self.fill_value_default is None:
-                self.fill_value_default = self.nodata if (self.nodata is not None) else 0
-
-            self.res = src.res
+                self.res = src.res
 
         # if (abs(self.real_transform.b) > 1e-6) or (abs(self.real_transform.d) > 1e-6):
         #     warnings.warn(f"transform of {self.paths[0]} is not rectilinear {self.real_transform}. "
@@ -112,22 +128,23 @@ class RasterioReader:
         #  (checking width and height will not be needed since we're reading with boundless option but I don't see the point to ignore it)
         if check:
             for p in self.paths:
-                with rasterio.open(p, "r", overview_level=overview_level) as src:
-                    if not src.transform == self.real_transform:
-                        raise ValueError(f"Different transform in {self.paths[0]} and {p}: {self.real_transform} {src.transform}")
-                    if not str(src.crs).lower() == str(self.crs).lower():
-                        raise ValueError(f"Different CRS in {self.paths[0]} and {p}: {self.crs} {src.crs}")
-                    if self.real_count != src.count:
-                        raise ValueError(f"Different number of bands in {self.paths[0]} and {p} {self.real_count} {src.count}")
-                    if src.nodata != self.nodata:
-                        warnings.warn(
-                            f"Different nodata in {self.paths[0]} and {p}: {self.nodata} {src.nodata}. This might lead to unexpected behaviour")
+                with rasterio.Env(**self.rio_env_options):
+                    with rasterio.open(p, "r", overview_level=overview_level) as src:
+                        if not src.transform == self.real_transform:
+                            raise ValueError(f"Different transform in {self.paths[0]} and {p}: {self.real_transform} {src.transform}")
+                        if not str(src.crs).lower() == str(self.crs).lower():
+                            raise ValueError(f"Different CRS in {self.paths[0]} and {p}: {self.crs} {src.crs}")
+                        if self.real_count != src.count:
+                            raise ValueError(f"Different number of bands in {self.paths[0]} and {p} {self.real_count} {src.count}")
+                        if src.nodata != self.nodata:
+                            warnings.warn(
+                                f"Different nodata in {self.paths[0]} and {p}: {self.nodata} {src.nodata}. This might lead to unexpected behaviour")
 
-                    if (self.real_width != src.width) or (self.real_height != src.height):
-                        if allow_different_shape:
-                            warnings.warn(f"Different shape in {self.paths[0]} and {p}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width}) Might lead to unexpected behaviour")
-                        else:
-                            raise ValueError(f"Different shape in {self.paths[0]} and {p}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width})")
+                        if (self.real_width != src.width) or (self.real_height != src.height):
+                            if allow_different_shape:
+                                warnings.warn(f"Different shape in {self.paths[0]} and {p}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width}) Might lead to unexpected behaviour")
+                            else:
+                                raise ValueError(f"Different shape in {self.paths[0]} and {p}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width})")
 
         self.check = check
         if indexes is not None:
@@ -218,8 +235,9 @@ class RasterioReader:
         """
         tags = []
         for i, p in enumerate(self.paths):
-            with rasterio.open(p, "r", overview_level=self.overview_level) as src:
-                tags.append(src.tags())
+            with rasterio.Env(**self.rio_env_options):
+                with rasterio.open(p, "r", overview_level=self.overview_level) as src:
+                    tags.append(src.tags())
 
         if (not self.stack) and (len(tags) == 1):
             return tags[0]
@@ -235,8 +253,10 @@ class RasterioReader:
         """
         descriptions_all = []
         for i, p in enumerate(self.paths):
-            with rasterio.open(p, "r") as src:
-                desc = src.descriptions
+            with rasterio.Env(**self.rio_env_options):
+                with rasterio.open(p, "r") as src:
+                    desc = src.descriptions
+
             if self.stack:
                 descriptions_all.append([desc[i-1] for i in self.indexes])
             else:
@@ -373,8 +393,9 @@ class RasterioReader:
             list of (block_idx, window)
 
         """
-        with rasterio.open(self.paths[time_idx]) as src:
-            windows_return = [(block_idx, rasterio.windows.intersection(window, self.window_focus)) for block_idx, window in src.block_windows(bidx) if rasterio.windows.intersect(self.window_focus, window)]
+        with rasterio.Env(**self.rio_env_options):
+            with rasterio.open(self.paths[time_idx]) as src:
+                windows_return = [(block_idx, rasterio.windows.intersection(window, self.window_focus)) for block_idx, window in src.block_windows(bidx) if rasterio.windows.intersect(self.window_focus, window)]
 
         return windows_return
 
@@ -417,6 +438,14 @@ class RasterioReader:
             np.ndarray raster loaded in memory
         """
         return self.read()
+
+    def footprint(self, crs:Optional[str]=None) -> Polygon:
+        pol = window_utils.window_polygon(rasterio.windows.Window(row_off=0, col_off=0, height=self.shape[-2], width=self.shape[-1]),
+                                          self.transform)
+        if (crs is None) or window_utils.compare_crs(self.crs, crs):
+            return pol
+
+        return window_utils.polygon_to_crs(pol, self.crs, crs)
     
     def __repr__(self)->str:
         return f""" 
@@ -523,18 +552,19 @@ class RasterioReader:
                     pad = None
 
             for i, p in enumerate(self.paths):
-                with rasterio.open(p, "r", overview_level=self.overview_level) as src:
-                    # rasterio.read API: https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.read
-                    read_data = src.read(**kwargs)
+                with rasterio.Env(**self.rio_env_options):
+                    with rasterio.open(p, "r", overview_level=self.overview_level) as src:
+                        # rasterio.read API: https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.read
+                        read_data = src.read(**kwargs)
 
-                    # Add pad when reading
-                    if pad is not None and need_pad:
-                        slice_y = slice(pad["y"][0], -pad["y"][1] if pad["y"][1] !=0 else None)
-                        slice_x = slice(pad["x"][0], -pad["x"][1] if pad["x"][1] !=0 else None)
-                        obj_out[i, :, slice_y, slice_x] = read_data
-                    else:
-                        obj_out[i] = read_data
-                        # pad_list_np = _get_pad_list(pad)
+                        # Add pad when reading
+                        if pad is not None and need_pad:
+                            slice_y = slice(pad["y"][0], -pad["y"][1] if pad["y"][1] !=0 else None)
+                            slice_x = slice(pad["x"][0], -pad["x"][1] if pad["x"][1] !=0 else None)
+                            obj_out[i, :, slice_y, slice_x] = read_data
+                        else:
+                            obj_out[i] = read_data
+                            # pad_list_np = _get_pad_list(pad)
                         #
                         # read_data = np.pad(read_data, tuple(pad_list_np), mode="constant",
                         #                    constant_values=self.fill_value_default)

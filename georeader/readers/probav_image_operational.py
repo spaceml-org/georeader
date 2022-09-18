@@ -11,6 +11,7 @@ import rasterio.windows
 from typing import Tuple, List, Optional, Union
 from georeader import window_utils, geotensor
 from numbers import Number
+from shapely.geometry import Polygon
 
 
 FILTERS_HDF5 = { 'gzip': h5z.FILTER_DEFLATE,
@@ -121,6 +122,14 @@ class ProbaV:
 
 
         return window_read, pad_list_np
+
+    def footprint(self, crs:Optional[str]=None) -> Polygon:
+        # TODO load footprint from metadata?
+        pol = window_utils.window_polygon(self.window_focus, self.transform)
+        if (crs is None) or window_utils.compare_crs(self.crs, crs):
+            return pol
+
+        return window_utils.polygon_to_crs(pol, self.crs, crs)
 
     def _load_bands(self, bands_names:Union[List[str],str], boundless:bool=True,
                     fill_value_default:Number=0) -> geotensor.GeoTensor:

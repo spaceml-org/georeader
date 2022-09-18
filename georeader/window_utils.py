@@ -2,7 +2,8 @@ import rasterio.windows
 from typing import Tuple, Dict, Optional, Union
 import numbers
 import numpy as np
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, MultiPolygon, shape, mapping
+import rasterio.warp
 
 PIXEL_PRECISION = 3
 
@@ -244,3 +245,18 @@ def normalize_bounds(bounds:Tuple[float, float, float, float], margin_add_if_equ
         ymax+=margin_add_if_equal
 
     return xmin, ymin, xmax, ymax
+
+
+def polygon_to_crs(polygon:Union[Polygon, MultiPolygon], crs_polygon:Any, dst_crs:Any) -> Union[Polygon, MultiPolygon]:
+    return shape(rasterio.warp.transform_geom(crs_polygon, dst_crs, mapping(polygon)))
+
+
+def _normalize_crs(a_crs):
+    a_crs = str(a_crs)
+    if "+init=" in a_crs:
+        a_crs = a_crs.replace("+init=","")
+    return a_crs.lower()
+
+
+def compare_crs(a_crs:str, b_crs:str) -> bool:
+    return _normalize_crs(a_crs) == _normalize_crs(b_crs)

@@ -13,22 +13,12 @@ from georeader import window_utils
 from georeader.window_utils import PIXEL_PRECISION, pad_window, round_outer_window, _is_exact_round
 from georeader.abstract_reader import GeoData
 from itertools import product
-from shapely.geometry import Polygon, MultiPolygon, shape, mapping
+from shapely.geometry import Polygon, MultiPolygon
 
 
 def _round_all(x):
     x = tuple([int(round(xi)) for xi in x])
     return x
-
-def _normalize_crs(a_crs):
-    a_crs = str(a_crs)
-    if "+init=" in a_crs:
-        a_crs = a_crs.replace("+init=","")
-    return a_crs.lower()
-
-
-def compare_crs(a_crs:str, b_crs:str) -> bool:
-    return _normalize_crs(a_crs) == _normalize_crs(b_crs)
 
 
 def _transform_from_crs(center_coords:Tuple[float, float], crs_input:Union[Dict[str,str],str],
@@ -37,10 +27,6 @@ def _transform_from_crs(center_coords:Tuple[float, float], crs_input:Union[Dict[
 
     coords_transformed = rasterio.warp.transform(crs_input, crs_output, [center_coords[0]], [center_coords[1]])
     return coords_transformed[0][0], coords_transformed[1][0]
-
-
-def polygon_to_crs(polygon:Union[Polygon, MultiPolygon], crs_polygon:Any, dst_crs:Any) -> Union[Polygon, MultiPolygon]:
-    return shape(rasterio.warp.transform_geom(crs_polygon, dst_crs, mapping(polygon)))
 
 
 def window_from_polygon(data_in: GeoData,
@@ -58,9 +44,9 @@ def window_from_polygon(data_in: GeoData,
 
     """
     # convert polygon to GeoData crs
-    if (crs_polygon is not None) and not compare_crs(crs_polygon, data_in.crs):
+    if (crs_polygon is not None) and not window_utils.compare_crs(crs_polygon, data_in.crs):
         # https://rasterio.readthedocs.io/en/latest/api/rasterio.warp.html#rasterio.warp.transform_geom
-        polygon_crs_data = polygon_to_crs(polygon, crs_polygon, data_in.crs)
+        polygon_crs_data = window_utils.polygon_to_crs(polygon, crs_polygon, data_in.crs)
     else:
         polygon_crs_data = polygon
 
@@ -104,7 +90,7 @@ def window_from_bounds(data_in: GeoData, bounds:Tuple[float, float, float, float
         Window object with location in pixel coordinates relative to `data_in` of the bounds
 
     """
-    if (crs_bounds is not None) and not compare_crs(crs_bounds, data_in.crs):
+    if (crs_bounds is not None) and not window_utils.compare_crs(crs_bounds, data_in.crs):
 
         bounds_in = rasterio.warp.transform_bounds(crs_bounds,
                                                    data_in.crs, *bounds)
@@ -132,7 +118,7 @@ def window_from_center_coords(data_in: GeoData, center_coords:Tuple[float, float
          Window object with location in pixel coordinates relative to `data_in` of the window centered on `center_coords`
     """
 
-    if (crs_center_coords is not None) and not compare_crs(crs_center_coords, data_in.crs):
+    if (crs_center_coords is not None) and not window_utils.compare_crs(crs_center_coords, data_in.crs):
         center_coords = _transform_from_crs(center_coords, crs_center_coords, data_in.crs)
 
     # The compute of the corner coordinates from the center is the same as in utils.polygon_slices
@@ -469,7 +455,7 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
         dst_crs = crs_data_in
 
     #  if dst_crs == data_in.crs and the resolution is the same and window is exact return read_from_window
-    if compare_crs(dst_crs, crs_data_in):
+    if window_utils.compare_crs(dst_crs, crs_data_in):
         transform_data = data_in.transform
         if (dst_transform.a == transform_data.a) and (dst_transform.b == transform_data.b) and (
                 dst_transform.d == transform_data.d) and (dst_transform.e == transform_data.e):

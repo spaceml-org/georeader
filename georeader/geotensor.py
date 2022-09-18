@@ -6,6 +6,7 @@ import rasterio.windows
 from georeader import window_utils
 from georeader.window_utils import window_bounds
 from itertools import product
+from shapely.geometry import Polygon
 
 try:
     import torch
@@ -139,6 +140,14 @@ class GeoTensor:
             else:
                 slice_list.append(slice(None))
         return tuple(slice_list)
+
+    def footprint(self, crs:Optional[str]=None) -> Polygon:
+        pol = window_utils.window_polygon(rasterio.windows.Window(row_off=0, col_off=0, height=self.shape[-2], width=self.shape[-1]),
+                                          self.transform)
+        if (crs is None) or window_utils.compare_crs(self.crs, crs):
+            return pol
+
+        return window_utils.polygon_to_crs(pol, self.crs, crs)
 
     def __repr__(self)->str:
         return f""" 
