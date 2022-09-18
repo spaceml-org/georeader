@@ -6,6 +6,7 @@ import rasterio.windows
 from georeader import window_utils
 from georeader.window_utils import window_bounds
 from itertools import product
+from shapely.geometry import Polygon
 
 try:
     import torch
@@ -140,6 +141,14 @@ class GeoTensor:
                 slice_list.append(slice(None))
         return tuple(slice_list)
 
+    def footprint(self, crs:Optional[str]=None) -> Polygon:
+        pol = window_utils.window_polygon(rasterio.windows.Window(row_off=0, col_off=0, height=self.shape[-2], width=self.shape[-1]),
+                                          self.transform)
+        if (crs is None) or window_utils.compare_crs(self.crs, crs):
+            return pol
+
+        return window_utils.polygon_to_crs(pol, self.crs, crs)
+
     def __repr__(self)->str:
         return f""" 
          Transform: {self.transform}
@@ -270,6 +279,22 @@ class GeoTensor:
         return GeoTensor(output_tensor, transform=transform, crs=self.crs,
                          fill_value_default=self.fill_value_default)
 
+    def write_from_window(self, data:Tensor, window:rasterio.windows.Window):
+        window_data = rasterio.windows.Window(col_off=0, row_off=0,
+                                              width=self.width, height=self.height)
+        if not rasterio.windows.intersect(window, window_data):
+            return
+
+        assert data.shape[-2:] == (window.width, window.height), f"window {window} has different shape than data {data.shape}"
+
+        slice_dict, pad_width = window_utils.get_slice_pad(window_data, window)
+        slice_list = self._slice_tuple(slice_dict)
+        # need_pad = any(p != 0 for p in pad_width["x"] + pad_width["y"])
+
+        slice_data_spatial_x = slice(pad_width["x"][0], None if pad_width["x"][1] == 0 else -pad_width["x"][1])
+        slice_data_spatial_y = slice(pad_width["y"][0], None if pad_width["y"][1] == 0 else -pad_width["y"][1])
+        slice_data = self._slice_tuple({"x": slice_data_spatial_x, "y" : slice_data_spatial_y})
+        self.values[slice_list] = data[slice_data]
 
     def read_from_window(self, window:rasterio.windows.Window, boundless:bool=True) -> '__class__':
         """

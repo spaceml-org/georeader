@@ -25,6 +25,7 @@ import re
 from typing import List, Tuple, Union, Optional, Dict, Any
 from georeader.rasterio_reader import  RasterioReader
 from georeader import read
+from georeader import window_utils
 from georeader.geotensor import GeoTensor
 import rasterio.warp
 from shapely.geometry import shape
@@ -145,22 +146,23 @@ class S2Image:
             self.root_metadata_msi = read_xml(self.metadata_msi)
         return self.root_metadata_msi
 
-    @property
-    def polygon(self) -> Union[MultiPolygon, Polygon]:
-        """
-        Polygon in longlat (EPSG:4326) this takes into account the selected window. This is the intersection of the
-        footprint with the window.
-        """
+    def footprint(self, crs:Optional[str]=None) -> Polygon:
         if self._pol is None:
             self.load_metadata_msi()
             footprint_txt = self.root_metadata_msi.findall(".//EXT_POS_LIST")[0].text
             coords_split = footprint_txt.split(" ")[:-1]
             self._pol = Polygon(
                 [(float(lngstr), float(latstr)) for latstr, lngstr in zip(coords_split[::2], coords_split[1::2])])
+            self._pol = window_utils.polygon_to_crs(self._pol, "EPSG:4326", self.crs)
 
-        pol_bounds_latlng = box(*rasterio.warp.transform_bounds(self.crs, "EPSG:4326", *self.bounds))
+        pol_window = window_utils.window_polygon(self.window_focus, self.transform)
 
-        return self._pol.intersection(pol_bounds_latlng)
+        pol = self._pol.intersection(pol_window)
+
+        if (crs is None) or window_utils.compare_crs(self.crs, crs):
+            return pol
+
+        return window_utils.polygon_to_crs(pol, self.crs, crs)
 
     def radio_add_offsets(self) ->Dict[str,float]:
         if self._radio_add_offsets is None:
@@ -340,6 +342,9 @@ class S2Image:
         array_out = np.full((len(self.bands),) + geotensor_ref.shape[-2:],fill_value=geotensor_ref.fill_value_default,
                             dtype=geotensor_ref.dtype)
 
+        # Deal with NODATA values
+        invalids = (geotensor_ref.values == 0) | (geotensor_ref.values == (2 ** 16) - 1)
+
         radio_add = self.radio_add_offsets()
         for idx, b in enumerate(self.bands):
             if b == self.band_check:
@@ -356,9 +361,11 @@ class S2Image:
                 else:
                     geotensor_iter = read.read_reproject_like(reader_iter, geotensor_ref)
 
-            # TODO deal with NODATA values
+
             # Important: Adds radio correction! otherwise images after 2022-01-25 shifted (PROCESSING_BASELINE '04.00' or above)
             array_out[idx] = geotensor_iter.values[0] + radio_add[b]
+
+        array_out[:, invalids[0]] = self.fill_value_default
 
         return GeoTensor(values=array_out, transform=geotensor_ref.transform,crs=geotensor_ref.crs,
                          fill_value_default=self.fill_value_default)
