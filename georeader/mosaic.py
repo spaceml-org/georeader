@@ -59,13 +59,7 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
             for data in data_list:
                 if isinstance(data, tuple):
                     data = data[0]
-                window_data = rasterio.windows.Window(row_off=0, col_off=0,
-                                                      width=data.shape[-1], height=data.shape[-2])
-                polygon_iter = window_utils.window_polygon(window_data, data.transform)
-                if dst_crs is None:
-                    dst_crs = data.crs
-                if not read.compare_crs(dst_crs, data.crs):
-                    polygon_iter = read.polygon_to_crs(polygon_iter, crs_polygon=data.crs, dst_crs=dst_crs)
+                polygon_iter = data.footprint(crs=dst_crs)
 
                 if polygon is None:
                     polygon = polygon_iter
@@ -94,8 +88,13 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
                                                                     height=window_polygon.height),
                                  dst_nodata=dst_nodata)
 
-    # TODO invalid_values of spatial locations only  -> any
+    # invalid_values of spatial locations only  -> any
     invalid_values = data_return.values == dst_nodata
+    if len(data_return.shape) > 2:
+        axis_any = tuple(i for i in range(len(data_return.shape)-2))
+        invalid_values = np.any(invalid_values, axis=axis_any) # (H, W)
+    else:
+        axis_any = None
 
     if first_mask_object is not None:
         invalid_geotensor = read_reproject(first_mask_object,
@@ -110,10 +109,12 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
         assert len(invalid_geotensor.shape) == 2, f"Expected two dims, found {invalid_geotensor.shape}"
         invalid_values|= invalid_geotensor.values
 
-    # TODO mask only has spatial locations! -> unsqueeze
-    data_return.values[invalid_values] = data_return.fill_value_default
+    data_return.values[..., invalid_values] = data_return.fill_value_default
 
     if not np.any(invalid_values):
+        return data_return
+
+    if len(data_list) == 1:
         return data_return
 
     windows = slices.create_windows(data_return, window_size)
@@ -125,13 +126,13 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
         if not np.any(invalid_values_window):
             continue
 
-        # TODO add dims to slice_obj
-        slice_obj = (slice(None),) + slice_spatial
+        # Add dims to slice_obj
+        slice_obj = tuple(slice(None) for _ in range(len(data_return.shape)-2)) + slice_spatial
         dst_transform_iter = rasterio.windows.transform(window, transform=dst_transform)
         window_reproject_iter = rasterio.windows.Window(row_off=0, col_off=0, width=window.width, height=window.height)
         polygon_iter = window_utils.window_polygon(window, dst_transform)
 
-        for _i,data in enumerate(data_list[1:]):
+        for _i, data in enumerate(data_list[1:]):
             if isinstance(data, tuple):
                 geodata = data[0]
                 geomask = data[1]
@@ -140,13 +141,9 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
                 geomask = None
 
             if polygons_geodata[_i] is None:
-                polygon_geodata = window_utils.window_polygon(rasterio.windows.Window(row_off=0, col_off=0,
-                                                                                      width=geodata.shape[-1], height=geodata.shape[-2]),
-                                                              geodata.transform)
-                if not read.compare_crs(dst_crs, geodata.crs):
-                    polygon_geodata = read.polygon_to_crs(polygon_geodata, crs_polygon=geodata.crs, dst_crs=dst_crs)
-            else:
-                polygon_geodata = polygons_geodata[_i]
+                polygon_geodata[_i] = data.footprint(crs=dst_crs)
+
+            polygon_geodata = polygons_geodata[_i]
 
             if not polygon_geodata.intersects(polygon_iter):
                 continue
@@ -168,17 +165,19 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
                                        dst_transform=dst_transform_iter, resampling=resampling,
                                        dst_nodata=dst_nodata)
 
-            # TODO data_read could have more dims -> any
+            # data_read could have more dims -> any
             masked_values_read = data_read.values == dst_nodata
+            if axis_any is not None:
+                masked_values_read = np.any(masked_values_read, axis=axis_any)  # (H, W)
+
             if geomask is not None:
                 invalid_values_iter |= masked_values_read
             else:
                 invalid_values_iter = masked_values_read
 
-            # TODO mask only has spatial locations  -> unsqueeze
             mask_values_copy_out = invalid_values_window & ~invalid_values_iter
 
-            data_return.values[slice_obj][mask_values_copy_out] = data_read.values[mask_values_copy_out]
+            data_return.values[slice_obj][..., mask_values_copy_out] = data_read.values[...,mask_values_copy_out]
 
             invalid_values_window &= invalid_values_iter
 
