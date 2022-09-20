@@ -1,5 +1,5 @@
 import rasterio.windows
-from typing import Tuple, Dict, Optional, Union
+from typing import Tuple, Dict, Optional, Union, Any
 import numbers
 import numpy as np
 from shapely.geometry import Polygon, MultiPolygon, shape, mapping
