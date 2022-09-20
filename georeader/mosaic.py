@@ -1,6 +1,6 @@
 from georeader.abstract_reader import GeoData
 from georeader.geotensor import GeoTensor
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Callable
 import rasterio.warp
 from georeader import read
 from georeader.read import read_reproject
@@ -11,18 +11,59 @@ from shapely.geometry import Polygon, MultiPolygon, box
 import rasterio.windows
 from collections import namedtuple
 
+
+def select_polygons_overlap(polygons: List[Union[Polygon, MultiPolygon]], aoi: Union[Polygon, MultiPolygon]) -> List[int]:
+    """
+    Returns the indexes of polygons that maximally overlap the given aoi polygon
+
+    Args:
+        polygons: List of polygons (footprints of rasters)
+        aoi: Polygon to figure out the maximal overlap
+
+    Examples:
+        See notebooks/Sentinel-2/query_mosaic_s2_images.ipynb for an example of use.
+
+    Returns:
+        List of indexes of polygons that cover the aoi polygon
+
+    """
+
+    idxs_out = []
+    while (len(idxs_out) < len(polygons)) and not aoi.is_empty:
+        # Select idx of polygon with bigger overlap
+        idx_max = None
+        value_overlap_max = 0
+        for idx, pol in enumerate(polygons):
+            if idx in idxs_out:
+                continue
+
+            overlap_area = pol.intersection(aoi).area / aoi.area
+            if overlap_area > value_overlap_max:
+                value_overlap_max = overlap_area
+                idx_max = idx
+
+        if idx_max is None:
+            break
+
+        pol_max = polygons[idx_max]
+        aoi = aoi.difference(pol_max)
+        idxs_out.append(idx_max)
+
+    return idxs_out
+
 def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
                    polygon:Optional[Polygon]=None,
                    dst_transform:Optional[rasterio.transform.Affine]=None,
                    bounds:Optional[Tuple[float, float, float, float]]=None,
                    dst_crs:Optional[str]=None,
-                   window_size: Tuple[int, int]= (512, 512),
+                   window_size: Optional[Tuple[int, int]]= None,
                    resampling:rasterio.warp.Resampling=rasterio.warp.Resampling.cubic_spline,
+                   masking_function:Optional[Callable[[GeoData], GeoData]]=None,
                    dst_nodata:Optional[int]=None) -> GeoTensor:
     """
     Computes the spatial mosaic of all input products in `data_list`. It iteratively calls `read_reproject` with
-    all the list of rasters while there is any `dst_nodata` value. This function might consume a lot of memory, it requires
-    that the copy of the output fits in memory.
+    all the list of rasters while there is any `dst_nodata` value. This function m requires that the copy of the output
+    fits in memory.
 
     This function is very similar to `rasterio.merge.merge`.
 
@@ -35,6 +76,8 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
         dst_transform: Optional dest transform. If not provided the dst_transform is a rectilinear transform computed
         window_size: The mosaic will be computed by windows of this size (for efficiency purposes)
         resampling:specifies how data is reprojected from `rasterio.warp.Resampling`.
+        masking_function: function to call to the mask if provided or to the tensor (if not provided) should return a bool tensor
+            with only spatial dimensions.
         dst_nodata: no data value. if None will use `data_list[0].fill_value_default`
 
     Returns:
@@ -76,6 +119,8 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
     window_polygon = read.window_from_polygon(GeoDataFake(transform=dst_transform, crs=dst_crs),
                                               polygon, crs_polygon=dst_crs)
 
+    window_polygon = window_utils.round_outer_window(window_polygon)
+
     # Shift transform to window
     dst_transform = rasterio.windows.transform(window_polygon, transform=dst_transform)
     dst_nodata = dst_nodata or first_data_object.fill_value_default
@@ -97,6 +142,9 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
         axis_any = None
 
     if first_mask_object is not None:
+        if (masking_function is None) and len(first_mask_object.shape) > 2:
+            assert (len(first_mask_object.shape) == 3) and (first_mask_object.shape[0] == 1), f"Expected two dims, found {first_mask_object.shape}"
+
         invalid_geotensor = read_reproject(first_mask_object,
                                            dst_crs=dst_crs, dst_transform=dst_transform,
                                            resampling=rasterio.warp.Resampling.nearest,
@@ -104,12 +152,24 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
                                                                               width=window_polygon.width,
                                                                               height=window_polygon.height),
                                            dst_nodata=dst_nodata)
+        if masking_function is not None:
+            invalid_geotensor = masking_function(invalid_geotensor)
+
         invalid_geotensor.values = invalid_geotensor.values.astype(bool)
         invalid_geotensor.values =  invalid_geotensor.values.squeeze()
-        assert len(invalid_geotensor.shape) == 2, f"Expected two dims, found {invalid_geotensor.shape}"
-        invalid_values|= invalid_geotensor.values
+        assert len(invalid_geotensor.shape) == 2, f"Invalid mask expected 2 dims found {invalid_geotensor.shape}"
 
-    data_return.values[..., invalid_values] = data_return.fill_value_default
+        invalid_values|= invalid_geotensor.values
+    elif masking_function is not None:
+        # Apply masking funtion to the readed data
+        invalid_geotensor = masking_function(data_return)
+
+        invalid_geotensor.values = invalid_geotensor.values.astype(bool)
+        invalid_geotensor.values = invalid_geotensor.values.squeeze()
+        assert len(invalid_geotensor.shape) == 2, f"Invalid mask expected 2 dims found {invalid_geotensor.shape}"
+        invalid_values |= invalid_geotensor.values
+
+    # data_return.values[..., invalid_values] = data_return.fill_value_default
 
     if not np.any(invalid_values):
         return data_return
@@ -117,9 +177,15 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
     if len(data_list) == 1:
         return data_return
 
-    windows = slices.create_windows(data_return, window_size)
+    if window_size is not None:
+        windows = slices.create_windows(data_return, window_size)
+    else:
+        windows = [rasterio.windows.Window(row_off=0, col_off=0, width=data_return.shape[-1],
+                                           height=data_return.shape[-2])]
 
-    polygons_geodata = []
+    # Cache of the polygons geodata
+    polygons_geodata = [None for _ in range(len(data_list)-1)]
+
     for window in windows:
         slice_spatial = window.toslices()
         invalid_values_window = invalid_values[slice_spatial]
@@ -141,7 +207,7 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
                 geomask = None
 
             if polygons_geodata[_i] is None:
-                polygon_geodata[_i] = data.footprint(crs=dst_crs)
+                polygons_geodata[_i] = data.footprint(crs=dst_crs)
 
             polygon_geodata = polygons_geodata[_i]
 
@@ -149,34 +215,51 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
                 continue
 
             if geomask is not None:
+                if (masking_function is None) and len(geomask.shape) > 2:
+                    assert (len(geomask.shape) == 3) and (
+                                geomask.shape[0] == 1), f"Expected two dims, found {geomask.shape}"
+
                 invalid_geotensor = read_reproject(geomask,
                                                    dst_crs=dst_crs, dst_transform=dst_transform_iter,
                                                    resampling=rasterio.warp.Resampling.nearest,
                                                    window_out=window_reproject_iter,
                                                    dst_nodata=dst_nodata)
+                if masking_function is not None:
+                    invalid_geotensor = masking_function(invalid_geotensor)
+
                 invalid_geotensor.values = invalid_geotensor.values.astype(bool)
-                invalid_values_iter = invalid_geotensor.values
                 invalid_geotensor.values = invalid_geotensor.values.squeeze()
-                assert len(invalid_geotensor.shape) == 2, f"Expected two dims, found {invalid_geotensor.shape}"
-                if np.all(invalid_values_iter):
+                assert len(invalid_geotensor.shape) == 2, f"Invalid mask expected 2 dims found {invalid_geotensor.shape}"
+                if np.all(invalid_geotensor.values):
                     continue
+                invalid_values_iter = invalid_geotensor.values
 
             data_read = read_reproject(geodata, dst_crs=dst_crs, window_out=window_reproject_iter,
                                        dst_transform=dst_transform_iter, resampling=resampling,
                                        dst_nodata=dst_nodata)
+
+            if (geomask is None) and (masking_function is not None):
+                invalid_geotensor = masking_function(data_read)
+
+                invalid_geotensor.values = invalid_geotensor.values.astype(bool)
+                invalid_geotensor.values = invalid_geotensor.values.squeeze()
+                assert len(invalid_geotensor.shape) == 2, f"Invalid mask expected 2 dims found {invalid_geotensor.shape}"
+                if np.all(invalid_geotensor.values):
+                    continue
+                invalid_values_iter = invalid_geotensor.values
 
             # data_read could have more dims -> any
             masked_values_read = data_read.values == dst_nodata
             if axis_any is not None:
                 masked_values_read = np.any(masked_values_read, axis=axis_any)  # (H, W)
 
-            if geomask is not None:
+            if (geomask is not None) or (masking_function is not None):
                 invalid_values_iter |= masked_values_read
             else:
                 invalid_values_iter = masked_values_read
 
+            # Copy values invalids in window and valids in iter
             mask_values_copy_out = invalid_values_window & ~invalid_values_iter
-
             data_return.values[slice_obj][..., mask_values_copy_out] = data_read.values[...,mask_values_copy_out]
 
             invalid_values_window &= invalid_values_iter
