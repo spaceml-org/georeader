@@ -207,7 +207,7 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
                 geomask = None
 
             if polygons_geodata[_i] is None:
-                polygons_geodata[_i] = data.footprint(crs=dst_crs)
+                polygons_geodata[_i] = geodata.footprint(crs=dst_crs)
 
             polygon_geodata = polygons_geodata[_i]
 
