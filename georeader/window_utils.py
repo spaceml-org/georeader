@@ -182,17 +182,20 @@ def window_polygon(window:rasterio.windows.Window, transform:rasterio.Affine) ->
     """
     Computes the Polygon that contains the window
 
+    works similarly as `rasterio.windows.bounds` function
+
     Args:
-        window:
-        transform:
+        window: Window object to compute the polygon
+        transform: geotransform
 
     Returns:
-
+        Polygon surrounding the window in geographical coordinates
     """
     row_off = window.row_off
     col_off = window.col_off
-    row_max = window.height - window.row_off - 1
-    col_max = window.width - window.col_off - 1
+    row_max = row_off + window.height
+    col_max = col_off + window.width
+
     polygon_idx = [(col_off, row_off), (col_off, row_max), (col_max, row_max), (col_max, row_off), (col_off, row_off)]
 
     return Polygon([transform * coord for coord in polygon_idx])
