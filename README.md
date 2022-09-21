@@ -1,6 +1,6 @@
 # georeader
 
-Package to read data from rasters with very few dependencies, compatible with cloud platforms and with lazy loading.
+Read data from rasters: very few dependencies, compatible with cloud platforms and lazy loading.
 
 ## Install
 
@@ -46,7 +46,7 @@ data_memory
     fill_value_default: 0
 ```
 
-In the `.values` attribute we have the plain numpy array that we can plot with `show`:
+In the `.values` attribute we have the plain numpy array that we can plot with `imshow`:
 
 ```python
 from rasterio.plot import  show
