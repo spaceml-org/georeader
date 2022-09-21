@@ -72,8 +72,8 @@ def window_from_polygon(data_in: GeoData,
     col_max = max(c[0] for c in coords)
 
     return rasterio.windows.Window(row_off=row_off, col_off=col_off,
-                                   width=col_max-col_off+1,
-                                   height=row_max-row_off+1)
+                                   width=col_max-col_off,
+                                   height=row_max-row_off)
 
 def window_from_bounds(data_in: GeoData, bounds:Tuple[float, float, float, float],
                        crs_bounds:Optional[str]=None) -> rasterio.windows.Window:
@@ -417,14 +417,15 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
 
     Args:
         data_in: GeoData to read and reproject. Expected coords "x" and "y".
-        bounds: Bounds in CRS specified by dst_crs.
+        bounds: Optional. bounds in CRS specified by `dst_crs`. If not provided `window_out` must be given.
         dst_crs: CRS to reproject.
-        resolution_dst_crs: resolution in the CRS specified by dst_crs
+        resolution_dst_crs: resolution in the CRS specified by `dst_crs`. If not provided will use the the resolution
+            intrinsic of `dst_transform`.
         dst_transform: Optional dest transform. If not provided the dst_transform is a rectilinear transform computed
         with the bounds and resolution_dst_crs.
-        window_out: Window out in dst_crs. If not provided it is computed from the bounds.
+        window_out: Window out to read w.r.t `dst_transform`. If not provided it is computed from the bounds.
         resampling: specifies how data is reprojected from `rasterio.warp.Resampling`.
-        dtpye_dst: if None it will be inferred
+        dtpye_dst: if None it will be data_in.dtype
         return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
             returns an GeoTensor object (georreferenced array).
         dst_nodata: dst_nodata value
@@ -447,8 +448,8 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
                                                   transform=dst_transform).round_lengths(op="ceil",
                                                                                          pixel_precision=PIXEL_PRECISION)
 
-    # Compute real bounds that are going to be read
-    bounds = window_utils.window_bounds(window_out, dst_transform)
+    # Compute real polygon that is going to be read
+    polygon_dst_crs = window_utils.window_polygon(window_out, dst_transform)
 
     crs_data_in = data_in.crs
     if dst_crs is None:
@@ -459,8 +460,8 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
         transform_data = data_in.transform
         if (dst_transform.a == transform_data.a) and (dst_transform.b == transform_data.b) and (
                 dst_transform.d == transform_data.d) and (dst_transform.e == transform_data.e):
-            window_in_data = rasterio.windows.from_bounds(*bounds, transform=transform_data).round_lengths(op="ceil",
-                                                                                                           pixel_precision=PIXEL_PRECISION)
+            window_in_data = window_from_polygon(data_in, polygon_dst_crs, crs_polygon=dst_crs).round_lengths(op="ceil",
+                                                                                                              pixel_precision=PIXEL_PRECISION)
             if _is_exact_round(window_in_data.row_off) and _is_exact_round(
                     window_in_data.col_off) and window_in_data.width == window_out.width \
                     and window_in_data.height == window_out.height:
@@ -479,10 +480,9 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
 
     if not isinstance(data_in, GeoTensor):
         # Read a padded window of the input data. This data will be then used for reprojection
-        # TODO change read_from_bounds from read_from_polygon!
-        geotensor_in = read_from_bounds(data_in, bounds, dst_crs,
-                                        pad_add=(3, 3), return_only_data=False,
-                                        trigger_load=True)
+        geotensor_in = read_from_polygon(data_in, polygon_dst_crs, crs_polygon=dst_crs,
+                                         pad_add=(3, 3), return_only_data=False,
+                                         trigger_load=True)
     else:
         geotensor_in = data_in
 
