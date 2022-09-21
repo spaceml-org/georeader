@@ -53,9 +53,9 @@ def window_from_polygon(data_in: GeoData,
     if isinstance(polygon_crs_data, MultiPolygon):
         polygons = polygon_crs_data.geoms
     elif isinstance(polygon_crs_data, Polygon):
-        polygons = [polygon]
+        polygons = [polygon_crs_data]
     else:
-        raise NotImplementedError(f"Received shape of type {type(polygon)} different from {Polygon} or {MultiPolygon}")
+        raise NotImplementedError(f"Received shape of type {type(polygon_crs_data)} different from {Polygon} or {MultiPolygon}")
 
     # Collect all the pixel coordinates of the exterior polygons
     coords = []
@@ -284,6 +284,7 @@ def read_from_polygon(data_in: GeoData, polygon: Union[Polygon, MultiPolygon],
     if any(p > 0 for p in pad_add):
         window_in = pad_window(window_in, pad_add)  # Add padding for bicubic int or for co-registration
     window_in = round_outer_window(window_in)
+    print(window_in)
 
     return read_from_window(data_in, window_in, return_only_data=return_only_data, trigger_load=trigger_load,
                             boundless=boundless)
@@ -371,7 +372,8 @@ def resize(data_in:GeoData, resolution_dst:Union[float, Tuple[float, float]],
             data_in = data_in.load()
 
         if anti_aliasing_sigma is None:
-            anti_aliasing_sigma = np.maximum(0, (scale - 1) / 2)
+            anti_aliasing_sigma = np.mean(np.maximum(0, (scale - 1) / 2))
+
 
         # TODO if data_in.values is a torch.Tensor use kornia gaussian filter instead of ndi
 
@@ -448,6 +450,7 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
                                                   transform=dst_transform).round_lengths(op="ceil",
                                                                                          pixel_precision=PIXEL_PRECISION)
 
+    print(window_out, dst_transform)
     # Compute real polygon that is going to be read
     polygon_dst_crs = window_utils.window_polygon(window_out, dst_transform)
 
