@@ -71,7 +71,7 @@ def figure_out_transform(transform: Optional[rasterio.Affine] = None,
 
     if transform is None:
         assert bounds is not None, "Transform and bounds not provided"
-        assert resolution_dst is not None, "Transform and bounds not provided"
+        assert resolution_dst is not None, "Transform and resolution not provided"
         return rasterio.transform.from_origin(min(bounds[0], bounds[2]),
                                               max(bounds[1], bounds[3]),
                                               resolution_dst[0], resolution_dst[1])
@@ -85,6 +85,7 @@ def figure_out_transform(transform: Optional[rasterio.Affine] = None,
         dst_transform = transform * transform_scale
 
     if bounds is not None:
+        # Shift the transform to start in the bounds
         window_current_transform = rasterio.windows.from_bounds(*bounds,
                                                                 transform=transform)
         dst_transform = rasterio.windows.transform(window_current_transform, dst_transform)
