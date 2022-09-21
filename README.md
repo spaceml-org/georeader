@@ -5,9 +5,7 @@ Read data from rasters: very few dependencies, compatible with cloud platforms a
 ## Install
 
 ```bash
-git clone 
-cd georeader
-pip install -e .
+pip install git+https://github.com/spaceml-org/georeader#egg=georeader
 ```
 
 This package is work in progress. The API might change without notice. Use it with caution.
