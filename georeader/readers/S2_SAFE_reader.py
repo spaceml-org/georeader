@@ -72,6 +72,17 @@ class S2Image:
                  window_focus:Optional[rasterio.windows.Window]=None,
                  bands:Optional[List[str]]=None,
                  metadata_msi:Optional[str]=None):
+        """
+
+        Args:
+            s2_folder: name of the SAFE product expects name
+            polygon: in CRS EPSG:4326
+            granules:
+            out_res:
+            window_focus:
+            bands:
+            metadata_msi:
+        """
         self.mission, self.producttype, sensing_date_str, self.pdgs, self.relorbitnum, self.tile_number_field, self.product_discriminator = s2_name_split(
             s2_folder)
 
@@ -139,6 +150,10 @@ class S2Image:
             self.granules = granules
 
         self._pol = polygon
+        if self._pol is not None:
+            self._pol_crs = window_utils.polygon_to_crs(self._pol, "EPSG:4326", self.crs)
+        else:
+            self._pol_crs = None
 
 
     def load_metadata_msi(self):
@@ -147,17 +162,17 @@ class S2Image:
         return self.root_metadata_msi
 
     def footprint(self, crs:Optional[str]=None) -> Polygon:
-        if self._pol is None:
+        if self._pol_crs is None:
             self.load_metadata_msi()
             footprint_txt = self.root_metadata_msi.findall(".//EXT_POS_LIST")[0].text
             coords_split = footprint_txt.split(" ")[:-1]
             self._pol = Polygon(
                 [(float(lngstr), float(latstr)) for latstr, lngstr in zip(coords_split[::2], coords_split[1::2])])
-            self._pol = window_utils.polygon_to_crs(self._pol, "EPSG:4326", self.crs)
+            self._pol_crs = window_utils.polygon_to_crs(self._pol, "EPSG:4326", self.crs)
 
-        pol_window = window_utils.window_polygon(self.window_focus, self.transform)
+        pol_window = window_utils.window_polygon(self._get_reader().window_focus, self.transform)
 
-        pol = self._pol.intersection(pol_window)
+        pol = self._pol_crs.intersection(pol_window)
 
         if (crs is None) or window_utils.compare_crs(self.crs, crs):
             return pol
@@ -171,7 +186,7 @@ class S2Image:
             if len(radio_add_offsets) == 0:
                 self._radio_add_offsets = {b : 0 for b in BANDS_S2}
             else:
-                self._radio_add_offsets = {BANDS_S2[int(r.attrib["band_id"])]: float(r.text) for r in radio_add_offsets}
+                self._radio_add_offsets = {BANDS_S2[int(r.attrib["band_id"])]: int(r.text) for r in radio_add_offsets}
 
         return self._radio_add_offsets
 
@@ -328,7 +343,7 @@ class S2Image:
         reader_ref = self._get_reader()
         rasterio_reader_ref = reader_ref.read_from_window(window=window, boundless=boundless)
         s2obj =  __class__(s2_folder=self.folder, out_res=self.out_res, window_focus=rasterio_reader_ref.window_focus,
-                           bands=self.bands, granules=self.granules, polygon=self.polygon,
+                           bands=self.bands, granules=self.granules, polygon=self._pol,
                            metadata_msi=self.metadata_msi)
 
         s2obj.root_metadata_msi = self.root_metadata_msi

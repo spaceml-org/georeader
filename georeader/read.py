@@ -465,7 +465,7 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
                     window_in_data.col_off) and window_in_data.width == window_out.width \
                     and window_in_data.height == window_out.height:
                 window_in_data = window_in_data.round_offsets(op="floor", pixel_precision=PIXEL_PRECISION)
-                return read_from_window(data_in, window_in_data, return_only_data=return_only_data)
+                return read_from_window(data_in, window_in_data, return_only_data=return_only_data, trigger_load=True)
 
     cast = False
     if dtpye_dst is None:
