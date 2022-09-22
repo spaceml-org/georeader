@@ -120,6 +120,7 @@ def _save_cog(out_np: np.ndarray, path_tiff_save: str, profile: dict,
         profile["RESAMPLING"] = "CUBICSPLINE"  # for pyramids
 
     if cog_driver:
+        assert ("blockxsize" not in profile) and ("blockysize" not in profile), "In COG driver blockxsize and blockysize options are BLOCKSIZE"
         # Save tiff locally and copy it to GCP with fsspec is path is a GCP path
         if path_tiff_save.startswith("gs://"):
             import fsspec
