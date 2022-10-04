@@ -45,7 +45,7 @@ def _slices(dimsize: int, size: int, overlap: int = 0, include_incomplete: bool 
 def create_slices(named_shape: Dict[str, int],
                   dims: Dict[str, int], overlap: Optional[Dict[str, int]] = None,
                   include_incomplete: bool = True, start_negative_if_padding: bool = False,
-                  trim_incomplete: bool = False) -> List[Dict[str, slice]]:
+                  trim_incomplete: bool = True) -> List[Dict[str, slice]]:
     """
     This function creates a list of slice objects to slice the dataset over the given dimensions
 
@@ -81,19 +81,20 @@ def create_slices(named_shape: Dict[str, int],
 def create_windows(geodata_shape: Tuple[int, int],
                    window_size: Tuple[int, int], overlap: Optional[Tuple[str, int]] = None,
                    include_incomplete: bool = True, start_negative_if_padding: bool = False,
-                   trim_incomplete: bool = False) -> List[rasterio.windows.Window]:
+                   trim_incomplete: bool = True) -> List[rasterio.windows.Window]:
     """
     This function creates a list of window objects to slice the dataset in windows of shape `window_size`
 
     Args:
         geodata_shape: tuple with the spatial shape of hte geodata object `(n_rows, n_cols)` `(height, width)`
         window_size: shape of the windows to yield
-        overlap: number of pixels to read with overlap
+        overlap: number of pixels to read with overlap (same concept as stride in neural networks)
         include_incomplete: if `True` includes incomplete slices in the borders if `False` it discards the slices in the
         borders that will have size lower than dims.
         start_negative_if_padding: if `True` starts in -overlap//2 each slice. Useful to create slices to write in predict
             mode.
-        trim_incomplete: windows at the edge of the array will have smaller size if needed
+        trim_incomplete: if `True` windows at the edge of the array will have smaller size if needed (i.e. those windows
+            will have a smaller width or height)
 
     Returns:
         List of window objects covering the data
