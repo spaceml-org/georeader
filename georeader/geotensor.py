@@ -28,7 +28,7 @@ ORDERS = {
 class GeoTensor:
     def __init__(self, values:Tensor,
                  transform:rasterio.Affine, crs:Any,
-                 fill_value_default:Union[int, float]=0):
+                 fill_value_default:Optional[Union[int, float]]=0):
         self.values = values
         self.transform = transform
         self.crs = crs
