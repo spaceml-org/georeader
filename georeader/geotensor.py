@@ -280,12 +280,22 @@ class GeoTensor:
                          fill_value_default=self.fill_value_default)
 
     def write_from_window(self, data:Tensor, window:rasterio.windows.Window):
+        """
+        Writes array to GeoTensor values object at the given window position. If window surpasses the bounds of this
+        object it crops the data to fit the object.
+
+        Args:
+            data: Tensor to write. Expected: spatial dimensions `window.width`, `window.height`. Rest: same as `self`
+            window: Window object that specifies the spatial location to write the data
+
+        """
         window_data = rasterio.windows.Window(col_off=0, row_off=0,
                                               width=self.width, height=self.height)
         if not rasterio.windows.intersect(window, window_data):
             return
 
         assert data.shape[-2:] == (window.width, window.height), f"window {window} has different shape than data {data.shape}"
+        assert data.shape[:-2] == self.shape[:-2], f"Dimension of data in non-spatial channels found {data.shape} expected: {self.shape}"
 
         slice_dict, pad_width = window_utils.get_slice_pad(window_data, window)
         slice_list = self._slice_tuple(slice_dict)
