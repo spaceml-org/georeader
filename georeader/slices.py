@@ -1,6 +1,4 @@
 import rasterio.windows
-
-from georeader.abstract_reader import GeoData
 import itertools
 from typing import Dict, List, Tuple, Optional
 
@@ -80,7 +78,7 @@ def create_slices(named_shape: Dict[str, int],
     return [{key: slic for key, slic in zip(dims, tuple_slices)} for tuple_slices in itertools.product(*dim_slices)]
 
 
-def create_windows(ds: GeoData,
+def create_windows(geodata_shape: Tuple[int, int],
                    window_size: Tuple[int, int], overlap: Optional[Tuple[str, int]] = None,
                    include_incomplete: bool = True, start_negative_if_padding: bool = False,
                    trim_incomplete: bool = False) -> List[rasterio.windows.Window]:
@@ -88,7 +86,7 @@ def create_windows(ds: GeoData,
     This function creates a list of window objects to slice the dataset in windows of shape `window_size`
 
     Args:
-        ds:
+        geodata_shape: tuple with the spatial shape of hte geodata object `(n_rows, n_cols)` `(height, width)`
         window_size: shape of the windows to yield
         overlap: number of pixels to read with overlap
         include_incomplete: if `True` includes incomplete slices in the borders if `False` it discards the slices in the
@@ -101,7 +99,7 @@ def create_windows(ds: GeoData,
         List of window objects covering the data
 
     """
-    named_shape = {"x":ds.shape[-1], "y":ds.shape[-2]}
+    named_shape = {"x":geodata_shape[-1], "y":geodata_shape[-2]}
 
     if overlap is not None:
         overlap = {"x": overlap[1], "y": overlap[0]}

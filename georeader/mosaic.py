@@ -178,7 +178,7 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
         return data_return
 
     if window_size is not None:
-        windows = slices.create_windows(data_return, window_size)
+        windows = slices.create_windows(data_return.shape[-2:], window_size)
     else:
         windows = [rasterio.windows.Window(row_off=0, col_off=0, width=data_return.shape[-1],
                                            height=data_return.shape[-2])]
