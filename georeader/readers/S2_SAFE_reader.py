@@ -29,7 +29,8 @@ from georeader import window_utils
 from georeader.geotensor import GeoTensor
 import rasterio.warp
 from shapely.geometry import shape
-
+from tqdm import tqdm
+import json
 
 BANDS_S2 = ["B01", "B02","B03", "B04", "B05", "B06",
             "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
@@ -64,6 +65,28 @@ def normalize_band_names(bands:List[str]) -> List[str]:
     return bands_out
 
 
+def islocalpath(path:str) -> bool:
+    return path.startswith("file://") or ("://" not in path)
+
+def get_filesystem(path: str):
+    import fsspec
+    path = str(path)
+    if islocalpath(path):
+        return fsspec.filesystem("file")
+    else:
+        # use the fileystem from the protocol specified
+        return fsspec.filesystem(path.split(":", 1)[0],requester_pays = True)
+
+def _get_info_granules_metadata(folder):
+    granules_path = os.path.join(folder, "granules.json").replace("\\", "/")
+    info_granules_metadata = None
+    if islocalpath(granules_path) and os.path.exists(granules_path):
+        with open(granules_path, "r") as fh:
+            info_granules_metadata = json.load(fh)
+        info_granules_metadata["granules"] = {k:os.path.join(folder,g) for k,g in info_granules_metadata["granules"].items()}
+        info_granules_metadata["metadata_msi"] = os.path.join(folder, info_granules_metadata["metadata_msi"])
+    return info_granules_metadata
+
 class S2Image:
     def __init__(self, s2_folder:str,
                  polygon:Optional[Polygon]=None,
@@ -93,8 +116,16 @@ class S2Image:
         self.folder = s2_folder
         self.datetime = datetime.datetime.strptime(sensing_date_str, "%Y%m%dT%H%M%S").replace(
             tzinfo=datetime.timezone.utc)
+
+        info_granules_metadata = None
+
         if metadata_msi is None:
-            self.metadata_msi = os.path.join(self.folder, f"MTD_{self.producttype}.xml").replace("\\", "/")
+            info_granules_metadata = _get_info_granules_metadata(self.folder)
+            if info_granules_metadata is not None:
+                self.metadata_msi = info_granules_metadata["metadata_msi"]
+            else:
+                self.metadata_msi = os.path.join(self.folder, f"MTD_{self.producttype}.xml").replace("\\", "/")
+
         else:
             self.metadata_msi = metadata_msi
 
@@ -139,13 +170,21 @@ class S2Image:
 
         # The code below could be only triggered if required
         if granules is None:
-            self.load_metadata_msi()
-            bands_elms = self.root_metadata_msi.findall(".//IMAGE_FILE")
-            all_granules = [os.path.join(self.folder, b.text + ".jp2").replace("\\", "/")  for b in bands_elms]
-            if self.producttype == "MSIL2A":
-                self.granules = {j.split("_")[-2]: j for j in all_granules}
+            # This is useful when copying with cache_product_to_local_dir func
+            if info_granules_metadata is None:
+                info_granules_metadata = _get_info_granules_metadata(self.folder)
+
+            if info_granules_metadata is not None:
+                self.granules = info_granules_metadata["granules"]
+
             else:
-                self.granules = {j.split("_")[-1].replace(".jp2", ""): j for j in all_granules}
+                self.load_metadata_msi()
+                bands_elms = self.root_metadata_msi.findall(".//IMAGE_FILE")
+                all_granules = [os.path.join(self.folder, b.text + ".jp2").replace("\\", "/")  for b in bands_elms]
+                if self.producttype == "MSIL2A":
+                    self.granules = {j.split("_")[-2]: j for j in all_granules}
+                else:
+                    self.granules = {j.split("_")[-1].replace(".jp2", ""): j for j in all_granules}
         else:
             self.granules = granules
 
@@ -155,7 +194,56 @@ class S2Image:
         else:
             self._pol_crs = None
 
+    def cache_product_to_local_dir(self, path_dest:Optional[str]=None, **kwargs) -> '__class__':
+        if path_dest is None:
+            path_dest = "."
 
+        name_with_safe = f"{self.name}.SAFE"
+        dest_folder = os.path.join(path_dest, name_with_safe)
+
+        # Copy metadata
+        metadata_filename = os.path.basename(self.metadata_msi)
+        metadata_output_path = os.path.join(dest_folder, metadata_filename)
+        if not os.path.exists(metadata_output_path):
+            os.makedirs(dest_folder, exist_ok=True)
+            self.load_metadata_msi()
+            ET.ElementTree(self.root_metadata_msi).write(metadata_output_path)
+            root_metadata_msi = self.root_metadata_msi
+        else:
+            root_metadata_msi = read_xml(metadata_output_path)
+
+        bands_elms = root_metadata_msi.findall(".//IMAGE_FILE")
+        if self.producttype == "MSIL2A":
+            granules_name_metadata = {b.text.split("_")[-2]: b.text for b in bands_elms}
+        else:
+            granules_name_metadata = {b.text.split("_")[-1]: b.text for b in bands_elms}
+
+        new_granules = {}
+        with tqdm(total=len(self.bands)) as pbar:
+            for b in self.bands:
+                granule = self.granules[b]
+                ext_granule = os.path.splitext(granule)[1]
+                fsor = get_filesystem(granule)
+                new_granules[b] = os.path.splitext(granules_name_metadata[b])[0]+ext_granule
+                new_granules_path = os.path.join(dest_folder, new_granules[b])
+                if not os.path.exists(new_granules_path):
+                    pbar.set_description(f"Donwloading band {b} from {granule} to {new_granules_path}")
+                    dir_granules_path = os.path.dirname(new_granules_path)
+                    os.makedirs(dir_granules_path, exist_ok=True)
+                    fsor.get(granule, new_granules_path)
+                pbar.update(1)
+
+        # Save granules for fast reading
+        granules_path = os.path.join(dest_folder, "granules.json").replace("\\", "/")
+        if not os.path.exists(granules_path):
+            with open(granules_path, "w") as fh:
+                json.dump({"granules": new_granules, "metadata_msi": metadata_filename}, fh)
+
+        new_granules_full_path = {k: os.path.join(dest_folder,v) for k, v in new_granules.items()}
+
+        return __class__(s2_folder=dest_folder, out_res=self.out_res, window_focus=self.window_focus,
+                  bands=self.bands, granules=new_granules_full_path, polygon=self._pol,
+                  metadata_msi=metadata_output_path)
     def load_metadata_msi(self):
         if self.root_metadata_msi is None:
             self.root_metadata_msi = read_xml(self.metadata_msi)
@@ -337,7 +425,7 @@ class S2Image:
          fill_value_default: {self.fill_value_default}
         """
 
-    def read_from_window(self, window:rasterio.windows.Window, boundless:bool) -> '__class__':
+    def read_from_window(self, window:rasterio.windows.Window, boundless:bool=True) -> '__class__':
         # return GeoTensor(values=self.values, transform=self.transform, crs=self.crs)
 
         reader_ref = self._get_reader()

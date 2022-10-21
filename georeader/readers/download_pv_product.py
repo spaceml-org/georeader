@@ -29,7 +29,7 @@ RESOLUTIONS_LINKS = {
 
 def get_auth():
     home_dir = os.path.join(os.path.expanduser('~'),".georeader")
-    json_file = os.path.join(home_dir, "auth.json")
+    json_file = os.path.join(home_dir, "auth_probav.json")
     if not os.path.exists(json_file):
         os.makedirs(home_dir, exist_ok=True)
         with open(json_file, "w") as fh:
