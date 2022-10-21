@@ -1,8 +1,8 @@
 from sentinelsat.sentinel import SentinelAPI
-from georeader.readers import S2_SAFE_reader
 from shapely.geometry import MultiPolygon, Polygon
-from typing import Union, Optional, Tuple, Dict
+from typing import Union, Optional, Tuple
 from datetime import datetime, timedelta, timezone
+from georeader.readers import query_utils
 import geopandas as gpd
 import os
 import json
@@ -32,17 +32,18 @@ def get_api(api_url:str='https://scihub.copernicus.eu/dhus/') -> SentinelAPI:
 def query(area:Union[MultiPolygon,Polygon], date_start:datetime, date_end:datetime,
           producttype:str='S2MSI1C',api:Optional[SentinelAPI]=None,
           api_url:str='https://scihub.copernicus.eu/dhus/',
-          cloudcoverpercentage:Tuple[int,int]=(0,80)) -> gpd.GeoDataFrame:
+          cloudcoverpercentage:Tuple[int,int]=(0,80),filter_duplicates:bool=True) -> gpd.GeoDataFrame:
     """
 
     Args:
-        area: area to query images
+        area: area to query images in EPSG:4326
         date_start: datetime in a given timezone. If tz not provided UTC will be assumed.
         date_end: datetime in UTC. If tz not provided UTC will be assumed.
         producttype:'S2MSI1C' or 'S2MSI2A'
         api: Optional, if not provided will load the credentials from '~/.georeader/auth_S2.json'
         api_url: 'https://scihub.copernicus.eu/dhus/' or 'https://scihub.copernicus.eu/apihub'
         cloudcoverpercentage:
+        filter_duplicates: Filter S2 images that are duplicated
 
     Returns:
 
@@ -63,15 +64,25 @@ def query(area:Union[MultiPolygon,Polygon], date_start:datetime, date_end:dateti
 
     assert date_start < date_end, "Date start must be before date end"
 
-    products = api.query(area=str(area),
-                         date=(date_start, date_end),
-                         platformname='Sentinel-2',
-                         producttype=producttype,
-                         cloudcoverpercentage=cloudcoverpercentage)
+    if isinstance(area, MultiPolygon):
+        pols = area.geoms
+    else:
+        pols = [area]
 
-    products_gpd = api.to_geodataframe(products)
-    products_gpd.explore()
-    products_gpd["mgrs_tile"] = products_gpd.title.apply(lambda x: S2_SAFE_reader.s2_name_split(x)[5])
+    products_all = []
+    for a in pols:
+        res = api.query(area=str(a.simplify(tolerance=0.25)),
+                        date=(date_start, date_end),
+                        platformname='Sentinel-2',
+                        producttype=producttype,
+                        cloudcoverpercentage=cloudcoverpercentage)
+        products_all.append(api.to_geodataframe(res))
+
+    if len(products_all) == 1:
+        products_gpd = products_all[0]
+    else:
+        products_gpd = pd.concat(products_all).drop_duplicates()
+
     products_gpd["overlappercentage"] = products_gpd.geometry.apply(
         lambda x: x.intersection(area).area / area.area * 100)
 
@@ -81,9 +92,17 @@ def query(area:Union[MultiPolygon,Polygon], date_start:datetime, date_end:dateti
     products_gpd["solardatetime"] = products_gpd["datatakesensingstart"].apply(lambda x: x + timedelta(hours=hours_add))
     products_gpd["solarday"] = products_gpd["solardatetime"].apply(lambda x: x.strftime("%Y-%m-%d"))
 
-    products_gpd["localdatetime"] = pd.to_datetime(products_gpd["datatakesensingstart"],unit='ms', utc=True).dt.tz_convert(tz)
+    products_gpd["utcdatetime"] = pd.to_datetime(products_gpd["datatakesensingstart"], unit='ms', utc=True)
+    products_gpd["localdatetime"] = products_gpd["utcdatetime"].dt.tz_convert(tz)
+
+    products_gpd = products_gpd.sort_values("utcdatetime")
+    products_gpd = products_gpd.set_index("title", drop=True)
+
+    if filter_duplicates:
+        products_gpd = query_utils.filter_products_overlap(area, products_gpd).copy()
 
     return products_gpd
+
 
 
 

@@ -12,45 +12,6 @@ import rasterio.windows
 from collections import namedtuple
 
 
-def select_polygons_overlap(polygons: List[Union[Polygon, MultiPolygon]], aoi: Union[Polygon, MultiPolygon]) -> List[int]:
-    """
-    Returns the indexes of polygons that maximally overlap the given aoi polygon
-
-    Args:
-        polygons: List of polygons (footprints of rasters)
-        aoi: Polygon to figure out the maximal overlap
-
-    Examples:
-        See notebooks/Sentinel-2/query_mosaic_s2_images.ipynb for an example of use.
-
-    Returns:
-        List of indexes of polygons that cover the aoi polygon
-
-    """
-
-    idxs_out = []
-    while (len(idxs_out) < len(polygons)) and not aoi.is_empty:
-        # Select idx of polygon with bigger overlap
-        idx_max = None
-        value_overlap_max = 0
-        for idx, pol in enumerate(polygons):
-            if idx in idxs_out:
-                continue
-
-            overlap_area = pol.intersection(aoi).area / aoi.area
-            if overlap_area > value_overlap_max:
-                value_overlap_max = overlap_area
-                idx_max = idx
-
-        if idx_max is None:
-            break
-
-        pol_max = polygons[idx_max]
-        aoi = aoi.difference(pol_max)
-        idxs_out.append(idx_max)
-
-    return idxs_out
-
 def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
                    polygon:Optional[Polygon]=None,
                    dst_transform:Optional[rasterio.transform.Affine]=None,
