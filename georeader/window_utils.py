@@ -178,7 +178,7 @@ def get_slice_pad(window_data:rasterio.windows.Window,
 
     return slice_dict, pad_width
 
-def window_polygon(window:rasterio.windows.Window, transform:rasterio.Affine) -> Polygon:
+def window_polygon(window:rasterio.windows.Window, transform:rasterio.Affine, window_surrounding:bool=False) -> Polygon:
     """
     Computes the Polygon that contains the window
 
@@ -187,6 +187,7 @@ def window_polygon(window:rasterio.windows.Window, transform:rasterio.Affine) ->
     Args:
         window: Window object to compute the polygon
         transform: geotransform
+        window_surrounding: The window surrounds the polygon. (i.e. window.row_off + window.height will not be a vertex)
 
     Returns:
         Polygon surrounding the window in geographical coordinates
@@ -195,6 +196,9 @@ def window_polygon(window:rasterio.windows.Window, transform:rasterio.Affine) ->
     col_off = window.col_off
     row_max = row_off + window.height
     col_max = col_off + window.width
+    if window_surrounding:
+        row_max -= 1
+        col_max -= 1
 
     polygon_idx = [(col_off, row_off), (col_off, row_max), (col_max, row_max), (col_max, row_off), (col_off, row_off)]
 

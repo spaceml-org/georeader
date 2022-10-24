@@ -76,7 +76,7 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
     if dst_crs is None:
         dst_crs = first_data_object.crs
 
-    GeoDataFake = namedtuple("GeoDataFake", ["transform","crs"])
+    GeoDataFake = namedtuple("GeoDataFake", ["transform", "crs"])
     window_polygon = read.window_from_polygon(GeoDataFake(transform=dst_transform, crs=dst_crs),
                                               polygon, crs_polygon=dst_crs)
 

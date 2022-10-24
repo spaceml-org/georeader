@@ -43,7 +43,7 @@ def select_polygons_overlap(polygons: List[Union[Polygon, MultiPolygon]], aoi: U
     return idxs_out
 
 def filter_products_overlap(area:Union[Polygon,MultiPolygon],
-                            products_gpd:gpd.GeoDataFrame, groupkey:str="solarday") -> gpd.GeoDataFrame:
+                            products_gpd:gpd.GeoDataFrame, groupkey:Union[str,List[str]]="solarday") -> gpd.GeoDataFrame:
     indexes_selected = []
     for day, products_gpd_day in products_gpd.groupby(groupkey):
         idx_pols_selected = select_polygons_overlap(products_gpd_day.geometry, area)

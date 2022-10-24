@@ -30,7 +30,8 @@ def _transform_from_crs(center_coords:Tuple[float, float], crs_input:Union[Dict[
 
 
 def window_from_polygon(data_in: GeoData,
-                        polygon:Union[Polygon, MultiPolygon], crs_polygon:Optional[str]=None) -> rasterio.windows.Window:
+                        polygon:Union[Polygon, MultiPolygon], crs_polygon:Optional[str]=None,
+                        window_surrounding:bool=False) -> rasterio.windows.Window:
     """
     Obtains the data window that surrounds the polygon
 
@@ -38,6 +39,7 @@ def window_from_polygon(data_in: GeoData,
         data_in: Reader with crs and transform attributes
         polygon: Polygon or MultiPolygon
         crs_polygon: Optional coordinate reference system of the bounds. If not provided assumes same crs as `data_in`
+        window_surrounding: The window surrounds the polygon. (i.e. window.row_off + window.height will not be a vertex)
 
     Returns:
         Window object with location in pixel coordinates relative to `data_in` of the polygon
@@ -70,6 +72,9 @@ def window_from_polygon(data_in: GeoData,
 
     row_max = max(c[1] for c in coords)
     col_max = max(c[0] for c in coords)
+    if window_surrounding:
+        row_max += 1
+        col_max += 1
 
     return rasterio.windows.Window(row_off=row_off, col_off=col_off,
                                    width=col_max-col_off,
@@ -284,7 +289,6 @@ def read_from_polygon(data_in: GeoData, polygon: Union[Polygon, MultiPolygon],
     if any(p > 0 for p in pad_add):
         window_in = pad_window(window_in, pad_add)  # Add padding for bicubic int or for co-registration
     window_in = round_outer_window(window_in)
-    print(window_in)
 
     return read_from_window(data_in, window_in, return_only_data=return_only_data, trigger_load=trigger_load,
                             boundless=boundless)
@@ -450,7 +454,6 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
                                                   transform=dst_transform).round_lengths(op="ceil",
                                                                                          pixel_precision=PIXEL_PRECISION)
 
-    print(window_out, dst_transform)
     # Compute real polygon that is going to be read
     polygon_dst_crs = window_utils.window_polygon(window_out, dst_transform)
 
