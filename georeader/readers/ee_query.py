@@ -21,7 +21,7 @@ def query(area:Union[MultiPolygon,Polygon],
         area: area to query images in EPSG:4326
         date_start: datetime in a given timezone. If tz not provided UTC will be assumed.
         date_end: datetime in UTC. If tz not provided UTC will be assumed.
-        producttype:'S2MSI1C' or 'S2MSI2A' "Landsat", "L8" or "L9"
+        producttype: 'S2', "Landsat", "L8" or "L9"
         filter_duplicates: Filter S2 images that are duplicated
         return_collection: returns also the corresponding image collection
 
@@ -42,11 +42,8 @@ def query(area:Union[MultiPolygon,Polygon],
     else:
         tz = timezone.utc
 
-    if producttype == "S2MSI1C":
+    if producttype == "S2":
         image_collection_name = "COPERNICUS/S2_HARMONIZED"
-        keys_query = {"PRODUCT_ID": "title", 'CLOUDY_PIXEL_PERCENTAGE': "cloudcoverpercentage"}
-    elif producttype == "S2MSI2A":
-        image_collection_name = "COPERNICUS/S2_SR_HARMONIZED"
         keys_query = {"PRODUCT_ID": "title", 'CLOUDY_PIXEL_PERCENTAGE': "cloudcoverpercentage"}
     elif producttype == "Landsat":
         image_collection_name = "LANDSAT/LC08/C02/T1_RT_TOA"
@@ -73,9 +70,14 @@ def query(area:Union[MultiPolygon,Polygon],
         img_col = img_col.merge(img_col_l9)
 
     geodf = img_collection_to_feature_collection(img_col,
-                                                 ["system:time_start", "system:index"] + list(keys_query.keys()),
+                                                 ["system:time_start"] + list(keys_query.keys()),
                                                 as_geopandas=True)
     geodf.rename(keys_query, axis=1, inplace=True)
+
+    if (producttype == "Landsat") or (producttype == "both"):
+        geodf["collection_name"] = geodf["title"].apply(lambda x: "LANDSAT/LC08/C02/T1_RT_TOA" if x.startswith("LC08") else "LANDSAT/LC09/C02/T1_TOA")
+    else:
+        geodf["collection_name"] = image_collection_name
 
     img_col = img_col.map(lambda x: _rename_add_properties(x, keys_query))
 
@@ -86,11 +88,12 @@ def query(area:Union[MultiPolygon,Polygon],
             pol)
         keys_query_s2 = {"PRODUCT_ID": "title", 'CLOUDY_PIXEL_PERCENTAGE': "cloudcoverpercentage"}
         geodf_s2 = img_collection_to_feature_collection(img_col_s2,
-                                                        ["system:time_start", "system:index"] + list(keys_query_s2.keys()),
+                                                        ["system:time_start"] + list(keys_query_s2.keys()),
                                                         as_geopandas=True)
+        geodf_s2["collection_name"] = "COPERNICUS/S2_HARMONIZED"
         geodf_s2.rename(keys_query_s2, axis=1, inplace=True)
         if geodf_s2.shape[0] > 0:
-            geodf = pd.concat([geodf, geodf_s2], ignore_index=True)
+            geodf = pd.concat([geodf_s2, geodf], ignore_index=True)
             img_col_s2 = img_col_s2.map(lambda x: _rename_add_properties(x, keys_query_s2))
             img_col = img_col.merge(img_col_s2)
 
@@ -144,6 +147,7 @@ def img_collection_to_feature_collection(img_col:ee.ImageCollection,
     def extractFeatures(img):
         values = properties.map(lambda prop: img.get(prop))
         dictio = ee.Dictionary.fromLists(properties, values)
+        dictio = dictio.set("gee_id", img.id())
         return ee.Feature(img.geometry(), dictio)
 
     feature_collection = ee.FeatureCollection(img_col.map(extractFeatures))
@@ -154,8 +158,6 @@ def img_collection_to_feature_collection(img_col:ee.ImageCollection,
         else:
             geodf = gpd.GeoDataFrame.from_features(featcol_info, crs="EPSG:4326")
 
-        if "system:time_start" in geodf.columns:
-            geodf["datetime"] = pd.to_datetime(geodf["system:time_start"],unit="ms")
         return geodf
 
     return feature_collection
