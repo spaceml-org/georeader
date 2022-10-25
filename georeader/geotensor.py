@@ -1,6 +1,6 @@
 
 import numpy as np
-from typing import Any, Dict, Union, Tuple, Optional
+from typing import Any, Dict, Union, Tuple, Optional, List
 import rasterio
 import rasterio.windows
 from georeader import window_utils
@@ -342,6 +342,38 @@ class GeoTensor:
             return GeoTensor(self.values[slices_], transform_current, self.crs,
                              self.fill_value_default)
 
+
+def concatenate(geotensors:List[GeoTensor]) -> GeoTensor:
+    """
+    Concatenates a list of geotensors, assert that all of them has same shape, transform and crs.
+
+    Args:
+        geotensors: list of geotensors to concat.
+
+    Returns:
+        geotensor with extra dim at the front: (len(geotensors),) + shape
+    """
+    assert len(geotensors) > 0, "Empty list provided can't concat"
+
+    if len(geotensors) == 1:
+        gt = geotensors[0].copy()
+        gt.values = gt.values[np.newaxis]
+        return gt
+
+    first_geotensor = geotensors[0]
+    array_out = np.zeros((len(geotensors),) + first_geotensor.shape,
+                         dtype=first_geotensor.dtype)
+    array_out[0] = first_geotensor.values
+
+    for i, geo in enumerate(geotensors[1:]):
+        assert geo.crs == first_geotensor.crs, f"Different crs in concat"
+        assert geo.transform == first_geotensor.transform, f"Different transform in concat"
+        assert geo.shape == first_geotensor.shape, f"Different shape in concat"
+        assert geo.fill_value_default == first_geotensor.fill_value_default, "Different fill_value_default in concat"
+        array_out[i + 1] = geo.values
+
+    return GeoTensor(array_out, transform=first_geotensor.transform, crs=first_geotensor.crs,
+                     fill_value_default=first_geotensor.fill_value_default)
 
 
 

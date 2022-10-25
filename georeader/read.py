@@ -266,7 +266,7 @@ def read_from_bounds(data_in: GeoData, bounds: Tuple[float, float, float, float]
 def read_from_polygon(data_in: GeoData, polygon: Union[Polygon, MultiPolygon],
                       crs_polygon: Optional[str] = None, pad_add=(0, 0),
                       return_only_data: bool = False, trigger_load: bool = False,
-                      boundless: bool = True) -> Union[GeoData, np.ndarray]:
+                      boundless: bool = True, window_surrounding:bool=False) -> Union[GeoData, np.ndarray]:
     """
     Reads a slice of data_in covering the `polygon`.
 
@@ -281,11 +281,12 @@ def read_from_polygon(data_in: GeoData, polygon: Union[Polygon, MultiPolygon],
         trigger_load: defaults to `False`. Trigger loading the data to memory.
         boundless: if `True` data read will always have the shape of the provided window
             (padding with `fill_value_default`)
+        window_surrounding: The window surrounds the polygon. (i.e. window.row_off + window.height will not be a vertex)
 
     Returns:
         sliced GeoData
     """
-    window_in = window_from_polygon(data_in, polygon, crs_polygon)
+    window_in = window_from_polygon(data_in, polygon, crs_polygon, window_surrounding=window_surrounding)
     if any(p > 0 for p in pad_add):
         window_in = pad_window(window_in, pad_add)  # Add padding for bicubic int or for co-registration
     window_in = round_outer_window(window_in)
