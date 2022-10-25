@@ -126,7 +126,7 @@ def window_from_center_coords(data_in: GeoData, center_coords:Tuple[float, float
     if (crs_center_coords is not None) and not window_utils.compare_crs(crs_center_coords, data_in.crs):
         center_coords = _transform_from_crs(center_coords, crs_center_coords, data_in.crs)
 
-    # The compute of the corner coordinates from the center is the same as in utils.polygon_slices
+    # The computation of the corner coordinates from the center is the same as in utils.polygon_slices
     transform = data_in.transform
 
     pixel_center_coords = ~transform * tuple(center_coords)
@@ -149,7 +149,7 @@ def read_from_window(data_in: GeoData,
                      trigger_load: bool = False,
                      boundless: bool = True) -> Union[GeoData, np.ndarray, None]:
     """
-    Reads a window from data_in padding with 0 if needed (output GeoData will have window.height, window.width shape
+    Reads a window from data_in padding with 0 if needed (output GeoData will have `window.height`, `window.width` shape
     if boundless is `True`).
 
     Args:
@@ -243,7 +243,7 @@ def read_from_bounds(data_in: GeoData, bounds: Tuple[float, float, float, float]
     Args:
         data_in: GeoData with geographic info (crs and geotransform).
         bounds:  bounding box to read.
-        crs_bounds: if not None will transform the bounds from that crs to the data.crs to read the chip.
+        crs_bounds: if not None will transform the bounds from that crs to the `data.crs` to read the chip.
         pad_add: pad in pixels to add to the `window` that is read.This is useful when this function is called for
          interpolation/CNN prediction.
         return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
@@ -281,7 +281,7 @@ def read_from_polygon(data_in: GeoData, polygon: Union[Polygon, MultiPolygon],
         trigger_load: defaults to `False`. Trigger loading the data to memory.
         boundless: if `True` data read will always have the shape of the provided window
             (padding with `fill_value_default`)
-        window_surrounding: The window surrounds the polygon. (i.e. window.row_off + window.height will not be a vertex)
+        window_surrounding: The window surrounds the polygon. (i.e. `window.row_off` + `window.height` will not be a vertex)
 
     Returns:
         sliced GeoData
