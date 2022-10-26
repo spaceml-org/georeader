@@ -46,8 +46,9 @@ def filter_products_overlap(area:Union[Polygon,MultiPolygon],
                             products_gpd:gpd.GeoDataFrame, groupkey:Union[str,List[str]]="solarday") -> gpd.GeoDataFrame:
     indexes_selected = []
     for day, products_gpd_day in products_gpd.groupby(groupkey):
-        idx_pols_selected = select_polygons_overlap(products_gpd_day.geometry.tolist(), area)
+        products_gpd_day_iter = products_gpd_day.sort_index()
+        idx_pols_selected = select_polygons_overlap(products_gpd_day_iter.geometry.tolist(), area)
 
-        indexes_selected.extend(products_gpd_day.iloc[idx_pols_selected].index.tolist())
+        indexes_selected.extend(products_gpd_day_iter.iloc[idx_pols_selected].index.tolist())
 
     return products_gpd.loc[indexes_selected]

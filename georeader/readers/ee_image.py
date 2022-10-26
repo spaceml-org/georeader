@@ -1,6 +1,6 @@
 from georeader.geotensor import GeoTensor, concatenate
 from shapely.geometry import Polygon, MultiPolygon, mapping
-from typing import Union, Dict, Optional
+from typing import Union, Dict, Optional, Tuple
 import ee
 import rasterio.windows
 from rasterio import Affine
@@ -9,7 +9,10 @@ import numpy as np
 
 def export_image_fast(image:ee.Image, geometry:Union[ee.Geometry, Polygon, MultiPolygon],
                       cat_bands:bool=True,
-                      fill_value_default:Optional[float]=0) -> Union[GeoTensor, Dict[str, GeoTensor]]:
+                      fill_value_default:Optional[float]=0,
+                      return_metadata:bool=False) -> Union[GeoTensor, Dict[str, GeoTensor],
+                                                           Tuple[GeoTensor, Dict[str, str]],
+                                                           Tuple[Dict[str, GeoTensor], Dict[str, str]]]:
     """
     Exports an image from the GEE as a GeoTensor. It uses `sampleRectangle` method to export which is limited to small
     arrays (i.e. <1000x1000 pixels).
@@ -19,6 +22,7 @@ def export_image_fast(image:ee.Image, geometry:Union[ee.Geometry, Polygon, Multi
         geometry: geometry to export as a ee.Geometry object or as a shapely polygon.
         cat_bands: if `True` concat the bands to return a single GeoTensor object.
         fill_value_default: Value used to fill the masked areas.
+        return_metadata: if `True` it will alse return the metadata of the image (`image.clip(geometry).getInfo()`)
 
     Returns:
         GeoTensor object or Dict of band, GeoTensor.
@@ -46,7 +50,10 @@ def export_image_fast(image:ee.Image, geometry:Union[ee.Geometry, Polygon, Multi
         band_ordered.append(band_id)
 
     if cat_bands:
-        return concatenate([out[b] for b in band_ordered])
+        out = concatenate([out[b] for b in band_ordered])
+
+    if return_metadata:
+        return out, image_clip_info
 
     return out
 
