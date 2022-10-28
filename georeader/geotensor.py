@@ -261,7 +261,7 @@ class GeoTensor:
             output_tensor = np.ndarray(input_shape[:-2]+output_shape, dtype=self.dtype)
             if len(input_shape) == 4:
                 for i,j in product(range(0,input_shape[0]), range(0, input_shape[1])):
-                    if isinstance(anti_aliasing_sigma, numbers.Number):
+                    if (not anti_aliasing) or (anti_aliasing_sigma is None) or isinstance(anti_aliasing_sigma, numbers.Number):
                         anti_aliasing_sigma_iter = anti_aliasing_sigma
                     else:
                         anti_aliasing_sigma_iter = anti_aliasing_sigma[i, j]
@@ -271,7 +271,7 @@ class GeoTensor:
                                                 anti_aliasing_sigma=anti_aliasing_sigma_iter)
             elif len(input_shape) == 3:
                 for i in range(0,input_shape[0]):
-                    if isinstance(anti_aliasing_sigma, numbers.Number):
+                    if (not anti_aliasing) or (anti_aliasing_sigma is None) or isinstance(anti_aliasing_sigma, numbers.Number):
                         anti_aliasing_sigma_iter = anti_aliasing_sigma
                     else:
                         anti_aliasing_sigma_iter = anti_aliasing_sigma[i]
