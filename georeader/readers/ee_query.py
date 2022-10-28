@@ -13,7 +13,7 @@ def _rename_add_properties(image:ee.Image, properties_dict:Dict[str, str]) -> ee
 
 def query(area:Union[MultiPolygon,Polygon],
           date_start:datetime, date_end:datetime,
-          producttype:str='S2MSI1C',filter_duplicates:bool=True,
+          producttype:str='S2',filter_duplicates:bool=True,
           return_collection:bool=False)-> Union[gpd.GeoDataFrame, Tuple[gpd.GeoDataFrame, ee.ImageCollection]]:
     """
 
