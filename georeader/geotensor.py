@@ -7,6 +7,7 @@ from georeader import window_utils
 from georeader.window_utils import window_bounds
 from itertools import product
 from shapely.geometry import Polygon
+import numbers
 
 try:
     import torch
@@ -211,8 +212,8 @@ class GeoTensor:
         return GeoTensor(values_new, transform_current, self.crs,
                          self.fill_value_default)
 
-    def resize(self, output_shape:Optional[Tuple[int,int]]=None,
-               anti_aliasing:bool=True, anti_aliasing_sigma:Optional[float]=None,
+    def resize(self, output_shape:Tuple[int,int],
+               anti_aliasing:bool=True, anti_aliasing_sigma:Optional[Union[float,np.ndarray]]=None,
                interpolation:Optional[str]="bilinear",
                mode_pad:str="constant")-> '__class__':
         """
@@ -222,7 +223,7 @@ class GeoTensor:
         Args:
             output_shape: output spatial shape
             anti_aliasing: Whether to apply a Gaussian filter to smooth the image prior to downsampling
-            anti_aliasing_sigma:  anti_aliasing_sigma : {float, tuple of floats}, optional
+            anti_aliasing_sigma:  anti_aliasing_sigma : {float}, optional
                 Standard deviation for Gaussian filtering used when anti-aliasing.
                 By default, this value is chosen as (s - 1) / 2 where s is the
                 downsampling factor, where s > 1
@@ -260,16 +261,24 @@ class GeoTensor:
             output_tensor = np.ndarray(input_shape[:-2]+output_shape, dtype=self.dtype)
             if len(input_shape) == 4:
                 for i,j in product(range(0,input_shape[0]), range(0, input_shape[1])):
+                    if isinstance(anti_aliasing_sigma, numbers.Number):
+                        anti_aliasing_sigma_iter = anti_aliasing_sigma
+                    else:
+                        anti_aliasing_sigma_iter = anti_aliasing_sigma[i, j]
                     output_tensor[i,j] = resize(self.values[i,j], output_shape, order=ORDERS[interpolation],
                                                 anti_aliasing=anti_aliasing, preserve_range=False,
                                                 cval=self.fill_value_default,mode=mode_pad,
-                                                anti_aliasing_sigma=anti_aliasing_sigma)
+                                                anti_aliasing_sigma=anti_aliasing_sigma_iter)
             elif len(input_shape) == 3:
                 for i in range(0,input_shape[0]):
+                    if isinstance(anti_aliasing_sigma, numbers.Number):
+                        anti_aliasing_sigma_iter = anti_aliasing_sigma
+                    else:
+                        anti_aliasing_sigma_iter = anti_aliasing_sigma[i]
                     output_tensor[i] = resize(self.values[i], output_shape, order=ORDERS[interpolation],
                                               anti_aliasing=anti_aliasing, preserve_range=False,
                                               cval=self.fill_value_default,mode=mode_pad,
-                                              anti_aliasing_sigma=anti_aliasing_sigma)
+                                              anti_aliasing_sigma=anti_aliasing_sigma_iter)
             else:
                 output_tensor[...] = resize(self.values, output_shape, order=ORDERS[interpolation],
                                             anti_aliasing=anti_aliasing, preserve_range=False,
