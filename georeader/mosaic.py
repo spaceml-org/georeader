@@ -111,8 +111,7 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
                                            resampling=rasterio.warp.Resampling.nearest,
                                            window_out=rasterio.windows.Window(row_off=0, col_off=0,
                                                                               width=window_polygon.width,
-                                                                              height=window_polygon.height),
-                                           dst_nodata=dst_nodata)
+                                                                              height=window_polygon.height))
         if masking_function is not None:
             invalid_geotensor = masking_function(invalid_geotensor)
 
@@ -183,8 +182,7 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
                 invalid_geotensor = read_reproject(geomask,
                                                    dst_crs=dst_crs, dst_transform=dst_transform_iter,
                                                    resampling=rasterio.warp.Resampling.nearest,
-                                                   window_out=window_reproject_iter,
-                                                   dst_nodata=dst_nodata)
+                                                   window_out=window_reproject_iter)
                 if masking_function is not None:
                     invalid_geotensor = masking_function(invalid_geotensor)
 

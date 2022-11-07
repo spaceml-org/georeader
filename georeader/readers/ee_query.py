@@ -13,8 +13,9 @@ def _rename_add_properties(image:ee.Image, properties_dict:Dict[str, str]) -> ee
 
 def query(area:Union[MultiPolygon,Polygon],
           date_start:datetime, date_end:datetime,
-          producttype:str='S2',filter_duplicates:bool=True,
-          return_collection:bool=False)-> Union[gpd.GeoDataFrame, Tuple[gpd.GeoDataFrame, ee.ImageCollection]]:
+          producttype:str='S2', filter_duplicates:bool=True,
+          return_collection:bool=False,
+          add_s2cloudless:bool=False)-> Union[gpd.GeoDataFrame, Tuple[gpd.GeoDataFrame, ee.ImageCollection]]:
     """
 
     Args:
@@ -24,6 +25,8 @@ def query(area:Union[MultiPolygon,Polygon],
         producttype: 'S2', "Landsat", "L8" or "L9"
         filter_duplicates: Filter S2 images that are duplicated
         return_collection: returns also the corresponding image collection
+        add_s2cloudless: Adds a column that indicates if the s2cloudless image is available (from collection
+            COPERNICUS/S2_CLOUD_PROBABILITY collection)
 
     Returns:
 
@@ -41,6 +44,8 @@ def query(area:Union[MultiPolygon,Polygon],
         date_end = date_end.astimezone(timezone.utc)
     else:
         tz = timezone.utc
+
+    assert date_end < date_start, f"Date end: {date_start} prior to date start: {date_end}"
 
     if producttype == "S2":
         image_collection_name = "COPERNICUS/S2_HARMONIZED"
@@ -102,9 +107,26 @@ def query(area:Union[MultiPolygon,Polygon],
             return geodf, img_col
         return geodf
 
+    if add_s2cloudless and producttype in ["both", "S2"]:
+        values_s2_idx = geodf.title.apply(lambda x: x.startswith("S2"))
+        indexes_s2 = geodf.gee_id[values_s2_idx].tolist()
+        img_col_cloudprob = ee.ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY").filterDate(date_start.replace(tzinfo=None),
+                                                                              date_end.replace(
+                                                                                  tzinfo=None)).filterBounds(
+            pol)
+        img_col_cloudprob = img_col_cloudprob.filter(ee.Filter.inList("system:index", ee.List(indexes_s2)))
+        geodf_cloudprob = img_collection_to_feature_collection(img_col_cloudprob,
+                                                               ["system:time_start"],
+                                                               as_geopandas=True)
+        geodf["s2cloudless"] = False
+        list_geeid = geodf_cloudprob.gee_id.tolist()
+        geodf.loc[values_s2_idx, "s2cloudless"] = geodf.loc[values_s2_idx, "gee_id"].apply(lambda x: x in list_geeid)
+
+
     geodf = _add_stuff(geodf, area, tz)
 
     if filter_duplicates:
+        # TODO filter prioritizing s2cloudless?
         geodf = query_utils.filter_products_overlap(area, geodf,
                                                     groupkey=["solarday", "satellite"]).copy()
         # filter img_col:
@@ -118,6 +140,20 @@ def query(area:Union[MultiPolygon,Polygon],
 
     return geodf
 
+
+def images_by_query_grid(images_available_gee:gpd.GeoDataFrame, grid:gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    aois_images = images_available_gee.reset_index().sjoin(grid, how="inner").reset_index(drop=True)
+
+    # Filter duplicated images for the same gridid
+    indexes_selected = []
+    for (day, satellite, gridid), products_gpd_day in aois_images.groupby(["solarday", "satellite", "index_right"]):
+        area = grid.loc[gridid, "geometry"]
+        idx_pols_selected = query_utils.select_polygons_overlap(products_gpd_day.geometry.tolist(), area)
+
+        indexes_selected.extend(products_gpd_day.iloc[idx_pols_selected].index.tolist())
+
+    aois_images = aois_images.loc[indexes_selected].copy()
+    return aois_images.reset_index(drop=True)
 
 def _add_stuff(geodf, area, tz):
     geodf["utcdatetime"] = pd.to_datetime(geodf["system:time_start"], unit='ms', utc=True)
