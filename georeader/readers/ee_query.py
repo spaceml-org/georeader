@@ -45,7 +45,7 @@ def query(area:Union[MultiPolygon,Polygon],
     else:
         tz = timezone.utc
 
-    assert date_end < date_start, f"Date end: {date_start} prior to date start: {date_end}"
+    assert date_end >= date_start, f"Date end: {date_start} prior to date start: {date_end}"
 
     if producttype == "S2":
         image_collection_name = "COPERNICUS/S2_HARMONIZED"
