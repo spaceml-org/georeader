@@ -14,9 +14,8 @@ https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/document-librar
 
 """
 from rasterio import windows
-from shapely.geometry import Polygon, MultiPolygon, box
+from shapely.geometry import Polygon
 import xml.etree.ElementTree as ET
-import rasterio
 import datetime
 from collections import OrderedDict
 import numpy as np
@@ -31,6 +30,7 @@ import rasterio.warp
 from shapely.geometry import shape
 from tqdm import tqdm
 import json
+from georeader.save_cog import save_cog
 
 BANDS_S2 = ["B01", "B02","B03", "B04", "B05", "B06",
             "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
@@ -75,7 +75,10 @@ def get_filesystem(path: str):
         return fsspec.filesystem("file")
     else:
         # use the fileystem from the protocol specified
-        return fsspec.filesystem(path.split(":", 1)[0],requester_pays = True)
+        mode = path.split(":", 1)[0]
+        if mode == "gs":
+            return fsspec.filesystem(mode, requester_pays=True)
+        return fsspec.filesystem(mode)
 
 def _get_info_granules_metadata(folder):
     granules_path = os.path.join(folder, "granules.json").replace("\\", "/")
@@ -194,7 +197,7 @@ class S2Image:
         else:
             self._pol_crs = None
 
-    def cache_product_to_local_dir(self, path_dest:Optional[str]=None, **kwargs) -> '__class__':
+    def cache_product_to_local_dir(self, path_dest:Optional[str]=None) -> '__class__':
         if path_dest is None:
             path_dest = "."
 
@@ -244,6 +247,7 @@ class S2Image:
         return __class__(s2_folder=dest_folder, out_res=self.out_res, window_focus=self.window_focus,
                   bands=self.bands, granules=new_granules_full_path, polygon=self._pol,
                   metadata_msi=metadata_output_path)
+
     def load_metadata_msi(self):
         if self.root_metadata_msi is None:
             self.root_metadata_msi = read_xml(self.metadata_msi)
@@ -867,13 +871,14 @@ def s2_load_from_fearure(feature:Dict[str, Any], bands:Optional[List[str]]=None)
                     bands=bands)
 
 
-def s2_public_bucket_path(s2file:str, check_exists:bool=False) -> str:
+def s2_public_bucket_path(s2file:str, check_exists:bool=False, mode:str="gcp") -> str:
     """
     Returns the expected patch in the public bucket of the S2 file
 
     Args:
         s2file: safe file (e.g.  S2B_MSIL1C_20220527T030539_N0400_R075_T49SGV_20220527T051042.SAFE)
         check_exists: check if the file exists in the bucket
+        mode: "gcp" or "rest"
 
     Returns:
         full path to the file (gs://gcp-public-data-sentinel-2/tiles/49/S/GV/S2B_MSIL1C_20220527T030539_N0400_R075_T49SGV_20220527T051042.SAFE)
@@ -881,10 +886,17 @@ def s2_public_bucket_path(s2file:str, check_exists:bool=False) -> str:
     mission, producttype, sensing_date_str, pdgs, relorbitnum, tile_number_field, product_discriminator = s2_name_split(s2file)
     s2file = s2file[:-1] if s2file.endswith("/") else s2file
     basename = os.path.basename(s2file)
-    s2folder = f"gs://gcp-public-data-sentinel-2/tiles/{tile_number_field[:2]}/{tile_number_field[2]}/{tile_number_field[3:]}/{basename}"
-    if check_exists:
+    if mode == "gcp":
+        s2folder = f"gs://gcp-public-data-sentinel-2/tiles/{tile_number_field[:2]}/{tile_number_field[2]}/{tile_number_field[3:]}/{basename}"
+    elif mode == "rest":
+        s2folder = f"https://storage.googleapis.com/gcp-public-data-sentinel-2/tiles/{tile_number_field[:2]}/{tile_number_field[2]}/{tile_number_field[3:]}/{basename}"
+    else:
+        raise NotImplementedError(f"Mode {mode} unknown")
+
+    if check_exists and (mode == "gcp"):
         import fsspec
         fs = fsspec.filesystem("gs", requester_pays=True)
+
         if not fs.exists(s2folder):
             raise FileNotFoundError(f"Sentinel-2 file not found in {s2folder}")
 
