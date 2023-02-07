@@ -70,22 +70,3 @@ save_cog(data_memory, "s2_crop.tif", descriptions=s2obj.bands)
 * [Query Sentinel-2 images over a location and time span, mosaic and plot them](https://github.com/spaceml-org/georeader/blob/main/notebooks/Sentinel-2/query_mosaic_s2_images.ipynb)
 
 
-## TODOs
-
- * Fix and run tests.
- * Finish `xarray` wrapper (cast function) (finish `GeoDataArray` class)
- * `GeoTensor.resize` with `kornia` if inner tensor is a `torch.Tensor`.
-
-### Potential features
-
-* `read_tile` function + example of serving images.
-* Add `matplotlib` plotting functions.
-* Readers of standard format for Landsat-8? Read from s3 Landsat bucket?
-
-### Potential Examples
-
-* Show MISR dataset
-* Example of serving images
-* Example of building a torch Dataset
-
-
