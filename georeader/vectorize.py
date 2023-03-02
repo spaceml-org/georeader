@@ -3,12 +3,13 @@ import rasterio
 from shapely.geometry import shape, mapping, Polygon
 import numpy as np
 from typing import List, Optional, Union
-from georeader.abstract_reader import AbstractGeoData
+from georeader.abstract_reader import GeoData
 
 
-def get_polygons(binary_mask: Union[np.ndarray, AbstractGeoData], min_area:float=25.5,
+def get_polygons(binary_mask: Union[np.ndarray, GeoData], min_area:float=25.5,
                  polygon_buffer:int=0, tolerance:float=1., transform: Optional[rasterio.Affine]=None) -> List[Polygon]:
     """
+    Vectorize the polygons of the provided binary_mask.
 
     Args:
         binary_mask: (H, W) binary mask to rasterise
@@ -19,7 +20,7 @@ def get_polygons(binary_mask: Union[np.ndarray, AbstractGeoData], min_area:float
                   numpy array.
 
     Returns:
-        list of rasterised polygons
+        list of vectorized polygons
 
     """
 
