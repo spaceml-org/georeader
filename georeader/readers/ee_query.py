@@ -11,25 +11,92 @@ def _rename_add_properties(image:ee.Image, properties_dict:Dict[str, str]) -> ee
     dict_set = {v: image.get(k) for k, v in properties_dict.items()}
     return image.set(dict_set)
 
+def query_s1(area:Union[MultiPolygon,Polygon],
+             date_start:datetime, date_end:datetime,
+             filter_duplicates:bool=True,
+             return_collection:bool=False)-> Union[gpd.GeoDataFrame, Tuple[gpd.GeoDataFrame, ee.ImageCollection]]:
+    """
+    Query S1 products from the Google Earth Engine
+
+    Args:
+        area:
+        date_start:
+        date_end:
+        filter_duplicates:
+        return_collection:
+
+    Returns:
+
+    """
+    ee.Initialize()
+    pol = ee.Geometry(mapping(area))
+
+    if date_start.tzinfo is not None:
+        tz = date_start.tzinfo
+        if isinstance(tz, ZoneInfo):
+            tz = tz.key
+
+        date_start = date_start.astimezone(timezone.utc)
+        date_end = date_end.astimezone(timezone.utc)
+    else:
+        tz = timezone.utc
+
+    assert date_end >= date_start, f"Date end: {date_end} prior to date start: {date_start}"
+
+    img_col = ee.ImageCollection('COPERNICUS/S1_GRD').\
+       filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV')).\
+       filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH')).\
+       filter(ee.Filter.eq('instrumentMode', 'IW')).\
+       filterDate(date_start.replace(tzinfo=None),
+                  date_end.replace(tzinfo=None)).\
+       filterBounds(pol)
+
+    keys_query = {"orbitProperties_pass": "orbitProperties_pass"}
+
+    geodf = img_collection_to_feature_collection(img_col,
+                                                 ["system:time_start"] + list(keys_query.keys()),
+                                                as_geopandas=True)
+    geodf.rename(keys_query, axis=1, inplace=True)
+    geodf["title"] = geodf["gee_id"]
+    geodf["collection_name"] = "COPERNICUS/S1_GRD"
+    geodf = _add_stuff(geodf, area, tz)
+
+    if filter_duplicates:
+        geodf = query_utils.filter_products_overlap(area, geodf,
+                                                    groupkey=["solarday", "satellite","orbitProperties_pass"]).copy()
+        # filter img_col:
+        img_col = img_col.filter(ee.Filter.inList("title", ee.List(geodf.index.tolist())))
+
+    geodf.sort_values("utcdatetime")
+    img_col = img_col.sort("system:time_start")
+
+    if return_collection:
+        return geodf, img_col
+
+    return geodf
+
+
 def query(area:Union[MultiPolygon,Polygon],
           date_start:datetime, date_end:datetime,
           producttype:str='S2', filter_duplicates:bool=True,
           return_collection:bool=False,
           add_s2cloudless:bool=False)-> Union[gpd.GeoDataFrame, Tuple[gpd.GeoDataFrame, ee.ImageCollection]]:
     """
+    Query Landsat and Sentinel-2 products from the Google Earth Engine
 
     Args:
         area: area to query images in EPSG:4326
         date_start: datetime in a given timezone. If tz not provided UTC will be assumed.
         date_end: datetime in UTC. If tz not provided UTC will be assumed.
-        producttype: 'S2', "Landsat", "L8" or "L9"
+        producttype: 'S2', "Landsat"-> {"L8", "L9"}, "both" -> {"S2", "L8", "L9"}, "S2_SR", "L8", "L9"
         filter_duplicates: Filter S2 images that are duplicated
         return_collection: returns also the corresponding image collection
         add_s2cloudless: Adds a column that indicates if the s2cloudless image is available (from collection
             COPERNICUS/S2_CLOUD_PROBABILITY collection)
 
     Returns:
-
+        geodataframe with available products in the given area and time range
+        if `return_collection` is True it also returns the `ee.ImageCollection` of available images
     """
 
     ee.Initialize()
@@ -45,15 +112,21 @@ def query(area:Union[MultiPolygon,Polygon],
     else:
         tz = timezone.utc
 
-    assert date_end >= date_start, f"Date end: {date_start} prior to date start: {date_end}"
+    assert date_end >= date_start, f"Date end: {date_end} prior to date start: {date_start}"
 
-    if producttype == "S2":
+    if producttype == "S2_SR":
+        image_collection_name = "COPERNICUS/S2_SR_HARMONIZED"
+        keys_query = {"PRODUCT_ID": "title", 'CLOUDY_PIXEL_PERCENTAGE': "cloudcoverpercentage"}
+    elif producttype == "S2":
         image_collection_name = "COPERNICUS/S2_HARMONIZED"
         keys_query = {"PRODUCT_ID": "title", 'CLOUDY_PIXEL_PERCENTAGE': "cloudcoverpercentage"}
     elif producttype == "Landsat":
         image_collection_name = "LANDSAT/LC08/C02/T1_RT_TOA"
         keys_query = {"LANDSAT_PRODUCT_ID": "title", 'CLOUD_COVER': "cloudcoverpercentage"}
     elif producttype == "L8":
+        image_collection_name = "LANDSAT/LC08/C02/T1_RT_TOA"
+        keys_query = {"LANDSAT_PRODUCT_ID": "title", 'CLOUD_COVER': "cloudcoverpercentage"}
+    elif producttype == "S1":
         image_collection_name = "LANDSAT/LC08/C02/T1_RT_TOA"
         keys_query = {"LANDSAT_PRODUCT_ID": "title", 'CLOUD_COVER': "cloudcoverpercentage"}
     elif producttype == "L9":
