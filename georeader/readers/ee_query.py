@@ -55,7 +55,7 @@ def query_s1(area:Union[MultiPolygon,Polygon],
 
     geodf = img_collection_to_feature_collection(img_col,
                                                  ["system:time_start"] + list(keys_query.keys()),
-                                                as_geopandas=True)
+                                                 as_geopandas=True, band_crs="VV")
     geodf.rename(keys_query, axis=1, inplace=True)
     geodf["title"] = geodf["gee_id"]
     geodf["collection_name"] = "COPERNICUS/S1_GRD"
@@ -65,7 +65,7 @@ def query_s1(area:Union[MultiPolygon,Polygon],
         geodf = query_utils.filter_products_overlap(area, geodf,
                                                     groupkey=["solarday", "satellite","orbitProperties_pass"]).copy()
         # filter img_col:
-        img_col = img_col.filter(ee.Filter.inList("title", ee.List(geodf.index.tolist())))
+        img_col = img_col.filter(ee.Filter.inList("system:index", ee.List(geodf.index.tolist())))
 
     geodf.sort_values("utcdatetime")
     img_col = img_col.sort("system:time_start")
