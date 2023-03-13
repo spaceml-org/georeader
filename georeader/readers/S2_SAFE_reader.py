@@ -845,13 +845,14 @@ def s2loader(s2folder:str, out_res:int=10,
     raise NotImplementedError(f"Don't know how to load {producttype_nos2} products")
 
 
-def s2_load_from_fearure(feature:Dict[str, Any], bands:Optional[List[str]]=None) -> Union[S2ImageL2A, S2ImageL1C]:
+def s2_load_from_feature_element84(feature:Dict[str, Any], bands:Optional[List[str]]=None) -> Union[S2ImageL2A, S2ImageL1C]:
     """
     Loads a S2 image from an element feature returned by sat-search
+    (see `https://github.com/spaceml-org/georeader/blob/main/notebooks/Sentinel-2/read_s2_safe_element84_cloud.ipynb`)
 
     Args:
         feature: dictionary as produced by satsearch API
-        bands: Bands to read. Default to BANDS_S2 or BANDS_S2_L2A depending on the product type
+        bands: Bands to read. Defaults to BANDS_S2_L2A
 
     Returns:
         S2Image reader
@@ -866,6 +867,32 @@ def s2_load_from_fearure(feature:Dict[str, Any], bands:Optional[List[str]]=None)
 
     metadata_msi = feature["assets"]["metadata"]["href"]
     s2_folder = feature["properties"]["sentinel:product_id"] + ".SAFE"
+
+    return s2loader(s2folder=s2_folder, granules=granules, polygon=polygon, metadata_msi=metadata_msi,
+                    bands=bands)
+
+def s2_load_from_feature_planetary_microsoft(item:Any, bands:Optional[List[str]]=None) -> Union[S2ImageL2A, S2ImageL1C]:
+    """
+    Loads a S2 image from an element feature returned by Microsoft Planetary Computer
+    (see [example](https://github.com/microsoft/PlanetaryComputerExamples/blob/main/datasets/sentinel-2-l2a/sentinel-2-l2a-example.ipynb`))
+
+    Args:
+        item: (pystac.item.Item) dictionary as produced by pystac_client API
+        bands: Bands to read. Defaults to `BANDS_S2_L2A`
+
+    Returns:
+        S2Image reader
+
+    """
+
+    metadata_msi = item.assets['product-metadata'].href
+    s2_folder = item.properties['s2:product_uri']
+    polygon = shape(item.geometry)
+
+    granules = {}
+    for k, v in item.assets.items():
+        if v.href.endswith(".tif"):
+            granules[k] = v.href
 
     return s2loader(s2folder=s2_folder, granules=granules, polygon=polygon, metadata_msi=metadata_msi,
                     bands=bands)
@@ -914,6 +941,7 @@ def s2_name_split(s2file:str) -> Optional[Tuple[str, str, str, str, str, str, st
     ```
     s2l1c = "S2A_MSIL1C_20151218T182802_N0201_R127_T11SPD_20151218T182756.SAFE"
     mission, producttype, sensing_date_str, pdgs, relorbitnum, tile_number_field, product_discriminator = s2_name_split(s2l1c)
+    >> 'S2A', 'MSIL1C', '20151218T182802', 'N0201', 'R127', '11SPD', '20151218T182756'
     ```
 
     S2A_MSIL1C_20151218T182802_N0201_R127_T11SPD_20151218T182756.SAFE
