@@ -1,3 +1,5 @@
+import warnings
+
 from shapely.geometry import MultiPolygon, Polygon, mapping
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
@@ -150,6 +152,7 @@ def query(area:Union[MultiPolygon,Polygon],
     geodf = img_collection_to_feature_collection(img_col,
                                                  ["system:time_start"] + list(keys_query.keys()),
                                                 as_geopandas=True, band_crs="B1")
+
     geodf.rename(keys_query, axis=1, inplace=True)
 
     if (producttype == "Landsat") or (producttype == "both"):
@@ -176,6 +179,7 @@ def query(area:Union[MultiPolygon,Polygon],
             img_col = img_col.merge(img_col_s2)
 
     if geodf.shape[0] == 0:
+        warnings.warn(f"Not images found of collection {producttype} between dates {date_start} and {date_end}")
         if return_collection:
             return geodf, img_col
         return geodf
