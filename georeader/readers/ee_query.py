@@ -262,7 +262,7 @@ def img_collection_to_feature_collection(img_col:ee.ImageCollection,
         dictio = ee.Dictionary.fromLists(properties, values)
         dictio = dictio.set("gee_id", img.id())
         if band_crs is not None:
-            dictio = dictio.set("crs", img.select(band_crs).projection().crs())
+            dictio = dictio.set("crs_product", img.select(band_crs).projection().crs())
 
         return ee.Feature(img.geometry(), dictio)
 
