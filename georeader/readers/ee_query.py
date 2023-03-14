@@ -235,10 +235,8 @@ def images_by_query_grid(images_available_gee:gpd.GeoDataFrame, grid:gpd.GeoData
 def _add_stuff(geodf, area, tz):
     geodf["utcdatetime"] = pd.to_datetime(geodf["system:time_start"], unit='ms', utc=True)
     geodf["overlappercentage"] = geodf.geometry.apply(lambda x: x.intersection(area).area / area.area * 100)
-    longitude = area.centroid.coords[0][0]
-    hours_add = longitude * 12 / 180.
+    geodf["solardatetime"] = geodf.apply(lambda x: query_utils.solar_datetime(x.geometry, x.utcdatetime), axis=1)
 
-    geodf["solardatetime"] = geodf["utcdatetime"].apply(lambda x: x + timedelta(hours=hours_add))
     geodf["solarday"] = geodf["solardatetime"].apply(lambda x: x.strftime("%Y-%m-%d"))
 
     geodf["localdatetime"] = pd.to_datetime(geodf["utcdatetime"], unit='ms',

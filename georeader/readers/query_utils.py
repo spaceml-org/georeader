@@ -1,6 +1,7 @@
 from typing import List, Union
 from shapely.geometry import Polygon, MultiPolygon
 import geopandas as gpd
+from datetime import datetime, timedelta
 
 
 def select_polygons_overlap(polygons: List[Union[Polygon, MultiPolygon]], aoi: Union[Polygon, MultiPolygon]) -> List[int]:
@@ -52,3 +53,11 @@ def filter_products_overlap(area:Union[Polygon,MultiPolygon],
         indexes_selected.extend(products_gpd_day_iter.iloc[idx_pols_selected].index.tolist())
 
     return products_gpd.loc[indexes_selected]
+
+
+def solar_datetime(area:Union[Polygon,MultiPolygon],
+                   datetime_utc: datetime) -> datetime:
+    longitude = area.centroid.coords[0][0]
+    hours_add = longitude * 12 / 180.
+
+    return datetime_utc + timedelta(hours=hours_add)
