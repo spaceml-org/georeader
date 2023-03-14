@@ -172,7 +172,7 @@ class S2Image:
         self._quantification_value = None
 
         # The code below could be only triggered if required
-        if granules is None:
+        if not granules:
             # This is useful when copying with cache_product_to_local_dir func
             if info_granules_metadata is None:
                 info_granules_metadata = _get_info_granules_metadata(self.folder)
@@ -889,11 +889,11 @@ def s2_load_from_feature_planetary_microsoft(item:Any, bands:Optional[List[str]]
     s2_folder = item.properties['s2:product_uri']
     polygon = shape(item.geometry)
 
+    bands_available = ['AOT', 'B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08', 'B09', 'B11', 'B12', 'B8A', 'SCL', 'WVP'] 
     granules = {}
     for k, v in item.assets.items():
-        if v.href.endswith(".tif"):
+        if k in bands_available:
             granules[k] = v.href
-
     return s2loader(s2folder=s2_folder, granules=granules, polygon=polygon, metadata_msi=metadata_msi,
                     bands=bands)
 
