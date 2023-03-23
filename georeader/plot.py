@@ -3,7 +3,7 @@ import matplotlib.patches as mpatches
 import numpy as np
 from georeader.abstract_reader import GeoData
 from typing import Optional, List, Union
-import matplotlib
+import matplotlib.axes
 import rasterio.plot as rasterioplt
 
 COLORS_CLOUDSEN12 = np.array([[139, 64, 0], # clear
