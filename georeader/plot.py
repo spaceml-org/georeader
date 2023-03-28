@@ -3,7 +3,7 @@ import matplotlib.patches as mpatches
 import numpy as np
 from georeader.abstract_reader import GeoData
 from typing import Optional, List, Union
-import matplotlib
+import matplotlib.axes
 import rasterio.plot as rasterioplt
 
 
@@ -53,3 +53,4 @@ def plot_segmentation_mask(mask:Union[GeoData, np.array], color_array:np.array,
         ax.legend(handles=patches,
                   loc='upper right')
     return ax
+
