@@ -100,7 +100,7 @@ def round_outer_window(window:rasterio.windows.Window)-> rasterio.windows.Window
 
 # Precision to round the windows before applying ceiling/floor. e.g. 3.0001 will be rounded to 3 but 3.001 will not
 def _is_exact_round(x, precision=PIXEL_PRECISION):
-    return abs(round(x)-x) < precision
+    return abs(round(x,ndigits=precision)-x) < 1e-6
 
 
 def res(transform:rasterio.Affine) -> Tuple[float, float]:
