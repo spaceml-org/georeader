@@ -474,9 +474,9 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
                 window_in_data = window_in_data.round_offsets(op="floor", pixel_precision=PIXEL_PRECISION)
                 return read_from_window(data_in, window_in_data, return_only_data=return_only_data, trigger_load=True)
 
-    cast = False
+    cast = True
     if dtpye_dst is None:
-        cast = True
+        cast = False
         dtpye_dst = data_in.dtype
 
     # Create out array for reprojection
