@@ -455,9 +455,6 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
                                                   transform=dst_transform).round_lengths(op="ceil",
                                                                                          pixel_precision=PIXEL_PRECISION)
 
-    # Compute real polygon that is going to be read
-    polygon_dst_crs = window_utils.window_polygon(window_out, dst_transform)
-
     crs_data_in = data_in.crs
     if dst_crs is None:
         dst_crs = crs_data_in
@@ -467,11 +464,13 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
         transform_data = data_in.transform
         if (dst_transform.a == transform_data.a) and (dst_transform.b == transform_data.b) and (
                 dst_transform.d == transform_data.d) and (dst_transform.e == transform_data.e):
-            window_in_data = window_from_polygon(data_in, polygon_dst_crs, crs_polygon=dst_crs).round_lengths(op="ceil",
-                                                                                                              pixel_precision=PIXEL_PRECISION)
-            if _is_exact_round(window_in_data.row_off) and _is_exact_round(
-                    window_in_data.col_off) and window_in_data.width == window_out.width \
-                    and window_in_data.height == window_out.height:
+            # find shift between the two transforms
+            x_dst, y_dst = dst_transform.c, dst_transform.f
+            col_off, row_off = ~transform_data * (x_dst, y_dst)
+            window_in_data = rasterio.windows.Window(col_off, row_off, 
+                                                     window_out.width, window_out.height)
+
+            if _is_exact_round(window_in_data.row_off) and _is_exact_round(window_in_data.col_off):
                 window_in_data = window_in_data.round_offsets(op="floor", pixel_precision=PIXEL_PRECISION)
                 return read_from_window(data_in, window_in_data, return_only_data=return_only_data, trigger_load=True)
 
@@ -486,6 +485,8 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
     destination = np.zeros(shape_out, dtype=dtpye_dst)
 
     if not isinstance(data_in, GeoTensor):
+        # Compute real polygon that is going to be read
+        polygon_dst_crs = window_utils.window_polygon(window_out, dst_transform)
         # Read a padded window of the input data. This data will be then used for reprojection
         geotensor_in = read_from_polygon(data_in, polygon_dst_crs, crs_polygon=dst_crs,
                                          pad_add=(3, 3), return_only_data=False,
@@ -493,7 +494,7 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
     else:
         geotensor_in = data_in
 
-    # Trigger load makes that fill_value_default goes to nodata
+    # Triggering load makes that fill_value_default goes to nodata
 
     np_array_in = np.asanyarray(geotensor_in.values)
     if cast:
