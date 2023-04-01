@@ -24,18 +24,17 @@ def get_polygons(binary_mask: Union[np.ndarray, GeoData], min_area:float=25.5,
 
     """
 
-
     if isinstance(binary_mask, np.ndarray):
         binary_mask_np = binary_mask
     else:
         binary_mask_np = binary_mask.values
-        shape_ = binary_mask_np.shape
-        if len(shape_) != 2:
-            binary_mask_np.squeeze()
 
         assert transform is None, "transform only must be used if input is np.ndarray"
         transform = binary_mask.transform
 
+    shape_ = binary_mask_np.shape
+    if len(shape_) != 2:
+        binary_mask_np.squeeze()
 
     assert len(binary_mask_np.shape) == 2, f"Expected mask with 2 dim found {binary_mask_np.shape}"
 
@@ -43,7 +42,7 @@ def get_polygons(binary_mask: Union[np.ndarray, GeoData], min_area:float=25.5,
     polygon_generator = features.shapes(binary_mask_np.astype(np.int16),
                                         binary_mask_np)
 
-    for polygon, value in polygon_generator:
+    for polygon, _ in polygon_generator:
         p = shape(polygon)
         if polygon_buffer > 0:
             p = p.buffer(polygon_buffer)
