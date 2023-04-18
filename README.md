@@ -5,7 +5,14 @@ Read data from rasters: very few dependencies, compatible with cloud platforms a
 ## Install
 
 ```bash
+# Install with minimal requirements (only rasterio, numpy as shapely)
 pip install git+https://github.com/spaceml-org/georeader#egg=georeader
+
+# Install with Google dependencies (to read objects from Google Cloud Storage)
+pip install git+https://github.com/spaceml-org/georeader#egg=georeader[google]
+
+# Install with Planetary Computer requirements
+pip install git+https://github.com/spaceml-org/georeader#egg=georeader[microsoftplanetary]
 ```
 
 This package is work in progress. The API might change without notice. Use it with caution.
@@ -13,6 +20,8 @@ This package is work in progress. The API might change without notice. Use it wi
 ## Getting started
 
 ```python
+# This snipper requires Google requirements
+# pip install git+https://github.com/spaceml-org/georeader#egg=georeader[google]
 import os
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/path/to/requester/pays/credentials.json"
@@ -31,7 +40,7 @@ data = read.read_from_bounds(s2obj, bounds_read, crs_bounds=crs_bounds,
 
 data_memory = data.load() # this triggers downloading the data
 
-data_memory
+data_memory # GeoTensor object
 ```
 ```
 >>  Transform: | 10.00, 0.00, 759560.00|
@@ -44,7 +53,7 @@ data_memory
     fill_value_default: 0
 ```
 
-In the `.values` attribute we have the plain numpy array that we can plot with `imshow`:
+In the `.values` attribute we have the plain numpy array that we can plot with `show`:
 
 ```python
 from rasterio.plot import  show
@@ -58,7 +67,7 @@ Saving the `GeoTensor` as a COG GeoTIFF:
 ```python
 from georeader.save_cog import save_cog
 
-# Supports writing in bucket location (gs://bucket-name/s2_crop.tif)
+# Supports writing in bucket location (e.g. gs://bucket-name/s2_crop.tif)
 save_cog(data_memory, "s2_crop.tif", descriptions=s2obj.bands)
 ```
 
@@ -68,5 +77,4 @@ save_cog(data_memory, "s2_crop.tif", descriptions=s2obj.bands)
 * [Example of reading a Proba-V image overlapping with Sentinel-2 forcing same resolution](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_overlapping_probav_and_sentinel2.ipynb)
 * [Reading Sentinel-2 images from the public Google bucket](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_S2_SAFE_from_bucket.ipynb)
 * [Query Sentinel-2 images over a location and time span, mosaic and plot them](https://github.com/spaceml-org/georeader/blob/main/notebooks/Sentinel-2/query_mosaic_s2_images.ipynb)
-
 

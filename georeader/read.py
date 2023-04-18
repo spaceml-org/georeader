@@ -296,6 +296,7 @@ def read_from_polygon(data_in: GeoData, polygon: Union[Polygon, MultiPolygon],
 
 
 def read_reproject_like(data_in: GeoData, data_like: GeoData,
+                        resolution_dst:Optional[Union[float, Tuple[float, float]]]=None,
                         resampling: rasterio.warp.Resampling = rasterio.warp.Resampling.cubic_spline,
                         dtpye_dst=None, return_only_data: bool = False,
                         dst_nodata: Optional[int] = None) -> Union[GeoTensor, np.ndarray]:
@@ -306,6 +307,7 @@ def read_reproject_like(data_in: GeoData, data_like: GeoData,
         data_in: GeoData to read and reproject. Expected coords "x" and "y".
         data_like: GeoData to get the bounds and resolution to reproject `data_in`.
         resampling: specifies how data is reprojected from `rasterio.warp.Resampling`.
+        resolution_dst: if not None it will overwrite the resolution of `data_like`.
         dtpye_dst: if None it will be inferred
         return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
             returns an GeoTensor object (georreferenced array).
@@ -315,8 +317,18 @@ def read_reproject_like(data_in: GeoData, data_like: GeoData,
         GeoTensor read from `data_in` with same transform, crs, shape and bounds than `data_like`.
     """
 
-    shape_out = data_like.shape
+    shape_out = data_like.shape[-2:]
+    if resolution_dst is not None:
+        if isinstance(resolution_dst, float):
+            resolution_dst = (resolution_dst, resolution_dst)
+        
+        resolution_data_like = data_like.resolution
+
+        shape_out = int(round(shape_out[0] / resolution_dst[0] * resolution_data_like[0])), \
+                    int(round(shape_out[1] / resolution_dst[1] * resolution_data_like[1]))
+        
     return read_reproject(data_in, dst_crs=data_like.crs, dst_transform=data_like.transform,
+                          resolution_dst_crs=resolution_dst,
                           window_out=rasterio.windows.Window(0,0, width=shape_out[-1], height=shape_out[-2]),
                           resampling=resampling,dtpye_dst=dtpye_dst, return_only_data=return_only_data,
                           dst_nodata=dst_nodata)
