@@ -4,7 +4,7 @@ import os.path
 
 
 REQUIREMENTS_EXTRA =["scikit-image", "fsspec"]
-REQUIREMENTS_GOOGLE = ["fsspec", "google-cloud-storage", "earthengine-api"]
+REQUIREMENTS_GOOGLE = ["fsspec", "gcsfs", "google-cloud-storage", "earthengine-api"]
 REQUIREMENTS_TORCH = ["torch", "torchvision"]
 REQUIREMENTS_PLANETARY_COMPUTER = ["fsspec", "pystac-client", "planetary-computer"]
 REQUIREMENTS_PROBAV = ["h5py", "requests", "tqdm", "lxml"]
