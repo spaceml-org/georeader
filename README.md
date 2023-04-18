@@ -8,7 +8,7 @@ Read data from rasters: very few dependencies, compatible with cloud platforms a
 # Install with minimal requirements (only rasterio, numpy as shapely)
 pip install git+https://github.com/spaceml-org/georeader#egg=georeader
 
-# Install with Google dependencies (to read objects from Google Cloud Storage)
+# Install with Google dependencies (to read objects from Google Cloud Storage or Google Earth Engine)
 pip install git+https://github.com/spaceml-org/georeader#egg=georeader[google]
 
 # Install with Planetary Computer requirements
