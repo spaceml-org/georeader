@@ -68,7 +68,7 @@ def normalize_band_names(bands:List[str]) -> List[str]:
 def islocalpath(path:str) -> bool:
     return path.startswith("file://") or ("://" not in path)
 
-def get_filesystem(path: str):
+def get_filesystem(path: str, requester_pays: bool = False):
     import fsspec
     path = str(path)
     if islocalpath(path):
@@ -77,7 +77,7 @@ def get_filesystem(path: str):
         # use the fileystem from the protocol specified
         mode = path.split(":", 1)[0]
         if mode == "gs":
-            return fsspec.filesystem(mode, requester_pays=True)
+            return fsspec.filesystem(mode, requester_pays=requester_pays)
         return fsspec.filesystem(mode)
 
 def _get_info_granules_metadata(folder):

@@ -73,7 +73,8 @@ def _add_overviews(rst_out, tile_size, verbose=False):
 def _save_cog(out_np: np.ndarray, path_tiff_save: str, profile: dict,
              descriptions:Optional[List[str]] = None,
              tags: Optional[dict] = None,
-             dir_tmpfiles:str="."):
+             dir_tmpfiles:str=".",
+             requester_pays:bool=False):
     """
     Saves `out_np` np array as a COG GeoTIFF in path_tiff_save. profile is a dict with the geospatial info to be saved
     with the TiFF.
@@ -85,6 +86,7 @@ def _save_cog(out_np: np.ndarray, path_tiff_save: str, profile: dict,
         descriptions: List[str]
         tags: extra dict to save as tags
         dir_tmpfiles: dir to create tempfiles if needed
+        requester_pays: if True and the path is in a cloud bucket it will initialize fsspec with requester_pays=True
 
     Returns:
         None
@@ -138,7 +140,7 @@ def _save_cog(out_np: np.ndarray, path_tiff_save: str, profile: dict,
                     rst_out.set_band_description(i, descriptions[i-1])
 
         if path_tiff_save.startswith("gs://"):
-            fs = fsspec.filesystem("gs", requester_pays=True)
+            fs = fsspec.filesystem("gs", requester_pays=requester_pays)
             time.sleep(1)
             if not os.path.exists(name_save):
                 raise FileNotFoundError(f"File {name_save} have not been created")

@@ -1,4 +1,3 @@
 rasterio
 numpy
 shapely
-scikit-image

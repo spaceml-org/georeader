@@ -2,6 +2,15 @@ from setuptools import setup, find_packages
 import codecs
 import os.path
 
+
+REQUIREMENTS_EXTRA =["scikit-image", "fsspec"]
+REQUIREMENTS_GOOGLE = ["fsspec", "google-cloud-storage", "earthengine-api"]
+REQUIREMENTS_TORCH = ["torch", "torchvision"]
+REQUIREMENTS_PLANETARY_COMPUTER = ["fsspec", "pystac-client", "planetary-computer"]
+REQUIREMENTS_PROBAV = ["h5py", "requests", "tqdm", "lxml"]
+REQUIREMENTS_SCIHUB = ["sentinelsat"]
+
+
 def parse_requirements_file(filename):
     with open(filename, encoding="utf-8") as fid:
         requires = [l.strip() for l in fid.readlines() if l]
@@ -11,7 +20,13 @@ def parse_requirements_file(filename):
 # Optional Packages
 # See https://godatadriven.com/blog/a-practical-guide-to-using-setup-py/
 EXTRAS = {
-    "all": ["geopandas", "h5py", "zarr"],
+    "all": REQUIREMENTS_EXTRA + REQUIREMENTS_GOOGLE+REQUIREMENTS_TORCH+
+           REQUIREMENTS_PLANETARY_COMPUTER+REQUIREMENTS_PROBAV+REQUIREMENTS_SCIHUB,
+    "google": REQUIREMENTS_GOOGLE,
+    "torch": REQUIREMENTS_TORCH,
+    "planetary_computer": REQUIREMENTS_PLANETARY_COMPUTER,
+    "probav": REQUIREMENTS_PROBAV,
+    "scihub": REQUIREMENTS_SCIHUB,
     "tests": ["pytest"],
     "docs": [ ],
 }

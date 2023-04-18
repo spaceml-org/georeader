@@ -1,6 +1,8 @@
 from georeader.geotensor import GeoTensor, concatenate
+from georeader.abstract_reader import GeoData
+from georeader.rasterio_reader import RasterioReader
 from shapely.geometry import Polygon, MultiPolygon, mapping
-from typing import Union, Dict, Optional, Tuple
+from typing import Union, Dict, Optional, Tuple, List
 import ee
 import rasterio.windows
 from rasterio import Affine
@@ -57,8 +59,34 @@ def export_image_fast(image:ee.Image, geometry:Union[ee.Geometry, Polygon, Multi
 
     return out
 
+def export_image_reproject(image: ee.Image,
+                           transform:rasterio.Affine,
+                           crs:str,
+                           dimensions:Tuple[int, int],
+                           bands:Optional[List[str]]=None,
+                           donwload_path:Optional[str]=None) -> GeoData:
+    # TODO default if not provided
+    donwload_path
 
+    download_url = image.getDownloadURL(params={
+        "name": name,
+        "bands": bands,
+        "crs_transform": list(transform)[:6],
+        "crs": str(crs).upper(),
+        "dimensions": dimensions,
+        "filePerBand": False})
 
+    import requests
+    r = requests.get(download_url, stream=True)
+    filenamezip = f'/home/gonzalo/Downloads/{name}.zip'
+    with open(filenamezip, "wb") as fd:
+        for chunk in r.iter_content(chunk_size=1024):
+            fd.write(chunk)
+
+    # TODO unzip?
+    filename = f'zip+file:///{filenamezip}!{name}.tif'
+    data = RasterioReader(filename)
+    return data
 
 
 
