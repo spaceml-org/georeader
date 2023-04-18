@@ -30,7 +30,7 @@ os.environ["GS_USER_PROJECT"] = "project-name-to-bill"
 from georeader.readers import S2_SAFE_reader
 from georeader import read
 
-cords_read = (-104.394, 32.026)
+cords_read = (-104.394, 32.026) # long, lat
 crs_cords = "EPSG:4326"
 s2obj = S2_SAFE_reader.s2loader("gs://gcp-public-data-sentinel-2/tiles/13/S/ER/S2B_MSIL1C_20191008T173219_N0208_R055_T13SER_20191008T204555.SAFE", 
                                 out_res=10, bands=["B04","B03","B02"])
