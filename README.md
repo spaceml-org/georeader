@@ -20,7 +20,7 @@ This package is work in progress. The API might change without notice. Use it wi
 ## Getting started
 
 ```python
-# This snipper requires Google requirements
+# This snippet requires Google requirements
 # pip install git+https://github.com/spaceml-org/georeader#egg=georeader[google]
 import os
 
