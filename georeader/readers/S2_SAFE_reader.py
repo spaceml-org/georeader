@@ -99,15 +99,17 @@ class S2Image:
                  bands:Optional[List[str]]=None,
                  metadata_msi:Optional[str]=None):
         """
+        Sentinel-2 image reader class.
 
         Args:
             s2_folder: name of the SAFE product expects name
             polygon: in CRS EPSG:4326
-            granules:
-            out_res:
-            window_focus:
-            bands:
-            metadata_msi:
+            granules: dictionary with granule name and path
+            out_res: output resolution in meters one of 10, 20, 60 (default 10)
+            window_focus: rasterio window to read. All reads will be based on this window
+            bands: list of bands to read. If None all bands are read.
+            metadata_msi: path to metadata file. If None it is assumed to be in the SAFE folder
+        
         """
         self.mission, self.producttype, sensing_date_str, self.pdgs, self.relorbitnum, self.tile_number_field, self.product_discriminator = s2_name_split(
             s2_folder)
@@ -197,7 +199,17 @@ class S2Image:
         else:
             self._pol_crs = None
 
-    def cache_product_to_local_dir(self, path_dest:Optional[str]=None) -> '__class__':
+    def cache_product_to_local_dir(self, path_dest:Optional[str]=None, print_progress:bool=True) -> '__class__':
+        """
+        Copy the product to a local directory and return a new instance of the class with the new path
+
+        Args:
+            path_dest: path to the destination folder. If None, the current folder ()".") is used
+            print_progress: print progress bar. Default True
+        
+        Returns:
+            A new instance of the class with the new path
+        """
         if path_dest is None:
             path_dest = "."
 
@@ -222,7 +234,7 @@ class S2Image:
             granules_name_metadata = {b.text.split("_")[-1]: b.text for b in bands_elms}
 
         new_granules = {}
-        with tqdm(total=len(self.bands)) as pbar:
+        with tqdm(total=len(self.bands),disable=not print_progress) as pbar:
             for b in self.bands:
                 granule = self.granules[b]
                 ext_granule = os.path.splitext(granule)[1]
