@@ -8,7 +8,7 @@ Read data from rasters: very few dependencies, compatible with cloud platforms a
 # Install with minimal requirements (only rasterio, numpy as shapely)
 pip install git+https://github.com/spaceml-org/georeader#egg=georeader
 
-# Install with Google dependencies (to read objects from Google Cloud Storage)
+# Install with Google dependencies (to read objects from Google Cloud Storage or Google Earth Engine)
 pip install git+https://github.com/spaceml-org/georeader#egg=georeader[google]
 
 # Install with Planetary Computer requirements
@@ -20,7 +20,7 @@ This package is work in progress. The API might change without notice. Use it wi
 ## Getting started
 
 ```python
-# This snippet requires Google requirements
+# This snippet requires Google requirements:
 # pip install git+https://github.com/spaceml-org/georeader#egg=georeader[google]
 import os
 
@@ -30,7 +30,7 @@ os.environ["GS_USER_PROJECT"] = "project-name-to-bill"
 from georeader.readers import S2_SAFE_reader
 from georeader import read
 
-cords_read = (-104.394, 32.026)
+cords_read = (-104.394, 32.026) # long, lat
 crs_cords = "EPSG:4326"
 s2obj = S2_SAFE_reader.s2loader("gs://gcp-public-data-sentinel-2/tiles/13/S/ER/S2B_MSIL1C_20191008T173219_N0208_R055_T13SER_20191008T204555.SAFE", 
                                 out_res=10, bands=["B04","B03","B02"])
