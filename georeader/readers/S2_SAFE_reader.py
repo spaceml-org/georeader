@@ -260,7 +260,7 @@ class S2Image:
                   bands=self.bands, granules=new_granules_full_path, polygon=self._pol,
                   metadata_msi=metadata_output_path)
 
-    def load_metadata_msi(self):
+    def load_metadata_msi(self) -> ET.Element:
         if self.root_metadata_msi is None:
             self.root_metadata_msi = read_xml(self.metadata_msi)
         return self.root_metadata_msi
