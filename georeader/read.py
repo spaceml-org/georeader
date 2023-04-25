@@ -29,7 +29,7 @@ def _transform_from_crs(center_coords:Tuple[float, float], crs_input:Union[Dict[
     return coords_transformed[0][0], coords_transformed[1][0]
 
 
-def window_from_polygon(data_in: GeoData,
+def window_from_polygon(data_in: Union[GeoData, rasterio.DatasetReader],
                         polygon:Union[Polygon, MultiPolygon], crs_polygon:Optional[str]=None,
                         window_surrounding:bool=False) -> rasterio.windows.Window:
     """
@@ -80,7 +80,9 @@ def window_from_polygon(data_in: GeoData,
                                    width=col_max-col_off,
                                    height=row_max-row_off)
 
-def window_from_bounds(data_in: GeoData, bounds:Tuple[float, float, float, float],
+
+def window_from_bounds(data_in: Union[GeoData, rasterio.DatasetReader], 
+                       bounds:Tuple[float, float, float, float],
                        crs_bounds:Optional[str]=None) -> rasterio.windows.Window:
     """
     Compute window to read in data_in from bounds in crs_bounds. If crs_bounds is None it assumes bounds are in the
@@ -107,7 +109,8 @@ def window_from_bounds(data_in: GeoData, bounds:Tuple[float, float, float, float
     return window_in
 
 
-def window_from_center_coords(data_in: GeoData, center_coords:Tuple[float, float],
+def window_from_center_coords(data_in: Union[GeoData, rasterio.DatasetReader], 
+                              center_coords:Tuple[float, float],
                               shape:Tuple[int,int], crs_center_coords:Optional[Any]=None) -> rasterio.windows.Window:
     """
      Compute window to read in `data_in` from the coordinates of the center pixel. If `crs_center_coords` is None it assumes
