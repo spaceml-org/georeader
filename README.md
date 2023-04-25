@@ -68,7 +68,7 @@ show(data_memory.values/3500, transform=data_memory.transform)
 Saving the `GeoTensor` as a COG GeoTIFF: 
 
 ```python
-from georeader.save_cog import save_cog
+from georeader.save import save_cog
 
 # Supports writing in bucket location (e.g. gs://bucket-name/s2_crop.tif)
 save_cog(data_memory, "s2_crop.tif", descriptions=s2obj.bands)
