@@ -11,12 +11,15 @@ import time
 
 
 GeoData = Union[AbstractGeoData, GeoTensor]
+REMOTE_FILE_EXTENSIONS = ["gs://", "s3://", "az://", "http://", "https://", "abfs://"]
 
 
 def save_cog(data_save:GeoData, path_tiff_save:str,
              profile:Optional[Dict[str, Any]]=None,
-             descriptions:Optional[List[str]] = None, tags:Optional[Dict[str, Any]]=None,
-             dir_tmpfiles:str=".") -> None:
+             descriptions:Optional[List[str]] = None, 
+             tags:Optional[Dict[str, Any]]=None,
+             dir_tmpfiles:str=".",
+             fs:Optional[Any]=None) -> None:
     """
     Save data GeoData object as cloud optimized GeoTIFF
 
@@ -27,6 +30,14 @@ def save_cog(data_save:GeoData, path_tiff_save:str,
         profile: profile dict to save the data. crs and transform will be updated from data_save.
         tags: Dict to save as tags of the image
         dir_tmpfiles: dir to create tempfiles if needed
+        fs: fsspec filesystem to save the file
+    
+        
+    Examples:
+        >> img = np.random.randn(4,256,256)
+        >> transform = rasterio.Affine(10, 0, 799980.0, 0, -10, 1900020.0)
+        >> data = GeoTensor(img, crs="EPSG:32644", transform=transform)
+        >> save_cog(data, "example.tif", descriptions=["band1", "band2", "band3", "band4"])
 
     """
     if profile is None:
@@ -49,7 +60,7 @@ def save_cog(data_save:GeoData, path_tiff_save:str,
 
     _save_cog(np_data,
               path_tiff_save, profile, descriptions=descriptions,
-              tags=tags, dir_tmpfiles=dir_tmpfiles)
+              tags=tags, dir_tmpfiles=dir_tmpfiles, fs=fs)
 
 def _add_overviews(rst_out, tile_size, verbose=False):
     """ Add overviews to be a cog and be displayed nicely in GIS software """
@@ -88,6 +99,7 @@ def _save_cog(out_np: np.ndarray, path_tiff_save: str, profile: dict,
         tags: extra dict to save as tags
         dir_tmpfiles: dir to create tempfiles if needed
         requester_pays: if True and the path is in a cloud bucket it will initialize fsspec with requester_pays=True
+        fs: fsspec filesystem to save the file
 
     Returns:
         None
@@ -125,8 +137,8 @@ def _save_cog(out_np: np.ndarray, path_tiff_save: str, profile: dict,
     if cog_driver:
         assert ("blockxsize" not in profile) and ("blockysize" not in profile), "In COG driver blockxsize and blockysize options are BLOCKSIZE"
         # Save tiff locally and copy it to GCP with fsspec is path is a GCP path
-        if path_tiff_save.startswith("gs://"):
-            import fsspec
+        is_remote_file = any((path_tiff_save.startswith(ext) for ext in REMOTE_FILE_EXTENSIONS))
+        if is_remote_file:
             with tempfile.NamedTemporaryFile(dir=dir_tmpfiles, suffix=".tif", delete=True) as fileobj:
                 name_save = fileobj.name
         else:
@@ -140,12 +152,16 @@ def _save_cog(out_np: np.ndarray, path_tiff_save: str, profile: dict,
                 for i in range(1, out_np.shape[0] + 1):
                     rst_out.set_band_description(i, descriptions[i-1])
 
-        if path_tiff_save.startswith("gs://"):
-            fs = fsspec.filesystem("gs", requester_pays=requester_pays)
+        if is_remote_file:
+            if fs is None:
+                import fsspec
+                fs = fsspec.filesystem(path_tiff_save.split(":")[0], 
+                                       requester_pays=requester_pays)
+            
             time.sleep(1)
             if not os.path.exists(name_save):
                 raise FileNotFoundError(f"File {name_save} have not been created")
-            fs.put_file(name_save, path_tiff_save)
+            fs.put_file(name_save, path_tiff_save, overwrite=True)
             # subprocess.run(["gsutil", "-m", "mv", name_save, path_tiff_save])
             if os.path.exists(name_save):
                 os.remove(name_save)
