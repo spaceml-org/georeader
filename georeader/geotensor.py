@@ -30,6 +30,19 @@ class GeoTensor:
     def __init__(self, values:Tensor,
                  transform:rasterio.Affine, crs:Any,
                  fill_value_default:Optional[Union[int, float]]=0):
+        """
+        This class is a wrapper around a numpy or torch tensor with geospatial information.
+
+        Args:
+            values (Tensor): numpy or torch tensor
+            transform (rasterio.Affine): affine geospatial transform
+            crs (Any): coordinate reference system
+            fill_value_default (Optional[Union[int, float]], optional): Value to fill when 
+            reading out of bounds. Could be None. Defaults to 0.
+
+        Raises:
+            ValueError: when the shape of the tensor is not 2d, 3d or 4d.
+        """
         self.values = values
         self.transform = transform
         self.crs = crs
@@ -107,7 +120,11 @@ class GeoTensor:
             sel: Dict with slice selection; i.e. `{"x": slice(10, 20), "y": slice(20, 340)}`.
 
         Returns:
+            GeoTensor: GeoTensor with the sliced values.
 
+        Examples:
+            >>> gt = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
+            >>> gt.isel({"x": slice(10, 20), "y": slice(20, 340)})
         """
         for k in sel:
             if k not in self.dims:
@@ -143,6 +160,18 @@ class GeoTensor:
         return tuple(slice_list)
 
     def footprint(self, crs:Optional[str]=None) -> Polygon:
+        """Returns the footprint of the GeoTensor as a Polygon.
+
+        Args:
+            crs (Optional[str], optional): Coordinate reference system. Defaults to None.
+
+        Returns:
+            Polygon: footprint of the GeoTensor.
+
+        Examples:
+            >>> gt = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
+            >>> gt.footprint(crs="EPSG:4326") # returns a Polygon in WGS84
+        """
         pol = window_utils.window_polygon(rasterio.windows.Window(row_off=0, col_off=0, height=self.shape[-2], width=self.shape[-1]),
                                           self.transform)
         if (crs is None) or window_utils.compare_crs(self.crs, crs):
@@ -160,18 +189,27 @@ class GeoTensor:
          fill_value_default: {self.fill_value_default}
         """
 
-    def pad(self, pad_width=Dict[str, Tuple[int, int]], mode:str="constant",
-            constant_values:Any=0)-> '__class__':
+    def pad(self, pad_width:Dict[str, Tuple[int, int]], mode:str="constant",
+            constant_values:Optional[Any]=None)-> '__class__':
         """
+        Pad the GeoTensor.
 
         Args:
-            pad_width: e.g. `{"x": (pad_x_0, pad_x_1), "y": (pad_y_0, pad_y_1)}`
-            mode:
-            constant_values:
+            pad_width (_type_, optional):  dictionary with Tuple to pad for each dimension 
+                `{"x": (pad_x_0, pad_x_1), "y": (pad_y_0, pad_y_1)}`. 
+            mode (str, optional): pad mode (see np.pad or torch.nn.functional.pad). Defaults to "constant".
+            constant_values (Any, optional): _description_. Defaults to `self.fill_value_default`.
 
         Returns:
-
+            GeoTensor: padded GeoTensor.
+        
+        Examples:
+            >>> gt = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
+            >>> gt.pad({"x": (10, 10), "y": (10, 10)})
+            >>> assert gt.shape == (3, 120, 120)
         """
+        if constant_values is None:
+            constant_values = self.fill_value_default
 
         # Pad the data
         pad_torch = False
@@ -232,6 +270,12 @@ class GeoTensor:
 
         Returns:
              resized GeoTensor
+        
+        Examples:
+            >>> gt = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
+            >>> resized = gt.resize((50, 50))
+            >>> assert resized.shape == (3, 50, 50)
+            >>> assert resized.res == (2*gt.res[0], 2*gt.res[1])
         """
         input_shape = self.shape
         spatial_shape = input_shape[-2:]
@@ -296,6 +340,12 @@ class GeoTensor:
         Args:
             data: Tensor to write. Expected: spatial dimensions `window.width`, `window.height`. Rest: same as `self`
             window: Window object that specifies the spatial location to write the data
+        
+        Examples:
+            >>> gt = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
+            >>> data = np.random.rand(3, 50, 50)
+            >>> window = rasterio.windows.Window(col_off=7, row_off=9, width=50, height=50)
+            >>> gt.write_from_window(data, window)
 
         """
         window_data = rasterio.windows.Window(col_off=0, row_off=0,
@@ -325,7 +375,7 @@ class GeoTensor:
                 the GeoTensor with `self.fill_value_default`)
 
         Returns:
-            GeoTensor
+            GeoTensor object with the spatial dimensions sliced
 
         Raises:
             rasterio.windows.WindowError if `window` does not intersect the data
@@ -357,10 +407,17 @@ def concatenate(geotensors:List[GeoTensor]) -> GeoTensor:
     Concatenates a list of geotensors, assert that all of them has same shape, transform and crs.
 
     Args:
-        geotensors: list of geotensors to concat.
+        geotensors: list of geotensors to concat. All with same shape, transform and crs.
 
     Returns:
         geotensor with extra dim at the front: (len(geotensors),) + shape
+    
+    Examples:
+        >>> gt1 = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
+        >>> gt2 = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
+        >>> gt3 = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
+        >>> gt = concatenate([gt1, gt2, gt3])
+        >>> assert gt.shape == (3, 3, 100, 100)
     """
     assert len(geotensors) > 0, "Empty list provided can't concat"
 

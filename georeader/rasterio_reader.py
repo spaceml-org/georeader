@@ -206,6 +206,12 @@ class RasterioReader:
             relative: provided window is relative to current self.window_focus
             boundless: if boundless is false the windows that do not overlap the total raster will be
                 intersected.
+        
+        Examples:
+            >>> # Read the first 1000x1000 pixels of the raster
+            >>> r = Raster("path/to/raster.tif")
+            >>> r.set_window(rasterio.windows.Window(col_off=0, row_off=0, width=1000, height=1000))
+            >>> r.load() #  returns GeoTensor with shape (1, 1, 1000, 1000)
 
         """
         if window_focus is None:
@@ -268,8 +274,9 @@ class RasterioReader:
         """
         Returns a new reader with window focus the window `window` relative to `self.window_focus`
         Args:
-            window:
-            boundless:
+            window: rasterio.window.Window to read
+            boundless: if boundless is False if the window do not overlap the total raster  it will be
+                intersected.
 
         Returns:
             New reader object
