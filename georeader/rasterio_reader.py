@@ -158,12 +158,20 @@ class RasterioReader:
             indexes: 1-based array to mantain rasterio convention
             relative: True means the indexes arg will be treated ad relative to the current self.indexes. If false
                      it sets self.indexes = indexes (and update the count attribute)
-
+        Examples:
+            >>> r = RasterioDataset("path/to/raster.tif", indexes=[2,3,4]) # Read all bands except the first one.
+            >>> r.set_indexes([2,3], relative=True) # will read bands 2 and 3 of the original raster
         """
         if relative:
-            self.indexes = [self.indexes[idx - 1] for idx in indexes]
+            new_indexes = [self.indexes[idx - 1] for idx in indexes]
         else:
-            self.indexes = indexes
+            new_indexes = indexes
+
+        # Check if indexes are valid
+        assert all((s >= 1) and (s <= self.real_count) for s in new_indexes), \
+               f"Indexes (1-based) out of real bounds current: {self.indexes} asked: {new_indexes} number of bands:{self.real_count}"
+        
+        self.indexes = new_indexes
 
         assert all((s >= 1) and (s <= self.real_count) for s in
                    self.indexes), f"Indexes out of real bounds current: {self.indexes} asked: {indexes} number of bands:{self.real_count}"
@@ -176,6 +184,11 @@ class RasterioReader:
 
         Args:
             names: List of band names to read
+        
+        Examples:
+            >>> r = RasterioDataset("path/to/raster.tif") # Read all bands except the first one.
+            >>> # Assume r.descriptions = ["B1", "B2", "B3"]
+            >>> r.set_indexes_by_name(["B2", "B3"])
 
         """
         descriptions = self.descriptions
@@ -256,6 +269,13 @@ class RasterioReader:
         Returns a list with the descriptions for each tiff file. (This is usually the name of the bands of the raster)
 
         If stack it returns just the List with the descriptions
+
+        Returns:
+            List of lists with the descriptions of the bands of each tiff file
+        
+        Examples:
+            >>> r = Raster("path/to/raster.tif") # Raster with band names B1, B2, B3
+            >>> r.descriptions # returns ["B1", "B2", "B3"]
         """
         descriptions_all = []
         for i, p in enumerate(self.paths):
@@ -307,6 +327,12 @@ class RasterioReader:
 
         Returns:
             Copy of the current reader
+        
+        Examples:
+            >>> r = Raster(["path/to/raster1.tif", "path/to/raster2.tif"])
+            >>> r.isel({"time": 0, "band": [0]}) # returns a reader with the first band of the first raster
+            >>> r.isel({"time": slice(0, 1), "band": [0]}) # returns a reader with the first band of the first raster and second raster
+            >>> r.isel({"x": slice(4000, 5000), "band": [0, 1]}) # returns a reader slicing the x axis from 4000 to 5000 and the first two bands
         """
         for k in sel:
             if k not in self.dims:
@@ -414,7 +440,7 @@ class RasterioReader:
         Load all raster in memory in an GeoTensor object
 
         Returns:
-            GeoTensor with geographic info
+            GeoTensor (wrapper of numpy array with spatial information)
 
         """
         np_data = self.read(boundless=boundless)
