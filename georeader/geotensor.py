@@ -230,6 +230,41 @@ class GeoTensor:
         else:
             raise TypeError("Unsupported operand type for /: GeoTensor and " + type(other).__name__)
 
+    def __setitem__(self, index: np.ndarray, value: np.ndarray) -> None:
+        """
+        Set the values of the GeoTensor object using an index and a new value.
+
+        Args:
+            index (tuple or numpy.ndarray): Index or boolean mask to apply to the GeoTensor values.
+            value (numpy.ndarray): New value to assign to the GeoTensor values at the specified index.
+
+        Raises:
+            ValueError: If the index is not a tuple or a boolean numpy array with the same shape as the GeoTensor values.
+
+        Examples:
+            >>> gt = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
+            >>> boolmask = gt.values > 0.5
+            >>> gt[boolmask] = 0.5
+        """
+        if isinstance(index, np.ndarray) and index.dtype == np.bool and index.shape == self.values.shape:
+            # If the index is a boolean numpy array with the same shape as the values,
+            # use it to mask the values and assign the new values to the masked values
+            self.values[index] = np.where(index, value, self.values[index])
+        else:
+            raise ValueError(f"Unsupported index type {type(index)} for GeoTensor set operation.")
+    
+    def squeeze(self) -> '__class__':
+        """
+        Remove single-dimensional entries from the shape of the GeoTensor values.
+
+        Returns:
+            GeoTensor: GeoTensor with the squeezed values.
+        """
+        squeezed_values = np.squeeze(self.values)
+        return GeoTensor(squeezed_values, transform=self.transform, crs=self.crs,
+                         fill_value_default=self.fill_value_default)
+    
+    
     def isel(self, sel: Dict[str, slice]) -> '__class__':
         """
         Slicing with dict. It doesn't work with negative indexes!
