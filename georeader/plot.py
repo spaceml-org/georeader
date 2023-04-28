@@ -24,7 +24,7 @@ def colorbar_next_to(im:matplotlib.image.AxesImage, ax:plt.Axes):
     plt.gcf().colorbar(im, cax=cax, orientation='vertical')
 
 
-def show(data:GeoData, add_colorbar_next_to:bool=False, **kwargs) -> matplotlib.image.AxesImage:
+def show(data:GeoData, add_colorbar_next_to:bool=False, **kwargs) -> plt.Axes:
     """Wrapper around rasterio.plot.show that adds a colorbar next to the plot.
 
     Args:
@@ -32,21 +32,24 @@ def show(data:GeoData, add_colorbar_next_to:bool=False, **kwargs) -> matplotlib.
         add_colorbar_next_to (bool, optional): Defaults to False. Add a colorbar next to the plot
 
     Returns:
-        matplotlib.image.AxesImage: image object
+        plt.Axes: image object
     """
-    im = rasterioplt.show(data.values, transform=data.transform, **kwargs)
+    rasterioplt.show(data.values, transform=data.transform, **kwargs)
+    if "ax" in kwargs:
+        ax = kwargs["ax"]
+    else:
+        ax = plt.gca()
+    
     if add_colorbar_next_to:
-        if "ax" in kwargs:
-            ax = kwargs["ax"]
-        else:
-            ax = plt.gca()
+        im = ax.images[0]
         colorbar_next_to(im, ax)
-    return im
+    
+    return ax
 
 
 def plot_segmentation_mask(mask:Union[GeoData, np.array], color_array:np.array,
                            interpretation_array:Optional[List[str]]=None,
-                           legend:bool=True, ax:Optional[matplotlib.axes.Axes]=None) -> matplotlib.image.AxesImage:
+                           legend:bool=True, ax:Optional[plt.Axes]=None) -> plt.Axes:
     """
     Plots a discrete segmentation mask with a legend.
 
@@ -55,10 +58,10 @@ def plot_segmentation_mask(mask:Union[GeoData, np.array], color_array:np.array,
         color_array: colors for values 0,...,len(color_array)-1 of mask
         interpretation_array: interpretation for classes 0, ..., len(color_array)-1
         legend: plot the legend
-        ax: matplotlib.Axes to plot
+        ax: plt.Axes to plot
     
     Returns:
-        matplotlib.image.AxesImage
+        plt.Axes
 
     """
     cmap_categorical = colors.ListedColormap(color_array)
