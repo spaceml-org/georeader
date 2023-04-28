@@ -86,8 +86,8 @@ def plot_segmentation_mask(mask:Union[GeoData, np.array], color_array:np.array,
 
     assert mask_values.ndim == 2, f"Expected 2 D array found {mask_values.shape}"
 
-    im = rasterioplt.show(mask_values, transform=transform, ax=ax,
-                          cmap=cmap_categorical, norm=norm_categorical, interpolation='nearest')
+    rasterioplt.show(mask_values, transform=transform, ax=ax,
+                     cmap=cmap_categorical, norm=norm_categorical, interpolation='nearest')
 
     if legend:
         patches = []
@@ -96,5 +96,5 @@ def plot_segmentation_mask(mask:Union[GeoData, np.array], color_array:np.array,
 
         ax.legend(handles=patches,
                   loc='upper right')
-    return im
+    return ax
 

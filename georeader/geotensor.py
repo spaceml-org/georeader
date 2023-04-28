@@ -230,7 +230,7 @@ class GeoTensor:
         else:
             raise TypeError("Unsupported operand type for /: GeoTensor and " + type(other).__name__)
 
-    def __setitem__(self, index: np.ndarray, value: np.ndarray) -> None:
+    def __setitem__(self, index: np.ndarray, value: Union[np.ndarray, numbers.Number]) -> None:
         """
         Set the values of the GeoTensor object using an index and a new value.
 
@@ -246,12 +246,12 @@ class GeoTensor:
             >>> boolmask = gt.values > 0.5
             >>> gt[boolmask] = 0.5
         """
-        if isinstance(index, np.ndarray) and index.dtype == np.bool and index.shape == self.values.shape:
+        if isinstance(index, np.ndarray) and (index.dtype == np.bool) and (index.shape == self.values.shape):
             # If the index is a boolean numpy array with the same shape as the values,
             # use it to mask the values and assign the new values to the masked values
-            self.values[index] = np.where(index, value, self.values[index])
+            self.values[index] = value
         else:
-            raise ValueError(f"Unsupported index type {type(index)} for GeoTensor set operation.")
+            raise ValueError(f"Unsupported index type {type(index)} {index.dtype} {index} for GeoTensor set operation.")
     
     def squeeze(self) -> '__class__':
         """
