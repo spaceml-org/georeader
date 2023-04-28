@@ -111,6 +111,124 @@ class GeoTensor:
 
     def copy(self) -> '__class__':
         return self.__copy__()
+    
+    def _same_georref(self, other:'__class__') -> bool:
+        """
+        Check if two GeoTensors have the same georeferencing (crs and transform)
+
+        Args:
+            other (__class__): GeoTensor to compare with.
+
+        Returns:
+            bool: True if both GeoTensors have the same georeferencing.
+        """
+        return (self.transform == other.transform) and window_utils.compare_crs(self.crs, other.crs)
+    
+    def __add__(self, other:'__class__') -> '__class__':
+        """ 
+        Add two GeoTensors. The georeferencing must match.
+
+        Args:
+            other (GeoTensor): GeoTensor to add.
+
+        Raises:
+            ValueError: if the georeferencing does not match.
+            TypeError: if other is not a GeoTensor.
+
+        Returns:
+            GeoTensor: GeoTensor with the result of the addition.
+        """
+        if isinstance(other, GeoTensor):
+            if self._same_georref(other):
+                result_values = self.values + other.values
+                return GeoTensor(result_values, transform=self.transform, crs=self.crs,
+                                 fill_value_default=self.fill_value_default)
+            else:
+                raise ValueError("GeoTensor georref must match for addition. "
+                                 "Use `read.read_reproject_like(other, self)` to "
+                                 "to reproject `other` to `self` georreferencing.")
+        else:
+            raise TypeError("Unsupported operand type for +: GeoTensor and " + type(other).__name__)
+    
+    def __sub__(self, other:'__class__') -> '__class__':
+        """
+        Substract two GeoTensors. The georeferencing must match.
+
+        Args:
+            other (GeoTensor): GeoTensor to add.
+
+        Raises:
+            ValueError: if the georeferencing does not match.
+            TypeError: if other is not a GeoTensor.
+        
+        Returns:
+            GeoTensor: GeoTensor with the result of the substraction.
+            
+        """
+        if isinstance(other, GeoTensor):
+            if self._same_georref(other):
+                result_values = self.values - other.values
+                return GeoTensor(result_values, transform=self.transform, crs=self.crs,
+                                 fill_value_default=self.fill_value_default)
+            else:
+                raise ValueError("GeoTensor georref must match for substraction. "
+                                 "Use `read.read_reproject_like(other, self)` to "
+                                 "to reproject `other` to `self` georreferencing.")
+        else:
+            raise TypeError("Unsupported operand type for -: GeoTensor and " + type(other).__name__)
+    
+    def __mul__(self, other:'__class__') -> '__class__':
+        """
+        Multiply two GeoTensors. The georeferencing must match.
+
+        Args:
+            other (GeoTensor): GeoTensor to add.
+
+        Raises:
+            ValueError: if the georeferencing does not match.
+            TypeError: if other is not a GeoTensor.
+        
+        Returns:
+            GeoTensor: GeoTensor with the result of the multiplication.
+        """
+
+        if isinstance(other, GeoTensor):
+            if self._same_georref(other):
+                result_values = self.values * other.values
+                return GeoTensor(result_values, transform=self.transform, crs=self.crs,
+                                 fill_value_default=self.fill_value_default)
+            else:
+                raise ValueError("GeoTensor georref must match for multiplication. "
+                                 "Use `read.read_reproject_like(other, self)` to "
+                                 "to reproject `other` to `self` georreferencing.")
+        else:
+            raise TypeError("Unsupported operand type for *: GeoTensor and " + type(other).__name__)
+    
+    def __truediv__(self, other:'__class__') -> '__class__':
+        """
+        Divide two GeoTensors. The georeferencing must match.
+
+        Args:
+            other (GeoTensor): GeoTensor to add.
+
+        Raises:
+            ValueError: if the georeferencing does not match.
+            TypeError: if other is not a GeoTensor.
+        
+        Returns:
+            GeoTensor: GeoTensor with the result of the division.
+        """
+        if isinstance(other, GeoTensor):
+            if self._same_georref(other):
+                result_values = self.values / other.values
+                return GeoTensor(result_values, transform=self.transform, crs=self.crs,
+                                 fill_value_default=self.fill_value_default)
+            else:
+                raise ValueError("GeoTensor georref must match for division. "
+                                 "Use `read.read_reproject_like(other, self)` to "
+                                 "to reproject `other` to `self` georreferencing.")
+        else:
+            raise TypeError("Unsupported operand type for /: GeoTensor and " + type(other).__name__)
 
     def isel(self, sel: Dict[str, slice]) -> '__class__':
         """
