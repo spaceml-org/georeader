@@ -99,7 +99,7 @@ class GeoTensor:
         # TODO implement for torch tensor
         self.values = self.values.astype(dtype=dtype)
     
-    def astype(self) -> '__class__':
+    def astype(self, dtype) -> '__class__':
         copia = self.__copy__()
         copia.set_dtype(dtype)
         return copia
