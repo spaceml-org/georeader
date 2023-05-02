@@ -24,32 +24,55 @@ def colorbar_next_to(im:matplotlib.image.AxesImage, ax:plt.Axes):
     plt.gcf().colorbar(im, cax=cax, orientation='vertical')
 
 
-def show(data:GeoData, add_colorbar_next_to:bool=False, **kwargs) -> plt.Axes:
-    """Wrapper around rasterio.plot.show that adds a colorbar next to the plot.
+def show(data:GeoData, add_colorbar_next_to:bool=False,
+         add_scalebar:bool=False,
+         kwargs_scalebar:Optional[dict]=None, **kwargs) -> plt.Axes:
+    """
+    Wrapper around rasterio.plot.show for GeoData objects. It adds options to add a colorbar next to the plot
+    and a scalebar showing the geographic scale.
 
     Args:
         data (GeoData): GeoData object to plot with imshow
         add_colorbar_next_to (bool, optional): Defaults to False. Add a colorbar next to the plot
+        add_scalebar (bool, optional): Defaults to False. Add a scalebar to the plot
+        kwargs_scalebar (Optional[dict], optional): Defaults to None. Keyword arguments for the scalebar. 
+        See https://github.com/ppinard/matplotlib-scalebar. (install with pip install matplotlib-scalebar)
 
     Returns:
         plt.Axes: image object
     """
-    rasterioplt.show(data.values, transform=data.transform, **kwargs)
     if "ax" in kwargs:
         ax = kwargs["ax"]
     else:
-        ax = plt.gca()
+        ax = kwargs["ax"] = plt.gca()
+    rasterioplt.show(data.values, transform=data.transform, **kwargs)
     
     if add_colorbar_next_to:
         im = ax.images[0]
         colorbar_next_to(im, ax)
+    
+    if add_scalebar:
+        try:
+             from matplotlib_scalebar.scalebar import ScaleBar
+        except ImportError as e:
+            raise ImportError("Install matplotlib-scalebar to use scalebar"
+                              "pip install matplotlib-scalebar"
+                              f"{e}")
+        
+        if kwargs_scalebar is None:
+            kwargs_scalebar = {"dx":1}
+        if "dx" not in kwargs_scalebar:
+            kwargs_scalebar["dx"] = 1
+        ax.add_artist(ScaleBar(**kwargs_scalebar))
     
     return ax
 
 
 def plot_segmentation_mask(mask:Union[GeoData, np.array], color_array:np.array,
                            interpretation_array:Optional[List[str]]=None,
-                           legend:bool=True, ax:Optional[plt.Axes]=None) -> plt.Axes:
+                           legend:bool=True, ax:Optional[plt.Axes]=None,
+                           add_scalebar:bool=False,
+                           kwargs_scalebar:Optional[dict]=None) -> plt.Axes:
     """
     Plots a discrete segmentation mask with a legend.
 
@@ -59,6 +82,9 @@ def plot_segmentation_mask(mask:Union[GeoData, np.array], color_array:np.array,
         interpretation_array: interpretation for classes 0, ..., len(color_array)-1
         legend: plot the legend
         ax: plt.Axes to plot
+        add_scalebar (bool, optional): Defaults to False. Add a scalebar to the plot
+        kwargs_scalebar (Optional[dict], optional): Defaults to None. Keyword arguments for the scalebar. 
+        See https://github.com/ppinard/matplotlib-scalebar. (install with pip install matplotlib-scalebar)
     
     Returns:
         plt.Axes
@@ -96,5 +122,22 @@ def plot_segmentation_mask(mask:Union[GeoData, np.array], color_array:np.array,
 
         ax.legend(handles=patches,
                   loc='upper right')
+    
+    if add_scalebar:
+        assert transform is not None, "Cannot show scalebar without transform"
+        try:
+             from matplotlib_scalebar.scalebar import ScaleBar
+        except ImportError as e:
+            raise ImportError("Install matplotlib-scalebar to use scalebar"
+                              "pip install matplotlib-scalebar"
+                              f"{e}")
+        
+        if kwargs_scalebar is None:
+            kwargs_scalebar = {"dx":1}
+        if "dx" not in kwargs_scalebar:
+            kwargs_scalebar["dx"] = 1
+        
+        ax.add_artist(ScaleBar(**kwargs_scalebar))
+
     return ax
 

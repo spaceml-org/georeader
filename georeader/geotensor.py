@@ -98,6 +98,11 @@ class GeoTensor:
     def set_dtype(self, dtype):
         # TODO implement for torch tensor
         self.values = self.values.astype(dtype=dtype)
+    
+    def astype(self) -> '__class__':
+        copia = self.__copy__()
+        copia.set_dtype(dtype)
+        return copia
 
     @property
     def attrs(self) -> Dict[str, Any]:
