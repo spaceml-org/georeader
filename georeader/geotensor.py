@@ -101,9 +101,8 @@ class GeoTensor:
         self.values = self.values.astype(dtype=dtype)
     
     def astype(self, dtype) -> '__class__':
-        copia = self.__copy__()
-        copia.set_dtype(dtype)
-        return copia
+        return GeoTensor(self.values.astype(dtype), 
+                         self.transform, self.crs, self.fill_value_default)
 
     @property
     def attrs(self) -> Dict[str, Any]:
@@ -238,7 +237,7 @@ class GeoTensor:
         result_values = self.values / other
 
         return GeoTensor(result_values, transform=self.transform, crs=self.crs,
-                            fill_value_default=self.fill_value_default)
+                         fill_value_default=self.fill_value_default)
 
     def __setitem__(self, index: np.ndarray, value: Union[np.ndarray, numbers.Number]) -> None:
         """
@@ -271,7 +270,7 @@ class GeoTensor:
             GeoTensor: GeoTensor with the squeezed values.
         """
         squeezed_values = np.squeeze(self.values)
-        assert squeezed_values.ndims >= 2, "GeoTensor squeeze operation cannot remove spatial dimensions."
+        assert squeezed_values.ndim >= 2, "GeoTensor squeeze operation cannot remove spatial dimensions."
 
         return GeoTensor(squeezed_values, transform=self.transform, crs=self.crs,
                          fill_value_default=self.fill_value_default)

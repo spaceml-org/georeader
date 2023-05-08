@@ -66,7 +66,7 @@ class EMITImage:
     """
     Class to read L1B EMIT images.
 
-    See: https://github.com/emit-sds/emit-utils/ and https://colab.research.google.com/drive/1hVcLoY3R0QryLVSLG6C4jTSG-4Jgg_4c?usp=sharing
+    See: https://github.com/emit-sds/emit-utils/
     
 
     """
@@ -259,9 +259,10 @@ class EMITImage:
         else:
             raise ValueError(f"Data shape {data.shape} not supported")
 
-        fill_value = fill_value_default or self.fill_value_default
+        if fill_value_default is None:
+            fill_value_default = self.fill_value_default
         outdat = np.full(shape, dtype=data.dtype, 
-                         fill_value=fill_value)
+                         fill_value=fill_value_default)
         
         if len(data.shape) == 3:
             outdat[:, self.valid_glt] = data[:, self.glt_zero_based[1, self.valid_glt], 
@@ -271,7 +272,7 @@ class EMITImage:
                                           self.glt_zero_based[0, self.valid_glt]]
             
         return GeoTensor(values=outdat, transform=self.transform, crs=self.crs,
-                         fill_value_default=fill_value)
+                         fill_value_default=fill_value_default)
 
         
     @property

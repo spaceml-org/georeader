@@ -61,12 +61,15 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
         np_data = np.ma.masked_array(data.values, mask=mask)
 
     if len(np_data.shape) == 3:
-        np_data = np_data.transpose(1, 2, 0)
+        if np_data.shape[0] == 1:
+            np_data = np_data[0]
+        else:
+            np_data = np_data.transpose(1, 2, 0)
 
-        if mask is not None:
-            mask = np.any(mask, axis=0)
-            # Convert np_data to RGBA using mask as alpha channel.
-            np_data = np.concatenate([np_data, ~mask[..., None]], axis=-1)
+            if mask is not None:
+                mask = np.any(mask, axis=0)
+                # Convert np_data to RGBA using mask as alpha channel.
+                np_data = np.concatenate([np_data, ~mask[..., None]], axis=-1)
 
     xmin, ymin, xmax, ymax = data.bounds
     # kwargs['extent'] = (bounds.left, bounds.right, bounds.bottom, bounds.top)
