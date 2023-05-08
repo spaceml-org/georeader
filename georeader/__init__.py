@@ -1,20 +1,42 @@
 __version__ = "0.0.1"
 
 import math
+from typing import Tuple
+from shapely.geometry.base import BaseGeometry
+from shapely.geometry import shape, mapping
+import rasterio.warp
 
-def get_utm_epsg(lon: float, lat: float) -> str:
+
+def _normalize_crs(a_crs):
+    a_crs = str(a_crs)
+    if "+init=" in a_crs:
+        a_crs = a_crs.replace("+init=","")
+    return a_crs.lower()
+
+
+def compare_crs(a_crs:str, b_crs:str) -> bool:
+    return _normalize_crs(a_crs) == _normalize_crs(b_crs)
+
+
+def get_utm_epsg(point_or_geom: Tuple[float,float], crs_point_or_geom="EPSG:4326") -> str:
     """
-    Based on lat and lng, return best utm epsg-code
+    Based on lat and lng, return best utm epsg-code. For geometries it uses the centroid.
 
     https://gis.stackexchange.com/questions/269518/auto-select-suitable-utm-zone-based-on-grid-intersection
     https://stackoverflow.com/questions/40132542/get-a-cartesian-projection-accurate-around-a-lat-lng-pair/40140326#40140326
     Args:
-        lon:
-        lat:
+        point_or_geom: tuple with longitude and latitude or shapely geometry
 
     Returns: string with the best utm espg-code
 
     """
+    if isinstance(point_or_geom, BaseGeometry):
+        if not compare_crs(crs_point_or_geom, "EPSG:4326"):
+             point_or_geom = shape(rasterio.warp.transform_geom(crs_point_or_geom, "EPSG:4326", mapping(point_or_geom)))
+
+        lon, lat = list(point_or_geom.centroid.coords)[0]
+    else:
+        lon, lat = point_or_geom
 
     utm_band = str((math.floor((lon + 180) / 6 ) % 60) + 1)
     if len(utm_band) == 1:

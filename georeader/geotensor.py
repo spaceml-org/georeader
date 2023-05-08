@@ -5,6 +5,7 @@ import rasterio
 import rasterio.windows
 from georeader import window_utils
 from georeader.window_utils import window_bounds
+from numpy.typing import ArrayLike
 from itertools import product
 from shapely.geometry import Polygon
 import numbers
@@ -144,22 +145,18 @@ class GeoTensor:
             GeoTensor: GeoTensor with the result of the addition.
         """
         # Check if otther is a number
-        if isinstance(other, numbers.Number):
-            result_values = self.values + other
-            return GeoTensor(result_values, transform=self.transform, crs=self.crs,
-                             fill_value_default=self.fill_value_default)
-        
-        elif isinstance(other, GeoTensor):
+        if isinstance(other, GeoTensor):
             if self._same_georref(other):
-                result_values = self.values + other.values
-                return GeoTensor(result_values, transform=self.transform, crs=self.crs,
-                                 fill_value_default=self.fill_value_default)
+                other =  other.values
             else:
                 raise ValueError("GeoTensor georref must match for addition. "
                                  "Use `read.read_reproject_like(other, self)` to "
                                  "to reproject `other` to `self` georreferencing.")
-        else:
-            raise TypeError("Unsupported operand type for +: GeoTensor and " + type(other).__name__)
+        
+        result_values = self.values + other
+
+        return GeoTensor(result_values, transform=self.transform, crs=self.crs,
+                            fill_value_default=self.fill_value_default)
     
     def __sub__(self, other:Union[numbers.Number,'__class__']) -> '__class__':
         """
@@ -176,21 +173,18 @@ class GeoTensor:
             GeoTensor: GeoTensor with the result of the substraction.
             
         """
-        if isinstance(other, numbers.Number):
-            result_values = self.values - other
-            return GeoTensor(result_values, transform=self.transform, crs=self.crs,
-                             fill_value_default=self.fill_value_default)
-        elif isinstance(other, GeoTensor):
+        if isinstance(other, GeoTensor):
             if self._same_georref(other):
-                result_values = self.values - other.values
-                return GeoTensor(result_values, transform=self.transform, crs=self.crs,
-                                 fill_value_default=self.fill_value_default)
+                other =  other.values
             else:
                 raise ValueError("GeoTensor georref must match for substraction. "
                                  "Use `read.read_reproject_like(other, self)` to "
                                  "to reproject `other` to `self` georreferencing.")
-        else:
-            raise TypeError("Unsupported operand type for -: GeoTensor and " + type(other).__name__)
+        
+        result_values = self.values - other
+
+        return GeoTensor(result_values, transform=self.transform, crs=self.crs,
+                            fill_value_default=self.fill_value_default)
     
     def __mul__(self, other:Union[numbers.Number,'__class__']) -> '__class__':
         """
@@ -206,23 +200,20 @@ class GeoTensor:
         Returns:
             GeoTensor: GeoTensor with the result of the multiplication.
         """
-        if isinstance(other, numbers.Number):
-            result_values = self.values * other
-            return GeoTensor(result_values, transform=self.transform, crs=self.crs,
-                             fill_value_default=self.fill_value_default)
-        elif isinstance(other, GeoTensor):
+        if isinstance(other, GeoTensor):
             if self._same_georref(other):
-                result_values = self.values * other.values
-                return GeoTensor(result_values, transform=self.transform, crs=self.crs,
-                                 fill_value_default=self.fill_value_default)
+                other =  other.values
             else:
                 raise ValueError("GeoTensor georref must match for multiplication. "
                                  "Use `read.read_reproject_like(other, self)` to "
                                  "to reproject `other` to `self` georreferencing.")
-        else:
-            raise TypeError("Unsupported operand type for *: GeoTensor and " + type(other).__name__)
+        
+        result_values = self.values * other
+
+        return GeoTensor(result_values, transform=self.transform, crs=self.crs,
+                            fill_value_default=self.fill_value_default)
     
-    def __truediv__(self, other:Union[numbers.Number,'__class__']) -> '__class__':
+    def __truediv__(self, other:Union[ArrayLike,'__class__']) -> '__class__':
         """
         Divide two GeoTensors. The georeferencing must match.
 
@@ -236,21 +227,18 @@ class GeoTensor:
         Returns:
             GeoTensor: GeoTensor with the result of the division.
         """
-        if isinstance(other, numbers.Number):
-            result_values = self.values / other
-            return GeoTensor(result_values, transform=self.transform, crs=self.crs,
-                             fill_value_default=self.fill_value_default)
-        elif isinstance(other, GeoTensor):
+        if isinstance(other, GeoTensor):
             if self._same_georref(other):
-                result_values = self.values / other.values
-                return GeoTensor(result_values, transform=self.transform, crs=self.crs,
-                                 fill_value_default=self.fill_value_default)
+                other =  other.values
             else:
                 raise ValueError("GeoTensor georref must match for division. "
                                  "Use `read.read_reproject_like(other, self)` to "
                                  "to reproject `other` to `self` georreferencing.")
-        else:
-            raise TypeError("Unsupported operand type for /: GeoTensor and " + type(other).__name__)
+        
+        result_values = self.values / other
+
+        return GeoTensor(result_values, transform=self.transform, crs=self.crs,
+                            fill_value_default=self.fill_value_default)
 
     def __setitem__(self, index: np.ndarray, value: Union[np.ndarray, numbers.Number]) -> None:
         """
@@ -283,9 +271,26 @@ class GeoTensor:
             GeoTensor: GeoTensor with the squeezed values.
         """
         squeezed_values = np.squeeze(self.values)
+        assert squeezed_values.ndims >= 2, "GeoTensor squeeze operation cannot remove spatial dimensions."
+
         return GeoTensor(squeezed_values, transform=self.transform, crs=self.crs,
                          fill_value_default=self.fill_value_default)
     
+    def clip(self, a_min:Optional[np.array], a_max:Optional[np.array]) -> '__class__':
+        """
+        Clip the GeoTensor values between the GeoTensor min and max values.
+
+        Args:
+            a_min (float): Minimum value.
+            a_max (float): Maximum value.
+
+        Returns:
+            GeoTensor: GeoTensor with the clipped values.
+        """
+        clipped_values = np.clip(self.values, a_min, a_max)
+        return GeoTensor(clipped_values, transform=self.transform, crs=self.crs,
+                         fill_value_default=self.fill_value_default)
+
     
     def isel(self, sel: Dict[str, slice]) -> '__class__':
         """

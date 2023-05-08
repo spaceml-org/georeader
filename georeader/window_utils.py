@@ -1,9 +1,10 @@
 import rasterio.windows
-from typing import Tuple, Dict, Optional, Union, Any
+from typing import Tuple, Dict, Optional, Union, Any, List
 import numbers
 import numpy as np
 from shapely.geometry import Polygon, MultiPolygon, shape, mapping
 import rasterio.warp
+from georeader import compare_crs
 
 PIXEL_PRECISION = 3
 
@@ -259,12 +260,11 @@ def polygon_to_crs(polygon:Union[Polygon, MultiPolygon], crs_polygon:Any, dst_cr
     return shape(rasterio.warp.transform_geom(crs_polygon, dst_crs, mapping(polygon)))
 
 
-def _normalize_crs(a_crs):
-    a_crs = str(a_crs)
-    if "+init=" in a_crs:
-        a_crs = a_crs.replace("+init=","")
-    return a_crs.lower()
-
-
-def compare_crs(a_crs:str, b_crs:str) -> bool:
-    return _normalize_crs(a_crs) == _normalize_crs(b_crs)
+def pad_list_numpy(pad_width:Dict[str, Tuple[int, int]]) -> List[Tuple[int, int]]:
+    pad_list_np = []
+    for k in ["y", "x"]:
+        if k in pad_width:
+            pad_list_np.append(pad_width[k])
+        else:
+            pad_list_np.append((0, 0))
+    return pad_list_np

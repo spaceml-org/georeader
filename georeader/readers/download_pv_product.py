@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Tuple, List, Optional
 import numpy as np
 import json
-from tqdm import tqdm
+from georeader.readers.download_utils import download_product as download_product_base
 
 
 # Here you have the free data main
@@ -46,6 +46,25 @@ def get_auth():
     return HTTPBasicAuth(data["user"], data["password"])
 
 
+def download_product(link_down:str, filename:Optional[str]=None,
+                     display_progress_bar:bool=True) -> str:
+    """
+    Download a product from the probav website
+
+    Args:
+        link_down: link to the product
+        filename: filename to save the product
+        display_progress_bar: display tqdm progress bar
+
+    Example:
+        >>> link_down = "https://www.vito-eodata.be/PDF/datapool/Free_Data/PROBA-V_100m/S1_TOA_100_m_C1/2019/2/9/PV_S1_TOA-20190209_100M_V101/PROBAV_S1_TOA_X07Y05_20190209_100M_V101.HDF5"
+        >>> filename = download_product(link_down)
+    """
+    auth_probav = get_auth()
+    return download_product_base(link_down, filename=filename, auth=auth_probav,
+                                  display_progress_bar=display_progress_bar)
+
+
 def fetch_products_date_region(date: datetime, bounding_box: Tuple[float, float, float, float],
                                product_name: str = "333M") -> List[str]:
     assert product_name in RESOLUTIONS_LINKS, f"{product_name} not found in {RESOLUTIONS_LINKS.keys()}"
@@ -80,32 +99,6 @@ def fetch_products_date_region(date: datetime, bounding_box: Tuple[float, float,
         links_all.extend(links_hdf5_files)
 
     return links_all
-
-
-def download_product(link_down:str, filename:Optional[str]=None) -> str:
-    if filename is None:
-        filename = os.path.basename(link_down)
-
-    if os.path.exists(filename):
-        print(f"File {filename} exists. It won't be downloaded again")
-        return filename
-
-    filename_tmp = filename+".tmp"
-
-    auth_probav = get_auth()
-    with requests.get(link_down, stream=True, auth=auth_probav) as r_link:
-        total_size_in_bytes = int(r_link.headers.get('content-length', 0))
-        r_link.raise_for_status()
-        block_size = 8192  # 1 Kibibyte
-        with tqdm(total=total_size_in_bytes, unit='iB', unit_scale=True) as progress_bar:
-            with open(filename_tmp, 'wb') as f:
-                for chunk in tqdm(r_link.iter_content(chunk_size=block_size)):
-                    progress_bar.update(len(chunk))
-                    f.write(chunk)
-
-    shutil.move(filename_tmp, filename)
-
-    return filename
 
 
 def download_L2A_date_region(date, bounding_box, dir_out, resolution="333M", only_xml=False):

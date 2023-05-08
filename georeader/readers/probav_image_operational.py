@@ -273,8 +273,7 @@ class ProbaV:
 
     @property
     def res(self) -> Tuple[float, float]:
-        transform = self.real_transform
-        return abs(transform.a), abs(transform.e)
+        return window_utils.res(self.transform)
 
     @property
     def height(self) -> int:

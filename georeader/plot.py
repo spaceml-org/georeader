@@ -26,7 +26,8 @@ def colorbar_next_to(im:matplotlib.image.AxesImage, ax:plt.Axes):
 
 def show(data:GeoData, add_colorbar_next_to:bool=False,
          add_scalebar:bool=False,
-         kwargs_scalebar:Optional[dict]=None, **kwargs) -> plt.Axes:
+         kwargs_scalebar:Optional[dict]=None,
+         mask:Union[bool,np.array]= False, **kwargs) -> plt.Axes:
     """
     Wrapper around rasterio.plot.show for GeoData objects. It adds options to add a colorbar next to the plot
     and a scalebar showing the geographic scale.
@@ -37,15 +38,42 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
         add_scalebar (bool, optional): Defaults to False. Add a scalebar to the plot
         kwargs_scalebar (Optional[dict], optional): Defaults to None. Keyword arguments for the scalebar. 
         See https://github.com/ppinard/matplotlib-scalebar. (install with pip install matplotlib-scalebar)
+        mask (Union[bool,np.array], optional): Defaults to False. Mask to apply to the data. 
+            If True, the fill_value_default of the GeoData is used.
+        **kwargs: Keyword arguments for imshow
 
     Returns:
         plt.Axes: image object
     """
     if "ax" in kwargs:
-        ax = kwargs["ax"]
+        ax = kwargs.pop("ax")
     else:
-        ax = kwargs["ax"] = plt.gca()
-    rasterioplt.show(data.values, transform=data.transform, **kwargs)
+        ax = plt.gca()
+    
+    if isinstance(mask, bool):
+        if mask:
+            mask = data.values == data.fill_value_default
+            np_data = np.ma.masked_array(data.values, mask=mask)
+        else:
+            mask = None
+            np_data = data.values
+    else:
+        np_data = np.ma.masked_array(data.values, mask=mask)
+
+    if len(np_data.shape) == 3:
+        np_data = np_data.transpose(1, 2, 0)
+
+        if mask is not None:
+            mask = np.any(mask, axis=0)
+            # Convert np_data to RGBA using mask as alpha channel.
+            np_data = np.concatenate([np_data, ~mask[..., None]], axis=-1)
+
+    xmin, ymin, xmax, ymax = data.bounds
+    # kwargs['extent'] = (bounds.left, bounds.right, bounds.bottom, bounds.top)
+    # xmin, ymin, xmax, ymax
+    kwargs['extent'] = (xmin, xmax, ymin, ymax)
+    
+    ax.imshow(np_data, **kwargs)
     
     if add_colorbar_next_to:
         im = ax.images[0]

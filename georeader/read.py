@@ -425,6 +425,39 @@ def resize(data_in:GeoData, resolution_dst:Union[float, Tuple[float, float]],
                           resampling=resampling, return_only_data=return_only_data)
 
 
+def read_to_crs(data_in:GeoData, dst_crs:Any, 
+                resampling:rasterio.warp.Resampling = rasterio.warp.Resampling.cubic_spline,
+                resolution_dst_crs:Optional[Union[float, Tuple[float, float]]]=None,
+                return_only_data: bool = False)-> Union[GeoTensor, np.ndarray]:
+    """
+    Change the crs of data_in to dst_crs. This function is a wrapper of the `read_reproject` function
+
+    Args:
+        data_in (GeoData): GeoData to reproyect
+        dst_crs (Any): dst crs
+        return_only_data (bool, optional): Defaults to False.
+
+    Returns:
+        Union[GeoTensor, np.ndarray]: data in dst_crs
+    """
+    if window_utils.compare_crs(data_in.crs, dst_crs):
+        return data_in
+
+    if resolution_dst_crs is not None:
+        if isinstance(resolution_dst_crs, numbers.Number):
+            resolution_dst_crs = (abs(resolution_dst_crs), abs(resolution_dst_crs))
+    
+    in_height, in_width = data_in.shape[-2:]
+    dst_transform, width, height = rasterio.warp.calculate_default_transform(data_in.crs, dst_crs, in_width, in_height, *data_in.bounds,
+                                                                             resolution=resolution_dst_crs)
+    window_data = rasterio.windows.Window(0,0, width=width, height=height)
+
+
+    return read_reproject(data_in, dst_crs=dst_crs,
+                          dst_transform=dst_transform,
+                          window_out=window_data,
+                          resampling=resampling, return_only_data=return_only_data)
+
 
 def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
                    bounds: Optional[Tuple[float, float, float, float]]=None,
