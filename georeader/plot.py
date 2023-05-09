@@ -76,7 +76,14 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
     # xmin, ymin, xmax, ymax
     kwargs['extent'] = (xmin, xmax, ymin, ymax)
     
+    title = None
+    if "title" in kwargs:
+        title = kwargs.pop("title")
+    
     ax.imshow(np_data, **kwargs)
+
+    if title is not None:
+        ax.set_title(title)
     
     if add_colorbar_next_to:
         im = ax.images[0]
