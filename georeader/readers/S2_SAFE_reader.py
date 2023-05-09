@@ -31,6 +31,7 @@ from shapely.geometry import shape
 from tqdm import tqdm
 import json
 from georeader.save_cog import save_cog
+import pandas as pd
 
 BANDS_S2 = ["B01", "B02","B03", "B04", "B05", "B06",
             "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
@@ -769,6 +770,37 @@ class S2ImageL1C(S2Image):
         return np.array(vals)
 
 
+def read_srf(satellite:str, 
+            srf_file:str="https://sentinel.esa.int/documents/247904/685211/S2-SRF_COPE-GSEG-EOPG-TN-15-0007_3.1.xlsx") -> pd.DataFrame:
+    """
+    Process the spectral response function file. If the file is not provided
+    it downloads it from https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/document-library/-/asset_publisher/Wk0TKajiISaR/content/sentinel-2a-spectral-responses
+    
+
+    Args:
+        satellite (str): satellite name (S2A or S2B)
+        srf_file (str): path to the srf file
+
+    Returns:
+        pd.DataFrame: spectral response function for each of the bands of S2
+    """
+    assert satellite in ["S2A", "S2B"], "satellite must be S2A or S2B"
+
+    srf_s2 = pd.read_excel(srf_file,
+                           sheet_name=f"Spectral Responses ({satellite})")
+    
+    srf_s2 = srf_s2.set_index("SR_WL")
+
+    # remove rows with all values zero
+    any_not_cero = np.any((srf_s2 > 1e-6).values, axis=1)
+    srf_s2 = srf_s2.loc[any_not_cero]
+
+    # remove the satellite name from the columns
+    srf_s2.columns = [c.replace(f"{satellite}_SR_AV_","") for c in srf_s2.columns]
+
+    return srf_s2   
+
+
 def read_xml(xml_file:str) -> ET.Element:
     """Reads xml with xml package """
     if "://" in xml_file:
@@ -780,7 +812,7 @@ def read_xml(xml_file:str) -> ET.Element:
     return root
 
 
-def DN_to_radiance(dn_data:GeoTensor, s2file: S2ImageL1C) -> GeoTensor:
+def DN_to_radiance(s2obj: S2ImageL1C, dn_data:Optional[GeoTensor]=None) -> GeoTensor:
     """
     Function to convert Digital numbers (DN) to radiance.
 
@@ -804,19 +836,22 @@ def DN_to_radiance(dn_data:GeoTensor, s2file: S2ImageL1C) -> GeoTensor:
      t = datenum(Y,M,D) - datenum(Y,1,1) + 1;
 
     Args:
-        dn_data: data read from an S2Image class with digital numbers
-        s2file: s2file where data has been read
+        s2obj: s2obj where data has been read
+        dn_data: data read from an S2Image class with digital numbers. If None it will be read from s2obj
 
     Returns:
-        geotensor with radiances
+        geotensor with radiances in W/m²/nm/sr
     """
+    if dn_data is None:
+        dn_data = s2obj.load()
+
     data_values_new = dn_data.values.astype(np.float32) / 10_000
-    s2file.read_metadata_tl()
-    solar_irr = s2file.solar_irradiance()
-    U = s2file.scale_factor_U()
-    for i,b in enumerate(s2file.bands):
+    s2obj.read_metadata_tl()
+    solar_irr = s2obj.solar_irradiance()
+    U = s2obj.scale_factor_U()
+    for i,b in enumerate(s2obj.bands):
         mask = dn_data.values[i] == dn_data.fill_value_default
-        data_values_new[i] = data_values_new[i] * np.cos(s2file.mean_sza/180*np.pi) * solar_irr[b] * U / np.pi
+        data_values_new[i] = data_values_new[i] * np.cos(s2obj.mean_sza/180*np.pi) * solar_irr[b] * U / np.pi
         data_values_new[i][mask] = dn_data.fill_value_default
 
     return GeoTensor(data_values_new, transform=dn_data.transform, crs=dn_data.crs,
@@ -920,7 +955,7 @@ def s2_public_bucket_path(s2file:str, check_exists:bool=False, mode:str="gcp") -
         mode: "gcp" or "rest"
 
     Returns:
-        full path to the file (gs://gcp-public-data-sentinel-2/tiles/49/S/GV/S2B_MSIL1C_20220527T030539_N0400_R075_T49SGV_20220527T051042.SAFE)
+        full path to the file (e.g. gs://gcp-public-data-sentinel-2/tiles/49/S/GV/S2B_MSIL1C_20220527T030539_N0400_R075_T49SGV_20220527T051042.SAFE)
     """
     mission, producttype, sensing_date_str, pdgs, relorbitnum, tile_number_field, product_discriminator = s2_name_split(s2file)
     s2file = s2file[:-1] if s2file.endswith("/") else s2file
@@ -990,7 +1025,7 @@ def s2_old_format_name_split(s2file:str) -> Optional[Tuple[str, str, str, str, s
     ```
 
     Args:
-        s2file:
+        s2file: name or path to the Sentinel-2 SAFE file
 
     Returns:
         mission, opertortest, filetype, sitecenter,  creation_date_str, relorbitnum, sensing_time_start, sensing_time_stop
