@@ -50,6 +50,8 @@ BANDS_RESOLUTION = OrderedDict({"B01": 60, "B02": 10,
 
 BANDS_S2_NO_ZERO = ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9"]
 
+DEFAULT_REQUESTER_PAYS = False
+
 
 def normalize_band_names(bands:List[str]) -> List[str]:
     """ Adds zero before band name for reading """
@@ -69,8 +71,12 @@ def normalize_band_names(bands:List[str]) -> List[str]:
 def islocalpath(path:str) -> bool:
     return path.startswith("file://") or ("://" not in path)
 
-def get_filesystem(path: str, requester_pays: bool = False):
+def get_filesystem(path: str, requester_pays: Optional[bool] = None):
+    """Get the filesystem from a path """
     import fsspec
+    if requester_pays is None:
+        requester_pays = DEFAULT_REQUESTER_PAYS
+    
     path = str(path)
     if islocalpath(path):
         return fsspec.filesystem("file")
@@ -560,7 +566,7 @@ class S2ImageL1C(S2Image):
 
         self.root_metadata_tl = read_xml(self.metadata_tl)
 
-            # Stoopid XML namespace prefix
+        # Stoopid XML namespace prefix
         nsPrefix = self.root_metadata_tl.tag[:self.root_metadata_tl.tag.index('}') + 1]
         nsDict = {'n1': nsPrefix[1:-1]}
 
@@ -605,14 +611,30 @@ class S2ImageL1C(S2Image):
             self.ulxyByRes[res] = (ulx, uly)
 
         # Sun and satellite angles.
-        tileAnglesNode = geomInfoNode.find('Tile_Angles')
-        sunZenithNode = tileAnglesNode.find('Sun_Angles_Grid').find('Zenith')
-        self.angleGridXres = float(sunZenithNode.find('COL_STEP').text)
-        self.angleGridYres = float(sunZenithNode.find('ROW_STEP').text)
-        self.sunZenithGrid = self.makeValueArray(sunZenithNode.find('Values_List'))
-        sunAzimuthNode = tileAnglesNode.find('Sun_Angles_Grid').find('Azimuth')
-        self.sunAzimuthGrid = self.makeValueArray(sunAzimuthNode.find('Values_List'))
-        self.anglesGridShape = self.sunAzimuthGrid.shape
+        # Zenith
+        self.tileAnglesNode = geomInfoNode.find('Tile_Angles')
+        sunZenithNode = self.tileAnglesNode.find('Sun_Angles_Grid').find('Zenith')
+        # <Zenith>
+        #  <COL_STEP unit="m">5000</COL_STEP>
+        #  <ROW_STEP unit="m">5000</ROW_STEP>
+        angleGridXres = float(sunZenithNode.find('COL_STEP').text)
+        angleGridYres = float(sunZenithNode.find('ROW_STEP').text)
+        self.sza = self.makeValueArray(sunZenithNode.find('Values_List'))
+        transform_zenith = rasterio.transform.from_origin(self.ulxyByRes[str(self.out_res)][0],
+                                                          self.ulxyByRes[str(self.out_res)][1],
+                                                          angleGridXres, angleGridYres)
+        
+        self.sza = GeoTensor(self.sza, transform=transform_zenith, crs=self.crs)
+        
+        # Azimuth
+        sunAzimuthNode = self.tileAnglesNode.find('Sun_Angles_Grid').find('Azimuth')
+        angleGridXres = float(sunAzimuthNode.find('COL_STEP').text)
+        angleGridYres = float(sunAzimuthNode.find('ROW_STEP').text)
+        self.saa = self.makeValueArray(sunAzimuthNode.find('Values_List'))
+        transform_azimuth = rasterio.transform.from_origin(self.ulxyByRes[str(self.out_res)][0],
+                                                            self.ulxyByRes[str(self.out_res)][1],
+                                                            angleGridXres, angleGridYres)
+        self.saa = GeoTensor(self.saa, transform=transform_azimuth, crs=self.crs)
 
         # Now build up the viewing angle per grid cell, from the separate layers
         # given for each detector for each band. Initially I am going to keep
@@ -620,9 +642,15 @@ class S2ImageL1C(S2Image):
         # The names of things in the XML suggest that these are view angles,
         # but the numbers suggest that they are angles as seen from the pixel's
         # frame of reference on the ground, i.e. they are in fact what we ultimately want.
-        viewingAngleNodeList = tileAnglesNode.findall('Viewing_Incidence_Angles_Grids')
-        self.viewZenithDict = self.buildViewAngleArr(viewingAngleNodeList, 'Zenith')
-        self.viewAzimuthDict = self.buildViewAngleArr(viewingAngleNodeList, 'Azimuth')
+        viewingAngleNodeList = self.tileAnglesNode.findall('Viewing_Incidence_Angles_Grids')       
+        self.vza = self.buildViewAngleArr(viewingAngleNodeList, 'Zenith')
+        self.vaa = self.buildViewAngleArr(viewingAngleNodeList, 'Azimuth')
+
+        for k, varr in self.vaa.items():
+            self.vaa[k] = GeoTensor(varr, transform=transform_azimuth, crs=self.crs)
+        
+        for k, varr in self.vza.items():
+            self.vza[k] = GeoTensor(varr, transform=transform_zenith, crs=self.crs)
 
         # Make a guess at the coordinates of the angle grids. These are not given
         # explicitly in the XML, and don't line up exactly with the other grids, so I am
@@ -630,7 +658,17 @@ class S2ImageL1C(S2Image):
         # distances, it is not important if I am a bit wrong (although it would be nice
         # to be exactly correct!).
         (ulx, uly) = self.ulxyByRes["10"]
-        self.anglesULXY = (ulx - self.angleGridXres / 2.0, uly + self.angleGridYres / 2.0)
+        self.anglesULXY = (ulx - angleGridXres / 2.0, uly + angleGridYres / 2.0)
+
+        # Read mean viewing angles for each band.
+        self.mean_vaa = {}
+        self.mean_vza = {}
+        for elm in self.tileAnglesNode.find("Mean_Viewing_Incidence_Angle_List"):
+            band_name = BANDS_S2[int(elm.attrib["bandId"])]
+            viewing_zenith_angle = float(elm.find("ZENITH_ANGLE").text)
+            viewing_azimuth_angle = float(elm.find("AZIMUTH_ANGLE").text)
+            self.mean_vza[band_name] = viewing_azimuth_angle
+            self.mean_vaa[band_name] = viewing_zenith_angle
 
     def buildViewAngleArr(self, viewingAngleNodeList, angleName):
         """
@@ -643,14 +681,16 @@ class S2ImageL1C(S2Image):
         """
         angleArrDict = {}
         for viewingAngleNode in viewingAngleNodeList:
-            bandId = viewingAngleNode.attrib['bandId']
+            band_name = BANDS_S2[int(viewingAngleNode.attrib['bandId'])]
+            detectorId = viewingAngleNode.attrib['detectorId']
+            
             angleNode = viewingAngleNode.find(angleName)
             angleArr = self.makeValueArray(angleNode.find('Values_List'))
-            if bandId not in angleArrDict:
-                angleArrDict[bandId] = angleArr
+            if band_name not in angleArrDict:
+                angleArrDict[band_name] = angleArr
             else:
                 mask = (~np.isnan(angleArr))
-                angleArrDict[bandId][mask] = angleArr[mask]
+                angleArrDict[band_name][mask] = angleArr[mask]
         return angleArrDict
 
     # def get_polygons_bqa(self):
@@ -951,7 +991,8 @@ def s2_public_bucket_path(s2file:str, check_exists:bool=False, mode:str="gcp") -
 
     Args:
         s2file: safe file (e.g.  S2B_MSIL1C_20220527T030539_N0400_R075_T49SGV_20220527T051042.SAFE)
-        check_exists: check if the file exists in the bucket
+        check_exists: check if the file exists in the bucket, This will not work if GOOGLE_APPLICATION_CREDENTIALS and/or GS_USER_PROJECT 
+            env variables are not set. Default to False
         mode: "gcp" or "rest"
 
     Returns:
@@ -969,7 +1010,7 @@ def s2_public_bucket_path(s2file:str, check_exists:bool=False, mode:str="gcp") -
 
     if check_exists and (mode == "gcp"):
         import fsspec
-        fs = fsspec.filesystem("gs", requester_pays=True)
+        fs = fsspec.filesystem("gs", requester_pays=DEFAULT_REQUESTER_PAYS)
 
         if not fs.exists(s2folder):
             raise FileNotFoundError(f"Sentinel-2 file not found in {s2folder}")

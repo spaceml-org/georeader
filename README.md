@@ -20,19 +20,19 @@ This package is work in progress. The API might change without notice. Use it wi
 ## Getting started
 
 ```python
-# This snippet requires Google requirements:
-# pip install git+https://github.com/spaceml-org/georeader#egg=georeader[google]
+# This snippet requires:
+# pip install fsspec gcsfs google-cloud-storage
 import os
-
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/path/to/requester/pays/credentials.json"
-os.environ["GS_USER_PROJECT"] = "project-name-to-bill"
-
 from georeader.readers import S2_SAFE_reader
+
+os.environ["GS_NO_SIGN_REQUEST"] = "YES"
+
 from georeader import read
 
 cords_read = (-104.394, 32.026) # long, lat
 crs_cords = "EPSG:4326"
-s2obj = S2_SAFE_reader.s2loader("gs://gcp-public-data-sentinel-2/tiles/13/S/ER/S2B_MSIL1C_20191008T173219_N0208_R055_T13SER_20191008T204555.SAFE", 
+s2_safe_path = S2_SAFE_reader.s2_public_bucket_path("S2B_MSIL1C_20191008T173219_N0208_R055_T13SER_20191008T204555.SAFE")
+s2obj = S2_SAFE_reader.s2loader(s2_safe_path, 
                                 out_res=10, bands=["B04","B03","B02"])
 
 data = read.read_from_center_coords(s2obj,cords_read, shape=(2040, 4040),
@@ -59,7 +59,7 @@ data_memory # GeoTensor object
 In the `.values` attribute we have the plain numpy array that we can plot with `show`:
 
 ```python
-from rasterio.plot import  show
+from rasterio.plot import show
 show(data_memory.values/3500, transform=data_memory.transform)
 
 ```
