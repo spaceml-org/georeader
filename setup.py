@@ -9,6 +9,7 @@ REQUIREMENTS_TORCH = ["torch", "torchvision"]
 REQUIREMENTS_PLANETARY_COMPUTER = ["fsspec", "pystac-client", "planetary-computer"]
 REQUIREMENTS_PROBAV = ["h5py", "requests", "tqdm", "lxml"]
 REQUIREMENTS_SCIHUB = ["sentinelsat"]
+REQUIREMENTS_EMIT = ["netcdf4"]
 
 
 def parse_requirements_file(filename):
@@ -20,13 +21,14 @@ def parse_requirements_file(filename):
 # Optional Packages
 # See https://godatadriven.com/blog/a-practical-guide-to-using-setup-py/
 EXTRAS = {
-    "all": REQUIREMENTS_EXTRA + REQUIREMENTS_GOOGLE+REQUIREMENTS_TORCH+
-           REQUIREMENTS_PLANETARY_COMPUTER+REQUIREMENTS_PROBAV+REQUIREMENTS_SCIHUB,
+    "all": REQUIREMENTS_EXTRA + REQUIREMENTS_GOOGLE + REQUIREMENTS_TORCH +
+           REQUIREMENTS_PLANETARY_COMPUTER + REQUIREMENTS_PROBAV+ REQUIREMENTS_SCIHUB + REQUIREMENTS_EMIT,
     "google": REQUIREMENTS_GOOGLE,
     "torch": REQUIREMENTS_TORCH,
     "microsoftplanetary": REQUIREMENTS_PLANETARY_COMPUTER,
     "probav": REQUIREMENTS_PROBAV,
     "scihub": REQUIREMENTS_SCIHUB,
+    "emit": REQUIREMENTS_EMIT,
     "tests": ["pytest"],
     "docs": [ ],
 }

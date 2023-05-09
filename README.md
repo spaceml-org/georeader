@@ -80,4 +80,5 @@ save_cog(data_memory, "s2_crop.tif", descriptions=s2obj.bands)
 * [Example of reading a Proba-V image overlapping with Sentinel-2 forcing same resolution](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_overlapping_probav_and_sentinel2.ipynb)
 * [Reading Sentinel-2 images from the public Google bucket](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_S2_SAFE_from_bucket.ipynb)
 * [Query Sentinel-2 images over a location and time span, mosaic and plot them](https://github.com/spaceml-org/georeader/blob/main/notebooks/Sentinel-2/query_mosaic_s2_images.ipynb)
+* [Work with EMIT images](https://github.com/spaceml-org/georeader/blob/main/notebooks/emit_explore.ipynb)
 

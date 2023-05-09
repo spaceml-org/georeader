@@ -4,6 +4,8 @@ Module to read EMIT images.
 Requires: netCDF4:
 pip install netCDF4 
 
+Some of the functions of this module are based on the official EMIT repo: https://github.com/emit-sds/emit-utils/
+
 """
 import os
 import json
@@ -66,23 +68,28 @@ class EMITImage:
     """
     Class to read L1B EMIT images.
 
-    See: https://github.com/emit-sds/emit-utils/
-    
+    This class has been inspired by: https://github.com/emit-sds/emit-utils/
+
+    Example:
+        >>> from georeader.readers.emit import EMITImage, download_product
+        >>> link = 'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/EMIT_L1B_RAD_001_20220828T051941_2224004_006/EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
+        >>> filepath = download_product(link)
+        >>> emit = EMITImage(filepath)
+        >>> # reproject to UTM
+        >>> crs_utm = georeader.get_utm_epsg(emit.footprint("EPSG:4326"))
+        >>> emit_utm = emit.to_crs(crs_utm)
 
     """
     def __init__(self, filename:str, glt:Optional[GeoTensor]=None, 
                  band_selection:Optional[Union[int, Tuple[int, ...],slice]]=slice(None)):
         self.filename = filename
         self.nc_ds = netCDF4.Dataset(self.filename, 'r', format='NETCDF4')
-        self.nc_ds.set_auto_mask(False)
-
-        
+        self.nc_ds.set_auto_mask(False) # disable automatic masking when reading data
         # self.real_shape = (self.nc_ds['radiance'].shape[-1],) + self.nc_ds['radiance'].shape[:-1]
 
         self.real_transform = rasterio.Affine(self.nc_ds.geotransform[1], self.nc_ds.geotransform[2], self.nc_ds.geotransform[0],
                                               self.nc_ds.geotransform[4], self.nc_ds.geotransform[5], self.nc_ds.geotransform[3])
         
-        # https://rasterio.readthedocs.io/en/stable/api/rasterio.crs.html
 
         self.dtype = self.nc_ds['radiance'].dtype
         self.dims = ("band", "y", "x")
@@ -94,6 +101,8 @@ class EMITImage:
             glt = np.zeros((2,) + self.nc_ds.groups['location']['glt_x'].shape, dtype=np.int32)
             glt[0] = np.array(self.nc_ds.groups['location']['glt_x'])
             glt[1] = np.array(self.nc_ds.groups['location']['glt_y'])
+
+            # https://rasterio.readthedocs.io/en/stable/api/rasterio.crs.html
             self.glt = GeoTensor(glt, transform=self.real_transform, 
                                  crs=rasterio.crs.CRS.from_wkt(self.nc_ds.spatial_ref),
                                  fill_value_default=0)
@@ -209,7 +218,7 @@ class EMITImage:
   
     def load(self, boundless:bool=True)-> GeoTensor:
         data = self.load_raw() # (C, H, W) or (H, W)
-        return self.orthorectify(data)
+        return self.georreference(data)
         
     
     def load_raw(self) -> np.array:
@@ -239,17 +248,24 @@ class EMITImage:
         return data
 
 
-    def orthorectify(self, data:np.array, 
-                     fill_value_default:Optional[Union[int,float]]=None) -> GeoTensor:
+    def georreference(self, data:np.array, 
+                      fill_value_default:Optional[Union[int,float]]=None) -> GeoTensor:
         """
-        Orthorectify an image in sensor coordinates to coordinates of the current 
-        orthorectified object.
+        Georreference an image in sensor coordinates to coordinates of the current 
+        georreferenced object. If you do some processing with the raw data, you can 
+        georreference the raw output with this function.
 
         Args:
             data (np.array): raw data (C, H, W) or (H, W). 
 
         Returns:
-            array like: orthorectified version of data (C, H, W) or (H, W)
+            GeoTensor: georreferenced version of data (C, H', W') or (H', W')
+        
+        Example:
+            >>> emit_image = EMITImage("path/to/emit_image.nc")
+            >>> emit_image_rgb = emit_image.read_from_bands([35, 23, 11])
+            >>> data_rgb = emit_image_rgb.load_raw() # (3, H, W)
+            >>> data_rgb_ortho = emit_image.georreference(data_rgb) # (3, H', W')
         """
         spatial_shape = self.shape[1:]
         if len(data.shape) == 3:
