@@ -667,8 +667,8 @@ class S2ImageL1C(S2Image):
             band_name = BANDS_S2[int(elm.attrib["bandId"])]
             viewing_zenith_angle = float(elm.find("ZENITH_ANGLE").text)
             viewing_azimuth_angle = float(elm.find("AZIMUTH_ANGLE").text)
-            self.mean_vza[band_name] = viewing_azimuth_angle
-            self.mean_vaa[band_name] = viewing_zenith_angle
+            self.mean_vza[band_name] = viewing_zenith_angle
+            self.mean_vaa[band_name] = viewing_azimuth_angle
 
     def buildViewAngleArr(self, viewingAngleNodeList, angleName):
         """
