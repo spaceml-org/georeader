@@ -181,7 +181,12 @@ class EMITImage:
         self.fwhm = self.nc_ds['sensor_band_parameters']['fwhm'][self.band_selection]
     
     def __copy__(self) -> '__class__':
-        return EMITImage(self.filename, glt=self.glt.copy(), band_selection=self.band_selection)
+        out = EMITImage(self.filename, glt=self.glt.copy(), band_selection=self.band_selection)
+        # Copy _pol attribute if it exists
+        if hasattr(self, '_pol'):
+            setattr(out, '_pol', self._pol)
+
+        return out
     
     def copy(self) -> '__class__':
         return self.__copy__()
@@ -204,12 +209,23 @@ class EMITImage:
         glt = read.read_to_crs(self.glt, crs, resampling=rasterio.warp.Resampling.nearest, 
                                resolution_dst_crs=resolution_dst_crs)
 
-        return EMITImage(self.filename, glt=glt, band_selection=self.band_selection)
+        out = EMITImage(self.filename, glt=glt, band_selection=self.band_selection)
+        # Copy _pol attribute if it exists
+        if hasattr(self, '_pol'):
+            setattr(out, '_pol', self._pol)
+        
+        return out
 
 
     def read_from_window(self, window:Optional[rasterio.windows.Window]=None, boundless:bool=True) -> '__class__':
         glt_window = self.glt.read_from_window(window, boundless=boundless)
-        return EMITImage(self.filename, glt=glt_window, band_selection=self.band_selection)
+        out = EMITImage(self.filename, glt=glt_window, band_selection=self.band_selection)
+        
+        # Copy _pol attribute if it exists
+        if hasattr(self, '_pol'):
+            setattr(out, '_pol', self._pol)
+
+        return out
     
     def read_from_bands(self, bands:Union[int, Tuple[int, ...], slice]) -> '__class__':
         copy = self.__copy__()

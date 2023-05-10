@@ -459,6 +459,8 @@ class S2Image:
         s2obj =  __class__(s2_folder=self.folder, out_res=self.out_res, window_focus=rasterio_reader_ref.window_focus,
                            bands=self.bands, granules=self.granules, polygon=self._pol,
                            metadata_msi=self.metadata_msi)
+        # Set band check to avoid re-reading
+        s2obj.granule_readers[s2obj.band_check] = rasterio_reader_ref
 
         s2obj.root_metadata_msi = self.root_metadata_msi
 
@@ -558,6 +560,18 @@ class S2ImageL1C(S2Image):
         # Granule in L1C does not include TCI
         # Assert bands in self.granule are ordered as in BANDS_S2
         # assert all(granule[-7:-4] == bname for bname, granule in zip(BANDS_S2, self.granule)), f"some granules are not in the expected order {self.granule}"
+
+    def read_from_window(self, window:rasterio.windows.Window, boundless:bool=True) -> '__class__':
+        out = super().read_from_window(window, boundless=boundless)
+
+        if self.root_metadata_tl is None:
+            return out
+        
+        # copy all metadata from the original image
+        for atribute in ["tileId","root_metadata_tl", "satId", "procLevel", "dimsByRes", "ulxyByRes", "tileAnglesNode", 
+                         "mean_sza", "mean_saa", "mean_vza", "mean_vaa", "vaa", "vza", "saa", "sza", 
+                         "anglesULXY"]:
+            setattr(out, atribute, getattr(self, atribute))
 
 
     def read_metadata_tl(self):
