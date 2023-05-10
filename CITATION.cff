@@ -1,4 +1,3 @@
-# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-citation-files
 cff-version: 1.0
 message: "If you use this software, please cite it as below."
 authors:
@@ -7,7 +6,6 @@ authors:
   orcid: "https://orcid.org/0000-0002-0569-393X"
   affiliation: "Universitat de Valencia"
 title: "georeader"
-version: 1.
-# doi: 10.5281/zenodo.1234
+version: 1.0
 date-released: 2022-11-01
 url: "https://github.com/spaceml-org/georeader"
