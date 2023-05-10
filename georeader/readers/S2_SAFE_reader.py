@@ -810,8 +810,13 @@ class S2ImageL1C(S2Image):
         return np.array(vals)
 
 
+# Cache for the spectral response function of S2A and S2B
+SRF_S2 = {}
+
+
 def read_srf(satellite:str, 
-            srf_file:str="https://sentinel.esa.int/documents/247904/685211/S2-SRF_COPE-GSEG-EOPG-TN-15-0007_3.1.xlsx") -> pd.DataFrame:
+            srf_file:str="https://sentinel.esa.int/documents/247904/685211/S2-SRF_COPE-GSEG-EOPG-TN-15-0007_3.1.xlsx",
+            cache:bool=True) -> pd.DataFrame:
     """
     Process the spectral response function file. If the file is not provided
     it downloads it from https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/document-library/-/asset_publisher/Wk0TKajiISaR/content/sentinel-2a-spectral-responses
@@ -820,11 +825,17 @@ def read_srf(satellite:str,
     Args:
         satellite (str): satellite name (S2A or S2B)
         srf_file (str): path to the srf file
+        cache (bool): if True, the srf is cached for future calls. Default True
 
     Returns:
         pd.DataFrame: spectral response function for each of the bands of S2
     """
     assert satellite in ["S2A", "S2B"], "satellite must be S2A or S2B"
+
+    if cache:
+        global SRF_S2
+        if satellite in SRF_S2:
+            return SRF_S2[satellite]
 
     srf_s2 = pd.read_excel(srf_file,
                            sheet_name=f"Spectral Responses ({satellite})")
@@ -837,8 +848,12 @@ def read_srf(satellite:str,
 
     # remove the satellite name from the columns
     srf_s2.columns = [c.replace(f"{satellite}_SR_AV_","") for c in srf_s2.columns]
+    srf_s2.columns = normalize_band_names(srf_s2.columns)
 
-    return srf_s2   
+    if cache:
+        SRF_S2[satellite] = srf_s2
+
+    return srf_s2
 
 
 def read_xml(xml_file:str) -> ET.Element:
