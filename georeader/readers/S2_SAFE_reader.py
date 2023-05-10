@@ -267,6 +267,9 @@ class S2Image:
                   bands=self.bands, granules=new_granules_full_path, polygon=self._pol,
                   metadata_msi=metadata_output_path)
 
+    def DN_to_radiance(self, dn_data:Optional[GeoTensor]=None) -> GeoTensor:
+        return DN_to_radiance(self, dn_data)
+
     def load_metadata_msi(self) -> ET.Element:
         if self.root_metadata_msi is None:
             self.root_metadata_msi = read_xml(self.metadata_msi)
@@ -812,10 +815,11 @@ class S2ImageL1C(S2Image):
 
 # Cache for the spectral response function of S2A and S2B
 SRF_S2 = {}
+SRF_FILE_DEFAULT = "https://sentinel.esa.int/documents/247904/685211/S2-SRF_COPE-GSEG-EOPG-TN-15-0007_3.1.xlsx"
 
 
 def read_srf(satellite:str, 
-            srf_file:str="https://sentinel.esa.int/documents/247904/685211/S2-SRF_COPE-GSEG-EOPG-TN-15-0007_3.1.xlsx",
+            srf_file:str=SRF_FILE_DEFAULT,
             cache:bool=True) -> pd.DataFrame:
     """
     Process the spectral response function file. If the file is not provided
