@@ -83,3 +83,17 @@ save_cog(data_memory, "s2_crop.tif", descriptions=s2obj.bands)
 * [Query Sentinel-2 images over a location and time span, mosaic and plot them](https://github.com/spaceml-org/georeader/blob/main/notebooks/Sentinel-2/query_mosaic_s2_images.ipynb)
 * [Work with EMIT images](https://github.com/spaceml-org/georeader/blob/main/notebooks/emit_explore.ipynb)
 
+
+## Citation
+
+If you find this code useful please cite:
+```
+@software{georeader,
+  author = {Mateo-García, Gonzalo},
+  month = {11},
+  title = {{georeader}},
+  url = {https://github.com/spaceml-org/georeader},
+  version = {2.0.4},
+  year = {2022}
+}
+```
