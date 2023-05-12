@@ -572,6 +572,8 @@ class S2ImageL1C(S2Image):
                          "mean_sza", "mean_saa", "mean_vza", "mean_vaa", "vaa", "vza", "saa", "sza", 
                          "anglesULXY"]:
             setattr(out, atribute, getattr(self, atribute))
+        
+        return out
 
 
     def read_metadata_tl(self):
