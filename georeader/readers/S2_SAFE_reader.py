@@ -36,6 +36,8 @@ import pandas as pd
 BANDS_S2 = ["B01", "B02","B03", "B04", "B05", "B06",
             "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
 
+BANDS_S2_L1C = list(BANDS_S2)
+
 # TODO ADD SLC band? AOT? WP?
 BANDS_S2_L2A = ["B01", "B02","B03", "B04", "B05", "B06",
                 "B07", "B08", "B8A", "B09", "B11", "B12"]
@@ -47,8 +49,6 @@ BANDS_RESOLUTION = OrderedDict({"B01": 60, "B02": 10,
                                 "B8A": 20, "B09": 60,
                                 "B10": 60, "B11": 20,
                                 "B12": 20})
-
-BANDS_S2_NO_ZERO = ["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "B9"]
 
 DEFAULT_REQUESTER_PAYS = False
 
