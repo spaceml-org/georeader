@@ -604,7 +604,7 @@ class S2ImageL1C(S2Image):
 
         geomInfoNode = self.root_metadata_tl.find('n1:Geometric_Info', nsDict)
         geocodingNode = geomInfoNode.find('Tile_Geocoding')
-        epsgNode = geocodingNode.find('HORIZONTAL_CS_CODE')
+        self.epsg_code = geocodingNode.find('HORIZONTAL_CS_CODE').text
 
         # Dimensions of images at different resolutions.
         self.dimsByRes = {}
@@ -651,7 +651,7 @@ class S2ImageL1C(S2Image):
         transform_azimuth = rasterio.transform.from_origin(self.ulxyByRes[str(self.out_res)][0],
                                                             self.ulxyByRes[str(self.out_res)][1],
                                                             angleGridXres, angleGridYres)
-        self.saa = GeoTensor(self.saa, transform=transform_azimuth, crs=self.crs)
+        self.saa = GeoTensor(self.saa, transform=transform_azimuth, crs=self.epsg_code)
 
         # Now build up the viewing angle per grid cell, from the separate layers
         # given for each detector for each band. Initially I am going to keep
@@ -664,10 +664,10 @@ class S2ImageL1C(S2Image):
         self.vaa = self.buildViewAngleArr(viewingAngleNodeList, 'Azimuth')
 
         for k, varr in self.vaa.items():
-            self.vaa[k] = GeoTensor(varr, transform=transform_azimuth, crs=self.crs)
+            self.vaa[k] = GeoTensor(varr, transform=transform_azimuth, crs=self.epsg_code)
         
         for k, varr in self.vza.items():
-            self.vza[k] = GeoTensor(varr, transform=transform_zenith, crs=self.crs)
+            self.vza[k] = GeoTensor(varr, transform=transform_zenith, crs=self.epsg_code)
 
         # Make a guess at the coordinates of the angle grids. These are not given
         # explicitly in the XML, and don't line up exactly with the other grids, so I am
