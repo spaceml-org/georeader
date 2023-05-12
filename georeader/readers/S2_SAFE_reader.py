@@ -641,7 +641,7 @@ class S2ImageL1C(S2Image):
                                                           self.ulxyByRes[str(self.out_res)][1],
                                                           angleGridXres, angleGridYres)
         
-        self.sza = GeoTensor(self.sza, transform=transform_zenith, crs=self.crs)
+        self.sza = GeoTensor(self.sza, transform=transform_zenith, crs=self.epsg_code)
         
         # Azimuth
         sunAzimuthNode = self.tileAnglesNode.find('Sun_Angles_Grid').find('Azimuth')
