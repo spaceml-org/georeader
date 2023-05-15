@@ -5,7 +5,7 @@ import requests
 from tqdm import tqdm
 
 def download_product(link_down:str, filename:Optional[str]=None, auth:Any=None, 
-                     display_progress_bar:bool=True) -> str:
+                     display_progress_bar:bool=True, verify:bool=True) -> str:
     """
     Download a product from a link
 
@@ -14,6 +14,7 @@ def download_product(link_down:str, filename:Optional[str]=None, auth:Any=None,
         filename (Optional[str], optional): Filename to save the product. Defaults to None.
         auth (Any, optional): Authentication to download the product. Defaults to None.
         display_progress_bar (bool, optional): Display a progress bar. Defaults to True.
+        verify (bool, optional): Verify the SSL certificate. Defaults to True.
 
     Returns:
         str: Filename of the downloaded product
@@ -36,7 +37,7 @@ def download_product(link_down:str, filename:Optional[str]=None, auth:Any=None,
 
     filename_tmp = filename+".tmp"
 
-    with requests.get(link_down, stream=True, auth=auth) as r_link:
+    with requests.get(link_down, stream=True, auth=auth, verify=verify) as r_link:
         total_size_in_bytes = int(r_link.headers.get('content-length', 0))
         r_link.raise_for_status()
         block_size = 8192  # 1 Kibibyte

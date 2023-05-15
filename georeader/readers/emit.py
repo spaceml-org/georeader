@@ -60,7 +60,8 @@ def download_product(link_down:str, filename:Optional[str]=None,
     """
     auth_emit = get_auth()
     return download_product_base(link_down, filename=filename, auth=auth_emit,
-                                  display_progress_bar=display_progress_bar)
+                                  display_progress_bar=display_progress_bar, 
+                                  verify=False)
 
 
 
