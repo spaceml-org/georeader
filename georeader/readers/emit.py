@@ -22,6 +22,7 @@ import netCDF4
 from shapely.ops import unary_union
 from georeader import read
 import rasterio.warp
+from datetime import datetime
 
 
 def get_auth() -> Tuple[str, str]:
@@ -90,6 +91,9 @@ class EMITImage:
 
         self.real_transform = rasterio.Affine(self.nc_ds.geotransform[1], self.nc_ds.geotransform[2], self.nc_ds.geotransform[0],
                                               self.nc_ds.geotransform[4], self.nc_ds.geotransform[5], self.nc_ds.geotransform[3])
+        
+        self.time_coverage_start = datetime.strptime(self.nc_ds.time_coverage_start, "%Y-%m-%dT%H:%M:%S%z")
+        self.time_coverage_end = datetime.strptime(self.nc_ds.time_coverage_end, "%Y-%m-%dT%H:%M:%S%z")
         
 
         self.dtype = self.nc_ds['radiance'].dtype
