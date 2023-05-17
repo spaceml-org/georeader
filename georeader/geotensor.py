@@ -66,6 +66,20 @@ class GeoTensor:
             raise ValueError(f"Unexpected 2d-4d array found {shape}")
         
         return dims
+    
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            "values": self.values.tolist(),
+            "transform": self.transform.to_gdal(),
+            "crs": str(self.crs),
+            "fill_value_default": self.fill_value_default
+        }
+    
+    @classmethod
+    def from_json(cls, json:Dict[str, Any]) -> '__class__':
+        return cls(np.array(json["values"]), 
+                   rasterio.Affine.from_gdal(*json["transform"]),
+                   json["crs"], json["fill_value_default"])
 
     @property
     def shape(self) -> Tuple:
