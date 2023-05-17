@@ -70,7 +70,8 @@ class GeoTensor:
     def to_json(self) -> Dict[str, Any]:
         return {
             "values": self.values.tolist(),
-            "transform": self.transform.to_gdal(),
+            "transform": [self.transform.a,self.transform.b,self.transform.c, 
+                          self.transform.d, self.transform.e, self.transform.f] ,
             "crs": str(self.crs),
             "fill_value_default": self.fill_value_default
         }
@@ -78,8 +79,9 @@ class GeoTensor:
     @classmethod
     def from_json(cls, json:Dict[str, Any]) -> '__class__':
         return cls(np.array(json["values"]), 
-                   rasterio.Affine.from_gdal(*json["transform"]),
-                   json["crs"], json["fill_value_default"])
+                   rasterio.Affine(*json["transform"]),
+                   json["crs"], 
+                   json["fill_value_default"])
 
     @property
     def shape(self) -> Tuple:

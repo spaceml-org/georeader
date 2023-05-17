@@ -86,7 +86,7 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
         ax.set_title(title)
     
     if add_colorbar_next_to:
-        im = ax.images[0]
+        im = ax.images[-1]
         colorbar_next_to(im, ax)
     
     if add_scalebar:
