@@ -43,7 +43,7 @@ def download_product(link_down:str, filename:Optional[str]=None, auth:Any=None,
         block_size = 8192  # 1 Kibibyte
         with tqdm(total=total_size_in_bytes, unit='iB', unit_scale=True, disable=not display_progress_bar) as progress_bar:
             with open(filename_tmp, 'wb') as f:
-                for chunk in tqdm(r_link.iter_content(chunk_size=block_size)):
+                for chunk in r_link.iter_content(chunk_size=block_size):
                     if display_progress_bar:
                         progress_bar.update(len(chunk))
                     f.write(chunk)
