@@ -14,7 +14,8 @@ from shapely.geometry import Polygon
 RIO_ENV_OPTIONS_DEFAULT = dict(
     GDAL_DISABLE_READDIR_ON_OPEN='EMPTY_DIR',
     GDAL_HTTP_MERGE_CONSECUTIVE_RANGES="YES",
-    GDAL_CACHEMAX=200,
+    GDAL_CACHEMAX=2000, # GDAL raster block cache size. If its value is small (less than 100000), 
+    # it is assumed to be measured in megabytes, otherwise in bytes. https://trac.osgeo.org/gdal/wiki/ConfigOptions#GDAL_CACHEMAX
     GDAL_HTTP_MULTIPLEX="YES"
 )
 
@@ -665,13 +666,12 @@ def read_out_shape(reader:Union[RasterioReader, rasterio.DatasetReader],
 
     if indexes is None:
         nbands = reader.count
-    else:
-        nbands = len(indexes)
-
-    if out_shape is not None:
-        input_output_factor = (shape[0] / out_shape[0], shape[1] / out_shape[1])
-        out_shape = (nbands,) + out_shape
-        transform = transform * rasterio.Affine.scale(input_output_factor[1], input_output_factor[0])
+    elif isinstance(indexes, (list, tuple)):
+        if len(out_shape) == 2:
+            out_shape = (len(indexes),) + out_shape
+    
+    input_output_factor = (shape[0] / out_shape[-2], shape[1] / out_shape[-1])    
+    transform = transform * rasterio.Affine.scale(input_output_factor[1], input_output_factor[0])
         # transform = rasterio.Affine(transform.a * input_output_factor[1], transform.b, transform.c,
         #                             transform.d, transform.e * input_output_factor[0], transform.f)
 

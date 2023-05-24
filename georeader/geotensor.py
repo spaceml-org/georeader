@@ -281,12 +281,14 @@ class GeoTensor:
     def squeeze(self) -> '__class__':
         """
         Remove single-dimensional entries from the shape of the GeoTensor values.
+        It does not squeeze the spatial dimensions (last two dimensions).
 
         Returns:
             GeoTensor: GeoTensor with the squeezed values.
         """
-        squeezed_values = np.squeeze(self.values)
-        assert squeezed_values.ndim >= 2, "GeoTensor squeeze operation cannot remove spatial dimensions."
+
+        # squeeze all but last two dimensions
+        squeezed_values = np.squeeze(self.values, axis=tuple(range(self.values.ndim - 2)))
 
         return GeoTensor(squeezed_values, transform=self.transform, crs=self.crs,
                          fill_value_default=self.fill_value_default)

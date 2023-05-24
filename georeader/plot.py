@@ -8,7 +8,11 @@ import matplotlib.image
 import rasterio.plot as rasterioplt
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+import rasterio.warp
+import warnings
+import rasterio
 
+rasterio.Affine
 
 def colorbar_next_to(im:matplotlib.image.AxesImage, ax:plt.Axes):
     """
@@ -27,7 +31,8 @@ def colorbar_next_to(im:matplotlib.image.AxesImage, ax:plt.Axes):
 def show(data:GeoData, add_colorbar_next_to:bool=False,
          add_scalebar:bool=False,
          kwargs_scalebar:Optional[dict]=None,
-         mask:Union[bool,np.array]= False, **kwargs) -> plt.Axes:
+         mask:Union[bool,np.array]= False, bounds_in_latlng:bool=True,
+           **kwargs) -> plt.Axes:
     """
     Wrapper around rasterio.plot.show for GeoData objects. It adds options to add a colorbar next to the plot
     and a scalebar showing the geographic scale.
@@ -40,6 +45,7 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
         See https://github.com/ppinard/matplotlib-scalebar. (install with pip install matplotlib-scalebar)
         mask (Union[bool,np.array], optional): Defaults to False. Mask to apply to the data. 
             If True, the fill_value_default of the GeoData is used.
+        bounds_in_latlng (bool, optional): Defaults to True. If True, the x and y ticks are shown in latlng.
         **kwargs: Keyword arguments for imshow
 
     Returns:
@@ -75,6 +81,10 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
     # kwargs['extent'] = (bounds.left, bounds.right, bounds.bottom, bounds.top)
     # xmin, ymin, xmax, ymax
     kwargs['extent'] = (xmin, xmax, ymin, ymax)
+
+    if not data.transform.is_rectilinear:
+        warnings.warn("The transform is not rectilinear. The x and y ticks and the scale bar are not going to be correct."
+                      " To discard this warning use: warnings.filterwarnings('ignore', message='The transform is not rectilinear.')")
     
     title = None
     if "title" in kwargs:
@@ -102,6 +112,15 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
         if "dx" not in kwargs_scalebar:
             kwargs_scalebar["dx"] = 1
         ax.add_artist(ScaleBar(**kwargs_scalebar))
+    
+    if bounds_in_latlng:
+        xmin, ymin, xmax, ymax = rasterio.warp.transform_bounds(data.crs, "epsg:4326", *data.bounds)
+        warnings.filterwarnings("ignore", message="FixedFormatter should only be used together with FixedLocator")
+        ax.set_xticklabels([f"{x:.2f}" for x in np.linspace(xmin, xmax, len(ax.get_xticks()))])
+        ax.set_yticklabels([f"{x:.2f}" for x in np.linspace(ymin, ymax, len(ax.get_yticks()))])
+
+        # ax.set_xticks(np.linspace(xmin, xmax, len(ax.get_xticks())))
+        # ax.set_yticks(np.linspace(ymin, ymax, len(ax.get_yticks())))
     
     return ax
 
