@@ -96,7 +96,7 @@ If you find this code useful please cite:
   month = {11},
   title = {{georeader}},
   url = {https://github.com/spaceml-org/georeader},
-  version = {2.0.4},
+  version = {0.0.1},
   year = {2022}
 }
 ```
