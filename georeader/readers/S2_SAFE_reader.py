@@ -841,6 +841,7 @@ def read_srf(satellite:str,
     Process the spectral response function file. If the file is not provided
     it downloads it from https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/document-library/-/asset_publisher/Wk0TKajiISaR/content/sentinel-2a-spectral-responses
     
+    This function requires the fsspec package and pandas and openpyxl for reading excel files.
 
     Args:
         satellite (str): satellite name (S2A or S2B)
@@ -856,6 +857,18 @@ def read_srf(satellite:str,
         global SRF_S2
         if satellite in SRF_S2:
             return SRF_S2[satellite]
+
+    if srf_file == SRF_FILE_DEFAULT:
+        # home_dir = os.path.join(os.path.expanduser('~'),".georeader")
+        home_dir = os.path.join(os.path.expanduser('~'),".georeader")
+        os.makedirs(home_dir, exist_ok=True)
+        srf_file_local = os.path.join(home_dir, os.path.basename(srf_file))
+        if not os.path.exists(srf_file_local):
+            import fsspec
+            with fsspec.open(srf_file, "rb") as f:
+                with open(srf_file_local, "wb") as f2:
+                    f2.write(f.read())
+        srf_file = srf_file_local
 
     srf_s2 = pd.read_excel(srf_file,
                            sheet_name=f"Spectral Responses ({satellite})")
