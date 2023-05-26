@@ -65,6 +65,56 @@ def download_product(link_down:str, filename:Optional[str]=None,
                                   verify=False)
 
 
+def get_radiance_link(product_path:str) -> str:
+    """
+    Get the link to download a product from the EMIT website.
+    See: https://git.earthdata.nasa.gov/projects/LPDUR/repos/daac_data_download_python/browse
+
+    Args:
+        product_path: path to the product or filename of the product.
+            e.g. 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
+
+    Example:
+        >>> product_path = 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
+        >>> link = get_radiance_link(product_path)
+        'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/EMIT_L1B_RAD_001_20220827T060753_2223904_013/EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
+    """
+    "EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc"
+    namefile = os.path.basename(product_path)
+    if not namefile.endswith(".nc"):
+        namefile = namefile + ".nc"
+    product_id = os.path.splitext(namefile)[0]
+    content_id = product_id.split("_")
+    content_id[2] = "RAD"
+    product_id = "_".join(content_id)
+    link = f"https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/{product_id}/{namefile}"
+    return link
+
+
+def get_obs_link(product_path:str) -> str:
+    """
+    Get the link to download a product from the EMIT website.
+    See: https://git.earthdata.nasa.gov/projects/LPDUR/repos/daac_data_download_python/browse
+
+    Args:
+        product_path: path to the product or filename of the product.
+            e.g. 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
+
+    Example:
+        >>> product_path = 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
+        >>> link = get_radiance_link(product_path)
+        'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/EMIT_L1B_RAD_001_20220827T060753_2223904_013/EMIT_L1B_OBS_001_20220827T060753_2223904_013.nc'
+    """
+    namefile = os.path.basename(product_path)
+    if not namefile.endswith(".nc"):
+        namefile = namefile + ".nc"
+    product_id = os.path.splitext(namefile)[0]
+    content_id = product_id.split("_")
+    content_id[2] = "RAD"
+    product_id = "_".join(content_id)
+    link = f"https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/{product_id}/{namefile.replace('RAD', 'OBS')}"
+    return link
+
 
 class EMITImage:
     """
@@ -82,19 +132,24 @@ class EMITImage:
         >>> emit_utm = emit.to_crs(crs_utm)
 
     """
+    attributes_set_if_exists = ["_pol", "_nc_ds_obs", "_mean_sza", "_mean_vza", "_observation_bands"]
     def __init__(self, filename:str, glt:Optional[GeoTensor]=None, 
                  band_selection:Optional[Union[int, Tuple[int, ...],slice]]=slice(None)):
         self.filename = filename
         self.nc_ds = netCDF4.Dataset(self.filename, 'r', format='NETCDF4')
+        self._nc_ds_obs:Optional[netCDF4.Dataset] = None
+        self._observation_bands = None
         self.nc_ds.set_auto_mask(False) # disable automatic masking when reading data
         # self.real_shape = (self.nc_ds['radiance'].shape[-1],) + self.nc_ds['radiance'].shape[:-1]
+
+        self._mean_sza = None
+        self._mean_vza = None
 
         self.real_transform = rasterio.Affine(self.nc_ds.geotransform[1], self.nc_ds.geotransform[2], self.nc_ds.geotransform[0],
                                               self.nc_ds.geotransform[4], self.nc_ds.geotransform[5], self.nc_ds.geotransform[3])
         
         self.time_coverage_start = datetime.strptime(self.nc_ds.time_coverage_start, "%Y-%m-%dT%H:%M:%S%z")
         self.time_coverage_end = datetime.strptime(self.nc_ds.time_coverage_end, "%Y-%m-%dT%H:%M:%S%z")
-        
 
         self.dtype = self.nc_ds['radiance'].dtype
         self.dims = ("band", "y", "x")
@@ -103,20 +158,29 @@ class EMITImage:
         self.units = self.nc_ds["radiance"].units
 
         if glt is None:
-            glt = np.zeros((2,) + self.nc_ds.groups['location']['glt_x'].shape, dtype=np.int32)
-            glt[0] = np.array(self.nc_ds.groups['location']['glt_x'])
-            glt[1] = np.array(self.nc_ds.groups['location']['glt_y'])
+            glt_arr = np.zeros((2,) + self.nc_ds.groups['location']['glt_x'].shape, dtype=np.int32)
+            glt_arr[0] = np.array(self.nc_ds.groups['location']['glt_x'])
+            glt_arr[1] = np.array(self.nc_ds.groups['location']['glt_y'])
+            # glt_arr -= 1 # account for 1-based indexing
 
             # https://rasterio.readthedocs.io/en/stable/api/rasterio.crs.html
-            self.glt = GeoTensor(glt, transform=self.real_transform, 
+            self.glt = GeoTensor(glt_arr, transform=self.real_transform, 
                                  crs=rasterio.crs.CRS.from_wkt(self.nc_ds.spatial_ref),
                                  fill_value_default=0)
         else:
             self.glt = glt
         
         self.valid_glt = np.all(self.glt.values != self.glt.fill_value_default, axis=0)
-        self.glt_zero_based = self.glt.values.copy()
-        self.glt_zero_based[:, self.valid_glt] -= 1 # account for 1-based indexing
+        xmin, ymin, xmax, ymax = self._bounds_indexes_raw() # values are 1-based!
+
+        # glt has the absolute indexes of the netCDF object
+        # glt_relative has the relative indexes
+        self.glt_relative = self.glt.values.copy()
+        self.glt_relative[0, self.valid_glt] -= xmin
+        self.glt_relative[1, self.valid_glt] -= ymin
+
+        self.window_raw = rasterio.windows.Window(col_off=xmin-1, row_off=ymin-1, 
+                                                  width=xmax-xmin+1, height=ymax-ymin+1)
 
         if "wavelengths" in self.nc_ds['sensor_band_parameters'].variables:
             self.bandname_dimension = "wavelengths"
@@ -154,6 +218,17 @@ class EMITImage:
         return self.glt.bounds
 
     def footprint(self, crs:Optional[str]=None) -> Polygon:
+        """
+        Get the footprint of the image in the given CRS. If no CRS is given, the footprint is returned in the native CRS.
+        This function takes into account the valid_glt mask to compute the footprint.
+
+        Args:
+            crs (Optional[str], optional): The CRS to return the footprint in. Defaults to None. 
+                If None, the footprint is returned in the native CRS.
+        
+        Returns:
+            Polygon: The footprint of the image in the given CRS.
+        """
         if not hasattr(self, '_pol'):
             from georeader.vectorize import get_polygons
             pols = get_polygons(self.valid_glt, transform=self.transform)
@@ -185,14 +260,92 @@ class EMITImage:
         self.wavelengths = self.nc_ds['sensor_band_parameters'][self.bandname_dimension][self.band_selection]
         self.fwhm = self.nc_ds['sensor_band_parameters']['fwhm'][self.band_selection]
     
+    @ property
+    def nc_ds_obs(self, obs_file:Optional[str]=None) -> netCDF4.Dataset:
+        """
+        Loads the observation file. In this file we have information about angles (solar and viewing),
+        elevation and ilumination based on elevation and path length.
+
+        This function downloads the observation file if it does not exist from the JPL portal.
+
+        It caches the observation file in the object. (self.nc_ds_obs)
+
+        Args:
+            obs_file (Optional[str], optional): Path to the observation file. 
+                Defaults to None. If none it will download the observation file 
+                from the EMIT server.
+        """
+        if self._nc_ds_obs is not None:
+            return self._nc_ds_obs
+        
+        if obs_file is None:
+            link_obs_file = get_obs_link(self.filename)
+            obs_file = os.path.join(os.path.dirname(self.filename), os.path.basename(link_obs_file))
+            if not os.path.exists(obs_file):
+                download_product(link_obs_file, obs_file)
+        
+        self._nc_ds_obs = netCDF4.Dataset(obs_file)
+        self._nc_ds_obs.set_auto_mask(False)
+        self._observation_bands = self._nc_ds_obs['sensor_band_parameters']['observation_bands'][:]
+    
+    @property
+    def observation_bands(self) -> np.array:
+        """ Returns the observation bands """
+        self.nc_ds_obs
+        return self._observation_bands
+    
+    def observation(self, name:str) -> GeoTensor:
+        """ Returns the observation with the given name """
+        band_index = self.observation_bands.tolist().index(name)
+        slice_y, slice_x = self.window_raw.toslices()
+        obs_arr = self.nc_ds_obs['obs'][slice_y, slice_x, band_index]
+        return self.georreference(obs_arr, 
+                                  fill_value_default=self.nc_ds_obs['obs']._FillValue)
+
+    def sza(self) -> GeoTensor:
+        """ Return the solar zenith angle as a GeoTensor """
+        return self.observation('To-sun zenith (0 to 90 degrees from zenith)')
+    
+    def vza(self) -> GeoTensor:
+        """ Return the view zenith angle as a GeoTensor """
+        return self.observation('To-sensor zenith (0 to 90 degrees from zenith)')
+    
+    def elevation(self) -> GeoTensor:
+        obs_arr = self.nc_ds["location"]["elev"]
+        slice_y, slice_x = self.window_raw.toslices()
+        return self.georreference(obs_arr[slice_y, slice_x], 
+                                  fill_value_default=obs_arr._FillValue)
+
+    @property
+    def mean_sza(self) -> float:
+        """ Return the mean solar zenith angle """
+        if self._mean_sza is not None:
+            return self._mean_sza
+        
+        band_index = self.observation_bands.tolist().index('To-sun zenith (0 to 90 degrees from zenith)')
+        sza_arr = self.nc_ds_obs['obs'][..., band_index]
+        self._mean_sza = np.mean(sza_arr[sza_arr != self.nc_ds_obs['obs']._FillValue])
+        return self._mean_sza
+    
+    @property
+    def mean_vza(self) -> float:
+        """ Return the mean view zenith angle """
+        if self._mean_vza is not None:
+            return self._mean_vza
+        band_index = self.observation_bands.tolist().index('To-sensor zenith (0 to 90 degrees from zenith)')
+        vza_arr = self.nc_ds_obs['obs'][..., band_index]
+        self._mean_vza = np.mean(vza_arr[vza_arr != self.nc_ds_obs['obs']._FillValue])
+        return self._mean_vza
+        
     def __copy__(self) -> '__class__':
         out = EMITImage(self.filename, glt=self.glt.copy(), band_selection=self.band_selection)
-        # Copy _pol attribute if it exists
-        if hasattr(self, '_pol'):
-            setattr(out, '_pol', self._pol)
+        
+        # copy nc_ds_obs if it exists
+        for attrname in self.attributes_set_if_exists:
+            if hasattr(self, attrname):
+                setattr(out, attrname, self.nc_ds_obs)
 
         return out
-    
     def copy(self) -> '__class__':
         return self.__copy__()
     
@@ -225,10 +378,11 @@ class EMITImage:
     def read_from_window(self, window:Optional[rasterio.windows.Window]=None, boundless:bool=True) -> '__class__':
         glt_window = self.glt.read_from_window(window, boundless=boundless)
         out = EMITImage(self.filename, glt=glt_window, band_selection=self.band_selection)
-        
-        # Copy _pol attribute if it exists
-        if hasattr(self, '_pol'):
-            setattr(out, '_pol', self._pol)
+
+        # copy attributes as in __copy__ method
+        for attrname in self.attributes_set_if_exists:
+            if hasattr(self, attrname):
+                setattr(out, attrname, self.nc_ds_obs)
 
         return out
     
@@ -240,22 +394,34 @@ class EMITImage:
     def load(self, boundless:bool=True)-> GeoTensor:
         data = self.load_raw() # (C, H, W) or (H, W)
         return self.georreference(data)
-        
     
-    def load_raw(self) -> np.array:
+    @property
+    def shape_raw(self) -> Tuple[int, int, int]:
+        """ Return the shape of the raw data in (C, H, W) format """
+        return (len(self.wavelengths),) + rasterio.windows.shape(self.window_raw)
+
+    def _bounds_indexes_raw(self) -> Tuple[int, int, int, int]:
+        """ Return the bounds of the raw data: (min_x, min_y, max_x, max_y) """
+        min_x = np.min(self.glt.values[0, self.valid_glt])
+        max_x = np.max(self.glt.values[0, self.valid_glt])
+        min_y = np.min(self.glt.values[1, self.valid_glt])
+        max_y = np.max(self.glt.values[1, self.valid_glt])
+        return min_x, min_y, max_x, max_y
+
+
+    def load_raw(self, transpose:bool=True) -> np.array:
         """
         Load the raw data, without orthorectification
+
+        Args:
+            transpose (bool, optional): Transpose the data if it has 3 dimentsions to (C, H, W) 
+                Defaults to True. if False return (H, W, C)
 
         Returns:
             np.array: raw data (C, H, W) or (H, W)
         """
-        min_x = np.min(self.glt_zero_based[0, self.valid_glt])
-        max_x = np.max(self.glt_zero_based[0, self.valid_glt])
-        min_y = np.min(self.glt_zero_based[1, self.valid_glt])
-        max_y = np.max(self.glt_zero_based[1, self.valid_glt])
 
-        slice_x = slice(min_x, max_x + 1)
-        slice_y = slice(min_y, max_y + 1)
+        slice_y, slice_x = self.window_raw.toslices()
 
         if isinstance(self.band_selection, slice):
             data = np.array(self.nc_ds['radiance'][slice_y, slice_x, self.band_selection])
@@ -263,7 +429,7 @@ class EMITImage:
             data = np.array(self.nc_ds['radiance'][slice_y, slice_x][..., self.band_selection])
         
         # transpose to (C, H, W)
-        if len(data.shape) == 3:
+        if transpose and (len(data.shape) == 3):
             data = np.transpose(data, axes=(2, 0, 1))
         
         return data
@@ -288,7 +454,7 @@ class EMITImage:
             >>> data_rgb = emit_image_rgb.load_raw() # (3, H, W)
             >>> data_rgb_ortho = emit_image.georreference(data_rgb) # (3, H', W')
         """
-        spatial_shape = self.shape[1:]
+        spatial_shape = self.shape[-2:]
         if len(data.shape) == 3:
             shape = data.shape[:-2] + spatial_shape
         elif len(data.shape) == 2:
@@ -302,11 +468,11 @@ class EMITImage:
                          fill_value=fill_value_default)
         
         if len(data.shape) == 3:
-            outdat[:, self.valid_glt] = data[:, self.glt_zero_based[1, self.valid_glt], 
-                                             self.glt_zero_based[0, self.valid_glt]]
+            outdat[:, self.valid_glt] = data[:, self.glt_relative[1, self.valid_glt], 
+                                             self.glt_relative[0, self.valid_glt]]
         else:
-            outdat[self.valid_glt] = data[self.glt_zero_based[1, self.valid_glt], 
-                                          self.glt_zero_based[0, self.valid_glt]]
+            outdat[self.valid_glt] = data[self.glt_relative[1, self.valid_glt], 
+                                          self.glt_relative[0, self.valid_glt]]
             
         return GeoTensor(values=outdat, transform=self.transform, crs=self.crs,
                          fill_value_default=fill_value_default)

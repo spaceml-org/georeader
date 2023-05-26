@@ -2,7 +2,7 @@ from matplotlib import colors
 import matplotlib.patches as mpatches
 import numpy as np
 from georeader.abstract_reader import GeoData
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Any
 import matplotlib.axes
 import matplotlib.image
 import rasterio.plot as rasterioplt
@@ -11,8 +11,11 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import rasterio.warp
 import warnings
 import rasterio
+from shapely import Geometry
+import geopandas as gpd
+import pandas as pd
+from matplotlib.patches import Patch
 
-rasterio.Affine
 
 def colorbar_next_to(im:matplotlib.image.AxesImage, ax:plt.Axes):
     """
@@ -114,16 +117,81 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
         ax.add_artist(ScaleBar(**kwargs_scalebar))
     
     if bounds_in_latlng:
-        xmin, ymin, xmax, ymax = rasterio.warp.transform_bounds(data.crs, "epsg:4326", *data.bounds)
-        warnings.filterwarnings("ignore", message="FixedFormatter should only be used together with FixedLocator")
-        ax.set_xticklabels([f"{x:.2f}" for x in np.linspace(xmin, xmax, len(ax.get_xticks()))])
-        ax.set_yticklabels([f"{x:.2f}" for x in np.linspace(ymin, ymax, len(ax.get_yticks()))])
+        from matplotlib.ticker import FuncFormatter
 
-        # ax.set_xticks(np.linspace(xmin, xmax, len(ax.get_xticks())))
-        # ax.set_yticks(np.linspace(ymin, ymax, len(ax.get_yticks())))
+        xmin, ymin, xmax, ymax = data.bounds
+
+        @FuncFormatter
+        def x_formatter(x, pos):
+            # transform x,ymin to latlng
+            longs, lats = rasterio.warp.transform(data.crs, "epsg:4326", [x], [ymin])
+            return f"{longs[0]:.2f}"
+        
+
+        @FuncFormatter
+        def y_formatter(y, pos):
+            # transform xmin,y to latlng
+            longs, lats = rasterio.warp.transform(data.crs, "epsg:4326", [xmin], [y])
+            return f"{lats[0]:.2f}"
+
+        ax.xaxis.set_major_formatter(x_formatter)
+        ax.yaxis.set_major_formatter(y_formatter)
+
     
     return ax
 
+def add_shape_to_plot(shape:Union[gpd.GeoDataFrame, List[Geometry], Geometry], ax:Optional[plt.Axes]=None,
+                      crs_plot:Optional[Any]=None,
+                      crs_shape:Optional[Any]=None,
+                      polygon_no_fill:bool=False,
+                      kwargs_geopandas_plot:Optional[Any]=None) -> plt.Axes:
+    """
+    Adds a shape to a plot. It uses geopandas.plot.
+
+    Args:
+        shape (Union[gpd.GeoDataFrame, List[Geometry], Geometry]): geodata to plot
+        ax (Optional[plt.Axes], optional): Defaults to None. Axes to plot the shape
+        crs_plot (Optional[Any], optional): Defaults to None. crs to plot the shape. If None, the crs of the shape is used.
+        crs_shape (Optional[Any], optional): Defaults to None. crs of the shape. If None, the crs of the plot is used.
+        polygon_no_fill: If True, the polygons are plotted without fill.
+        kwargs_geopandas_plot (Optional[Any], optional): Defaults to None. Keyword arguments for geopandas.plot
+
+    Returns:
+        plt.Axes: 
+    """
+    if not isinstance(shape, gpd.GeoDataFrame):
+        if isinstance(shape, Geometry):
+            shape = [shape]
+        shape = gpd.GeoDataFrame(geometry=shape,crs=crs_shape if crs_shape is not None else crs_plot)
+
+    if crs_plot is not None:
+        shape = shape.to_crs(crs_plot)
+    
+    # if color is not None:
+    #     if not isinstance(color, str):
+    #         assert len(color) == shape.shape[0], "The length of color array must be the same as the number of shapes"
+        
+    #     color = pd.Series(color, index=shape.index)
+    
+    if ax is None:
+        ax = plt.gca()
+
+    if kwargs_geopandas_plot is None:
+        kwargs_geopandas_plot = {}
+
+    if polygon_no_fill:
+        shape.boundary.plot(ax=ax, **kwargs_geopandas_plot)
+    else:
+        shape.plot(ax=ax, **kwargs_geopandas_plot)
+
+    # if legend and color is not None:
+    #     color_unique = color.unique()
+    #     legend_elements = [Patch(facecolor=color_unique,  label=c) for c in color_unique]
+    #     ax.legend(handles=legend_elements)
+    
+    return ax
+    
+    
 
 def plot_segmentation_mask(mask:Union[GeoData, np.array], color_array:np.array,
                            interpretation_array:Optional[List[str]]=None,
