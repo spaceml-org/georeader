@@ -76,7 +76,10 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
             np_data = np_data.transpose(1, 2, 0)
 
             if mask is not None:
-                mask = np.any(mask, axis=0)
+                assert len(mask.shape) in (2, 3), f"mask must be 2D or 3D found shape: {mask.shape}"
+                if len(mask.shape) == 3:
+                    mask = np.any(mask, axis=0)
+                
                 # Convert np_data to RGBA using mask as alpha channel.
                 np_data = np.concatenate([np_data, ~mask[..., None]], axis=-1)
 
