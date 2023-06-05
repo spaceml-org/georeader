@@ -4,9 +4,9 @@ import os.path
 
 
 REQUIREMENTS_EXTRA =["scikit-image", "fsspec"]
-REQUIREMENTS_GOOGLE = ["fsspec", "gcsfs", "google-cloud-storage", "earthengine-api"]
+REQUIREMENTS_GOOGLE = ["gcsfs", "google-cloud-storage", "earthengine-api"]
 REQUIREMENTS_TORCH = ["torch", "torchvision"]
-REQUIREMENTS_PLANETARY_COMPUTER = ["fsspec", "pystac-client", "planetary-computer"]
+REQUIREMENTS_PLANETARY_COMPUTER = ["pystac-client", "planetary-computer"]
 REQUIREMENTS_PROBAV = ["h5py", "requests", "tqdm", "lxml"]
 REQUIREMENTS_SCIHUB = ["sentinelsat"]
 REQUIREMENTS_EMIT = ["netcdf4"]
@@ -23,9 +23,10 @@ def parse_requirements_file(filename):
 EXTRAS = {
     "all": REQUIREMENTS_EXTRA + REQUIREMENTS_GOOGLE + REQUIREMENTS_TORCH +
            REQUIREMENTS_PLANETARY_COMPUTER + REQUIREMENTS_PROBAV+ REQUIREMENTS_SCIHUB + REQUIREMENTS_EMIT,
-    "google": REQUIREMENTS_GOOGLE,
+    "google": REQUIREMENTS_EXTRA + REQUIREMENTS_GOOGLE,
     "torch": REQUIREMENTS_TORCH,
-    "microsoftplanetary": REQUIREMENTS_PLANETARY_COMPUTER,
+    "microsoftplanetary": REQUIREMENTS_EXTRA + REQUIREMENTS_PLANETARY_COMPUTER,
+    "sentinel2": REQUIREMENTS_EXTRA,
     "probav": REQUIREMENTS_PROBAV,
     "scihub": REQUIREMENTS_SCIHUB,
     "emit": REQUIREMENTS_EMIT,

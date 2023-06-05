@@ -135,6 +135,8 @@ class S2Image:
             info_granules_metadata = _get_info_granules_metadata(self.folder)
             if info_granules_metadata is not None:
                 self.metadata_msi = info_granules_metadata["metadata_msi"]
+                if "metadata_tl" in info_granules_metadata:
+                    self.metadata_tl = info_granules_metadata["metadata_tl"]
             else:
                 self.metadata_msi = os.path.join(self.folder, f"MTD_{self.producttype}.xml").replace("\\", "/")
 
@@ -554,7 +556,8 @@ class S2ImageL1C(S2Image):
         first_granule = self.granules[list(self.granules.keys())[0]]
         self.granule_folder = os.path.dirname(os.path.dirname(first_granule)).replace(f"{self.folder}/", "")
         self.msk_clouds_file = os.path.join(self.folder, self.granule_folder, "MSK_CLOUDS_B00.gml").replace("\\","/")
-        self.metadata_tl = os.path.join(self.folder, self.granule_folder, "MTD_TL.xml").replace("\\","/")
+        if not hasattr(self, "metadata_tl"):
+            self.metadata_tl = os.path.join(self.folder, self.granule_folder, "MTD_TL.xml").replace("\\","/")
         self.root_metadata_tl = None
 
         # Granule in L1C does not include TCI
@@ -575,6 +578,17 @@ class S2ImageL1C(S2Image):
         
         return out
 
+    def cache_product_to_local_dir(self, path_dest:Optional[str]=None, print_progress:bool=True) -> '__class__':
+        new_obj = super().cache_product_to_local_dir(path_dest=path_dest, print_progress=print_progress)
+        if self.root_metadata_tl is not None:
+            new_obj.root_metadata_tl = self.root_metadata_tl
+            new_path_metadata_tl = os.path.join(self.folder, "MTD_TL.xml").replace("\\","/")
+            ET.ElementTree(new_obj.metadata_tl).write(new_path_metadata_tl)
+            granules_metadata = _get_info_granules_metadata(new_obj)
+            granules_metadata["metadata_tl"] = new_path_metadata_tl
+            granules_path = os.path.join(new_obj.folder, "granules.json").replace("\\", "/")
+            with open(granules_path, "w") as f:
+                json.dump(granules_metadata, f)
 
     def read_metadata_tl(self):
         '''
@@ -638,22 +652,30 @@ class S2ImageL1C(S2Image):
         #  <ROW_STEP unit="m">5000</ROW_STEP>
         angleGridXres = float(sunZenithNode.find('COL_STEP').text)
         angleGridYres = float(sunZenithNode.find('ROW_STEP').text)
-        self.sza = self.makeValueArray(sunZenithNode.find('Values_List'))
+        sza = self.makeValueArray(sunZenithNode.find('Values_List'))
+        mask_nans = np.isnan(sza)
+        if np.any(mask_nans):
+            from skimage.restoration import inpaint_biharmonic
+            sza = inpaint_biharmonic(sza, mask_nans)
         transform_zenith = rasterio.transform.from_origin(self.ulxyByRes[str(self.out_res)][0],
                                                           self.ulxyByRes[str(self.out_res)][1],
                                                           angleGridXres, angleGridYres)
         
-        self.sza = GeoTensor(self.sza, transform=transform_zenith, crs=self.epsg_code)
+        self.sza = GeoTensor(sza, transform=transform_zenith, crs=self.epsg_code)
         
         # Azimuth
         sunAzimuthNode = self.tileAnglesNode.find('Sun_Angles_Grid').find('Azimuth')
         angleGridXres = float(sunAzimuthNode.find('COL_STEP').text)
         angleGridYres = float(sunAzimuthNode.find('ROW_STEP').text)
-        self.saa = self.makeValueArray(sunAzimuthNode.find('Values_List'))
+        saa = self.makeValueArray(sunAzimuthNode.find('Values_List'))
+        mask_nans = np.isnan(saa)
+        if np.any(mask_nans):
+            from skimage.restoration import inpaint_biharmonic
+            saa = inpaint_biharmonic(saa, mask_nans)
         transform_azimuth = rasterio.transform.from_origin(self.ulxyByRes[str(self.out_res)][0],
                                                             self.ulxyByRes[str(self.out_res)][1],
                                                             angleGridXres, angleGridYres)
-        self.saa = GeoTensor(self.saa, transform=transform_azimuth, crs=self.epsg_code)
+        self.saa = GeoTensor(saa, transform=transform_azimuth, crs=self.epsg_code)
 
         # Now build up the viewing angle per grid cell, from the separate layers
         # given for each detector for each band. Initially I am going to keep
@@ -662,13 +684,24 @@ class S2ImageL1C(S2Image):
         # but the numbers suggest that they are angles as seen from the pixel's
         # frame of reference on the ground, i.e. they are in fact what we ultimately want.
         viewingAngleNodeList = self.tileAnglesNode.findall('Viewing_Incidence_Angles_Grids')       
-        self.vza = self.buildViewAngleArr(viewingAngleNodeList, 'Zenith')
-        self.vaa = self.buildViewAngleArr(viewingAngleNodeList, 'Azimuth')
+        vza = self.buildViewAngleArr(viewingAngleNodeList, 'Zenith')
+        vaa = self.buildViewAngleArr(viewingAngleNodeList, 'Azimuth')
 
-        for k, varr in self.vaa.items():
+        self.vaa = {}
+        for k, varr in vaa.items():            
+            mask_nans = np.isnan(varr)
+            if np.any(mask_nans):
+                from skimage.restoration import inpaint_biharmonic
+                varr = inpaint_biharmonic(varr, mask_nans)
+            
             self.vaa[k] = GeoTensor(varr, transform=transform_azimuth, crs=self.epsg_code)
         
-        for k, varr in self.vza.items():
+        self.vza = {}
+        for k, varr in vza.items():
+            mask_nans = np.isnan(varr)
+            if np.any(mask_nans):
+                from skimage.restoration import inpaint_biharmonic
+                varr = inpaint_biharmonic(varr, mask_nans)
             self.vza[k] = GeoTensor(varr, transform=transform_zenith, crs=self.epsg_code)
 
         # Make a guess at the coordinates of the angle grids. These are not given
