@@ -36,6 +36,10 @@ import pandas as pd
 BANDS_S2 = ["B01", "B02","B03", "B04", "B05", "B06",
             "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
 
+PUBLIC_BUCKET_SENTINEL_2 = "gcp-public-data-sentinel-2"
+FULL_PATH_PUBLIC_BUCKET_SENTINEL_2 = f"gs://{PUBLIC_BUCKET_SENTINEL_2}/"
+
+
 BANDS_S2_L1C = list(BANDS_S2)
 
 # TODO ADD SLC band? AOT? WP?
@@ -73,6 +77,10 @@ def islocalpath(path:str) -> bool:
 
 def get_filesystem(path: str, requester_pays: Optional[bool] = None):
     """Get the filesystem from a path """
+    if path.startswith(FULL_PATH_PUBLIC_BUCKET_SENTINEL_2):
+        import gcsfs
+        return gcsfs.GCSFileSystem(token='anon', access="read_only", default_location="EUROPE-WEST1")
+    
     import fsspec
     if requester_pays is None:
         requester_pays = DEFAULT_REQUESTER_PAYS
@@ -247,14 +255,14 @@ class S2Image:
             for b in self.bands:
                 granule = self.granules[b]
                 ext_granule = os.path.splitext(granule)[1]
-                fsor = get_filesystem(granule)
+                
                 new_granules[b] = os.path.splitext(granules_name_metadata[b])[0]+ext_granule
                 new_granules_path = os.path.join(dest_folder, new_granules[b])
                 if not os.path.exists(new_granules_path):
                     pbar.set_description(f"Donwloading band {b} from {granule} to {new_granules_path}")
                     dir_granules_path = os.path.dirname(new_granules_path)
                     os.makedirs(dir_granules_path, exist_ok=True)
-                    fsor.get(granule, new_granules_path)
+                    get_file(granule, new_granules_path)
                 pbar.update(1)
 
         # Save granules for fast reading
@@ -579,16 +587,39 @@ class S2ImageL1C(S2Image):
         return out
 
     def cache_product_to_local_dir(self, path_dest:Optional[str]=None, print_progress:bool=True) -> '__class__':
+        """
+        Overrides the parent method to copy the MTD_TL.xml file
+
+        Args:
+            path_dest (Optional[str], optional): path to the destination folder. Defaults to None.
+            print_progress (bool, optional): whether to print progress. Defaults to True.
+
+        Returns:
+            __class__: the cached object
+        """
         new_obj = super().cache_product_to_local_dir(path_dest=path_dest, print_progress=print_progress)
-        if self.root_metadata_tl is not None:
-            new_obj.root_metadata_tl = self.root_metadata_tl
-            new_path_metadata_tl = os.path.join(self.folder, "MTD_TL.xml").replace("\\","/")
-            ET.ElementTree(new_obj.metadata_tl).write(new_path_metadata_tl)
-            granules_metadata = _get_info_granules_metadata(new_obj)
-            granules_metadata["metadata_tl"] = new_path_metadata_tl
-            granules_path = os.path.join(new_obj.folder, "granules.json").replace("\\", "/")
-            with open(granules_path, "w") as f:
-                json.dump(granules_metadata, f)
+        new_path_metadata_tl = os.path.join(new_obj.folder, "MTD_TL.xml")
+
+        if (new_path_metadata_tl == new_obj.metadata_tl) and os.path.exists(new_path_metadata_tl):
+            # the cached product already exists. returns
+            return new_obj
+
+        if not os.path.exists(new_path_metadata_tl):
+            if self.root_metadata_tl is not None:
+                new_obj.root_metadata_tl = self.root_metadata_tl
+                ET.ElementTree(new_obj.metadata_tl).write(new_path_metadata_tl)
+            else:
+                get_file(self.metadata_tl, new_path_metadata_tl)
+        
+        new_obj.metadata_tl = new_path_metadata_tl
+
+        granules_metadata = _get_info_granules_metadata(new_obj)
+        granules_metadata["metadata_tl"] = new_path_metadata_tl
+        granules_path = os.path.join(new_obj.folder, "granules.json").replace("\\", "/")
+        with open(granules_path, "w") as f:
+            json.dump(granules_metadata, f)
+        
+        return new_obj
 
     def read_metadata_tl(self):
         '''
@@ -921,10 +952,43 @@ def read_srf(satellite:str,
 
     return srf_s2
 
+def get_file(remote_path:str, local_path:str):
+    if remote_path.startswith(FULL_PATH_PUBLIC_BUCKET_SENTINEL_2):
+        from google.cloud import storage
+        from google.cloud.storage.retry import DEFAULT_RETRY
+        modified_retry = DEFAULT_RETRY.with_timeout(900.0)
+        modified_retry = modified_retry.with_delay(initial=1.5, multiplier=1.5, maximum=600)
+
+        storage_client = storage.Client.create_anonymous_client()
+        bucket = storage_client.bucket(PUBLIC_BUCKET_SENTINEL_2)
+        blob_name = remote_path.replace(FULL_PATH_PUBLIC_BUCKET_SENTINEL_2, "")
+        blob = bucket.blob(blob_name)
+        blob.download_to_filename(local_path, retry=modified_retry)
+    
+    elif "://" in remote_path:
+        fs = get_filesystem(remote_path)
+        fs.get(remote_path, local_path)
+    else:
+        raise ValueError(f"Unknown remote path {remote_path}")
+
 
 def read_xml(xml_file:str) -> ET.Element:
     """Reads xml with xml package """
-    if "://" in xml_file:
+    if xml_file.startswith(FULL_PATH_PUBLIC_BUCKET_SENTINEL_2):
+        from google.cloud import storage
+        from google.cloud.storage.retry import DEFAULT_RETRY
+
+        modified_retry = DEFAULT_RETRY.with_timeout(900.0)
+        modified_retry = modified_retry.with_delay(initial=1.5, multiplier=1.5, maximum=600)
+
+        storage_client = storage.Client.create_anonymous_client()
+        bucket = storage_client.bucket(PUBLIC_BUCKET_SENTINEL_2)
+        blob_name = xml_file.replace(FULL_PATH_PUBLIC_BUCKET_SENTINEL_2, "")
+        # print(f"Reading {xml_file} {blob_name} from {FULL_PATH_PUBLIC_BUCKET_SENTINEL_2}")
+        blob = bucket.blob(blob_name)        
+        root = ET.fromstring(blob.download_as_string(retry=modified_retry))
+        
+    elif "://" in xml_file:
         import fsspec
         with fsspec.open(xml_file, "rb") as file_obj:
             root = ET.fromstring(file_obj.read())
@@ -1083,7 +1147,7 @@ def s2_public_bucket_path(s2file:str, check_exists:bool=False, mode:str="gcp") -
     s2file = s2file[:-1] if s2file.endswith("/") else s2file
     basename = os.path.basename(s2file)
     if mode == "gcp":
-        s2folder = f"gs://gcp-public-data-sentinel-2/tiles/{tile_number_field[:2]}/{tile_number_field[2]}/{tile_number_field[3:]}/{basename}"
+        s2folder = f"{FULL_PATH_PUBLIC_BUCKET_SENTINEL_2}tiles/{tile_number_field[:2]}/{tile_number_field[2]}/{tile_number_field[3:]}/{basename}"
     elif mode == "rest":
         s2folder = f"https://storage.googleapis.com/gcp-public-data-sentinel-2/tiles/{tile_number_field[:2]}/{tile_number_field[2]}/{tile_number_field[3:]}/{basename}"
     else:

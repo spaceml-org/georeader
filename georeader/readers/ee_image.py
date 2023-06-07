@@ -21,7 +21,7 @@ def export_image_fast(image:ee.Image, geometry:Union[ee.Geometry, Polygon, Multi
 
     Args:
         image: ee.Image to export. Expected not an ArrayBand (see example)
-        geometry: geometry to export as a ee.Geometry object or as a shapely polygon.
+        geometry: geometry to export as a ee.Geometry object or as a shapely polygon in EPSG:4326.
         cat_bands: if `True` concat the bands to return a single GeoTensor object.
         fill_value_default: Value used to fill the masked areas.
         return_metadata: if `True` it will alse return the metadata of the image (`image.clip(geometry).getInfo()`)
