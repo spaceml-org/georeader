@@ -126,9 +126,6 @@ def query(area:Union[MultiPolygon,Polygon],
     elif producttype == "L8":
         image_collection_name = "LANDSAT/LC08/C02/T1_RT_TOA"
         keys_query = {"LANDSAT_PRODUCT_ID": "title", 'CLOUD_COVER': "cloudcoverpercentage"}
-    elif producttype == "S1":
-        image_collection_name = "LANDSAT/LC08/C02/T1_RT_TOA"
-        keys_query = {"LANDSAT_PRODUCT_ID": "title", 'CLOUD_COVER': "cloudcoverpercentage"}
     elif producttype == "L9":
         image_collection_name = "LANDSAT/LC09/C02/T1_TOA"
         keys_query = {"LANDSAT_PRODUCT_ID": "title", 'CLOUD_COVER': "cloudcoverpercentage"}
