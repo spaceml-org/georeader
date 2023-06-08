@@ -133,7 +133,7 @@ class GeoTensor:
     def copy(self) -> '__class__':
         return self.__copy__()
     
-    def _same_georref(self, other:'__class__') -> bool:
+    def same_extent(self, other:'__class__') -> bool:
         """
         Check if two GeoTensors have the same georeferencing (crs and transform)
 
@@ -143,7 +143,7 @@ class GeoTensor:
         Returns:
             bool: True if both GeoTensors have the same georeferencing.
         """
-        return (self.transform == other.transform) and window_utils.compare_crs(self.crs, other.crs)
+        return (self.transform == other.transform) and window_utils.compare_crs(self.crs, other.crs) and (self.shape[-2:] == other.shape[-2:])
     
     def __add__(self, other:Union[numbers.Number,'__class__']) -> '__class__':
         """ 
@@ -161,7 +161,7 @@ class GeoTensor:
         """
         # Check if otther is a number
         if isinstance(other, GeoTensor):
-            if self._same_georref(other):
+            if self.same_extent(other):
                 other =  other.values
             else:
                 raise ValueError("GeoTensor georref must match for addition. "
@@ -189,7 +189,7 @@ class GeoTensor:
             
         """
         if isinstance(other, GeoTensor):
-            if self._same_georref(other):
+            if self.same_extent(other):
                 other =  other.values
             else:
                 raise ValueError("GeoTensor georref must match for substraction. "
@@ -216,7 +216,7 @@ class GeoTensor:
             GeoTensor: GeoTensor with the result of the multiplication.
         """
         if isinstance(other, GeoTensor):
-            if self._same_georref(other):
+            if self.same_extent(other):
                 other =  other.values
             else:
                 raise ValueError("GeoTensor georref must match for multiplication. "
@@ -243,7 +243,7 @@ class GeoTensor:
             GeoTensor: GeoTensor with the result of the division.
         """
         if isinstance(other, GeoTensor):
-            if self._same_georref(other):
+            if self.same_extent(other):
                 other =  other.values
             else:
                 raise ValueError("GeoTensor georref must match for division. "

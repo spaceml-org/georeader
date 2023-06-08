@@ -59,3 +59,6 @@ class AbstractGeoData:
         raise self.load(boundless=True).values
 
 GeoData = Union[GeoTensor, AbstractGeoData]
+
+def same_extent(geo1:GeoData, geo2:GeoData) -> bool:
+    return (geo1.transform == geo2.transform) and window_utils.compare_crs(geo1.crs, geo2.crs) and (geo1.shape[-2:] == geo2.shape[-2:])
