@@ -30,7 +30,6 @@ def query_s1(area:Union[MultiPolygon,Polygon],
     Returns:
 
     """
-    ee.Initialize()
     pol = ee.Geometry(mapping(area))
 
     if date_start.tzinfo is not None:
@@ -101,7 +100,6 @@ def query(area:Union[MultiPolygon,Polygon],
         if `return_collection` is True it also returns the `ee.ImageCollection` of available images
     """
 
-    ee.Initialize()
     pol = ee.Geometry(mapping(area))
 
     if date_start.tzinfo is not None:
