@@ -106,7 +106,7 @@ def _get_info_granules_metadata(folder):
     return info_granules_metadata
 
 class S2Image:
-    def __init__(self, s2_folder:str,
+    def __init__(self, s2folder:str,
                  polygon:Optional[Polygon]=None,
                  granules: Optional[Dict[str, str]]=None,
                  out_res: int = 10,
@@ -117,7 +117,7 @@ class S2Image:
         Sentinel-2 image reader class.
 
         Args:
-            s2_folder: name of the SAFE product expects name
+            s2folder: name of the SAFE product expects name
             polygon: in CRS EPSG:4326
             granules: dictionary with granule name and path
             out_res: output resolution in meters one of 10, 20, 60 (default 10)
@@ -127,13 +127,13 @@ class S2Image:
         
         """
         self.mission, self.producttype, sensing_date_str, self.pdgs, self.relorbitnum, self.tile_number_field, self.product_discriminator = s2_name_split(
-            s2_folder)
+            s2folder)
 
         # Remove last trailing slash
-        s2_folder = s2_folder[:-1] if (s2_folder.endswith("/") or s2_folder.endswith("\\")) else s2_folder
-        self.name = os.path.basename(os.path.splitext(s2_folder)[0])
+        s2folder = s2folder[:-1] if (s2folder.endswith("/") or s2folder.endswith("\\")) else s2folder
+        self.name = os.path.basename(os.path.splitext(s2folder)[0])
 
-        self.folder = s2_folder
+        self.folder = s2folder
         self.datetime = datetime.datetime.strptime(sensing_date_str, "%Y%m%dT%H%M%S").replace(
             tzinfo=datetime.timezone.utc)
 
@@ -273,9 +273,11 @@ class S2Image:
 
         new_granules_full_path = {k: os.path.join(dest_folder,v) for k, v in new_granules.items()}
 
-        return __class__(s2_folder=dest_folder, out_res=self.out_res, window_focus=self.window_focus,
-                  bands=self.bands, granules=new_granules_full_path, polygon=self._pol,
-                  metadata_msi=metadata_output_path)
+        obj = s2loader(s2folder=dest_folder, out_res=self.out_res, window_focus=self.window_focus,
+                       bands=self.bands, granules=new_granules_full_path, polygon=self._pol,
+                       metadata_msi=metadata_output_path)
+        obj.root_metadata_msi = root_metadata_msi
+        return obj
 
     def DN_to_radiance(self, dn_data:Optional[GeoTensor]=None) -> GeoTensor:
         return DN_to_radiance(self, dn_data)
@@ -461,16 +463,35 @@ class S2Image:
          fill_value_default: {self.fill_value_default}
         """
 
+    def read_from_band_names(self, band_names:List[str]) -> '__class__':
+        """
+        Read from band names
+
+        Args:
+            band_names: List of band names
+        
+        Returns:
+            Copy of current object with band names set to band_names
+        """
+        s2obj =  s2loader(s2folder=self.folder, out_res=self.out_res, 
+                          window_focus=self.window_focus,
+                           bands=band_names, granules=self.granules, polygon=self._pol,
+                           metadata_msi=self.metadata_msi)
+        s2obj.root_metadata_msi = self.root_metadata_msi
+        return s2obj
+
     def read_from_window(self, window:rasterio.windows.Window, boundless:bool=True) -> '__class__':
         # return GeoTensor(values=self.values, transform=self.transform, crs=self.crs)
 
         reader_ref = self._get_reader()
         rasterio_reader_ref = reader_ref.read_from_window(window=window, boundless=boundless)
-        s2obj =  __class__(s2_folder=self.folder, out_res=self.out_res, window_focus=rasterio_reader_ref.window_focus,
+        s2obj =  s2loader(s2folder=self.folder, out_res=self.out_res, 
+                          window_focus=rasterio_reader_ref.window_focus,
                            bands=self.bands, granules=self.granules, polygon=self._pol,
                            metadata_msi=self.metadata_msi)
         # Set band check to avoid re-reading
-        s2obj.granule_readers[s2obj.band_check] = rasterio_reader_ref
+        s2obj.granule_readers[self.band_check] = rasterio_reader_ref
+        s2obj.band_check = self.band_check
 
         s2obj.root_metadata_msi = self.root_metadata_msi
 
@@ -523,7 +544,7 @@ class S2Image:
 
 
 class S2ImageL2A(S2Image):
-    def __init__(self, s2_folder:str, granules: Dict[str, str],
+    def __init__(self, s2folder:str, granules: Dict[str, str],
                  polygon:Polygon, out_res:int=10,
                  window_focus:Optional[rasterio.windows.Window]=None,
                  bands:Optional[List[str]]=None,
@@ -531,7 +552,7 @@ class S2ImageL2A(S2Image):
         if bands is None:
             bands = BANDS_S2_L2A
 
-        super(S2ImageL2A, self).__init__(s2_folder=s2_folder, granules=granules, polygon=polygon,
+        super(S2ImageL2A, self).__init__(s2folder=s2folder, granules=granules, polygon=polygon,
                                          out_res=out_res, bands=bands,
                                          window_focus=window_focus,
                                          metadata_msi=metadata_msi)
@@ -549,12 +570,12 @@ class S2ImageL2A(S2Image):
 
 
 class S2ImageL1C(S2Image):
-    def __init__(self, s2_folder, granules: Dict[str, str],
+    def __init__(self, s2folder, granules: Dict[str, str],
                  polygon:Polygon, out_res:int=10,
                  window_focus:Optional[rasterio.windows.Window]=None,
                  bands:Optional[List[str]]=None,
                  metadata_msi:Optional[str]=None):
-        super(S2ImageL1C,self).__init__(s2_folder=s2_folder, granules=granules, polygon=polygon,
+        super(S2ImageL1C,self).__init__(s2folder=s2folder, granules=granules, polygon=polygon,
                                          out_res=out_res, bands=bands,
                                          window_focus=window_focus,
                                         metadata_msi=metadata_msi)
@@ -598,23 +619,19 @@ class S2ImageL1C(S2Image):
             __class__: the cached object
         """
         new_obj = super().cache_product_to_local_dir(path_dest=path_dest, print_progress=print_progress)
-        new_path_metadata_tl = os.path.join(new_obj.folder, "MTD_TL.xml")
 
-        if (new_path_metadata_tl == new_obj.metadata_tl) and os.path.exists(new_path_metadata_tl):
+        if os.path.exists(new_obj.metadata_tl):
             # the cached product already exists. returns
             return new_obj
 
-        if not os.path.exists(new_path_metadata_tl):
-            if self.root_metadata_tl is not None:
-                new_obj.root_metadata_tl = self.root_metadata_tl
-                ET.ElementTree(new_obj.metadata_tl).write(new_path_metadata_tl)
-            else:
-                get_file(self.metadata_tl, new_path_metadata_tl)
-        
-        new_obj.metadata_tl = new_path_metadata_tl
+        if self.root_metadata_tl is not None:
+            new_obj.root_metadata_tl = self.root_metadata_tl
+            ET.ElementTree(new_obj.metadata_tl).write(new_obj.metadata_tl)
+        else:
+            get_file(self.metadata_tl, new_obj.metadata_tl)
 
-        granules_metadata = _get_info_granules_metadata(new_obj)
-        granules_metadata["metadata_tl"] = new_path_metadata_tl
+        granules_metadata = _get_info_granules_metadata(new_obj.folder)
+        granules_metadata["metadata_tl"] = new_obj.metadata_tl
         granules_path = os.path.join(new_obj.folder, "granules.json").replace("\\", "/")
         with open(granules_path, "w") as f:
             json.dump(granules_metadata, f)
@@ -1098,9 +1115,9 @@ def s2_load_from_feature_element84(feature:Dict[str, Any], bands:Optional[List[s
     polygon = shape(feature["geometry"])
 
     metadata_msi = feature["assets"]["metadata"]["href"]
-    s2_folder = feature["properties"]["sentinel:product_id"] + ".SAFE"
+    s2folder = feature["properties"]["sentinel:product_id"] + ".SAFE"
 
-    return s2loader(s2folder=s2_folder, granules=granules, polygon=polygon, metadata_msi=metadata_msi,
+    return s2loader(s2folder=s2folder, granules=granules, polygon=polygon, metadata_msi=metadata_msi,
                     bands=bands)
 
 def s2_load_from_feature_planetary_microsoft(item:Any, bands:Optional[List[str]]=None) -> Union[S2ImageL2A, S2ImageL1C]:
@@ -1145,6 +1162,10 @@ def s2_public_bucket_path(s2file:str, check_exists:bool=False, mode:str="gcp") -
     """
     mission, producttype, sensing_date_str, pdgs, relorbitnum, tile_number_field, product_discriminator = s2_name_split(s2file)
     s2file = s2file[:-1] if s2file.endswith("/") else s2file
+
+    if not s2file.endswith(".SAFE"):
+        s2file += ".SAFE"
+
     basename = os.path.basename(s2file)
     if mode == "gcp":
         s2folder = f"{FULL_PATH_PUBLIC_BUCKET_SENTINEL_2}tiles/{tile_number_field[:2]}/{tile_number_field[2]}/{tile_number_field[3:]}/{basename}"
@@ -1154,8 +1175,7 @@ def s2_public_bucket_path(s2file:str, check_exists:bool=False, mode:str="gcp") -
         raise NotImplementedError(f"Mode {mode} unknown")
 
     if check_exists and (mode == "gcp"):
-        import fsspec
-        fs = fsspec.filesystem("gs", requester_pays=DEFAULT_REQUESTER_PAYS)
+        fs = get_filesystem(s2folder)
 
         if not fs.exists(s2folder):
             raise FileNotFoundError(f"Sentinel-2 file not found in {s2folder}")
