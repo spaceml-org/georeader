@@ -627,6 +627,12 @@ class S2ImageL1C(S2Image):
         if self.root_metadata_tl is not None:
             new_obj.root_metadata_tl = self.root_metadata_tl
             ET.ElementTree(new_obj.metadata_tl).write(new_obj.metadata_tl)
+            # copy all metadata from the original image
+            for atribute in ["tileId","root_metadata_tl", "satId", "procLevel", "dimsByRes", "ulxyByRes", "tileAnglesNode", 
+                            "mean_sza", "mean_saa", "mean_vza", "mean_vaa", "vaa", "vza", "saa", "sza", 
+                            "anglesULXY"]:
+                if hasattr(self, atribute):
+                    setattr(new_obj, atribute, getattr(self, atribute))
         else:
             get_file(self.metadata_tl, new_obj.metadata_tl)
 
