@@ -150,10 +150,11 @@ def query(area:Union[MultiPolygon,Polygon],
 
     geodf.rename(keys_query, axis=1, inplace=True)
 
-    if (producttype == "Landsat") or (producttype == "both"):
-        geodf["collection_name"] = geodf["title"].apply(lambda x: "LANDSAT/LC08/C02/T1_RT_TOA" if x.startswith("LC08") else "LANDSAT/LC09/C02/T1_TOA")
-    else:
-        geodf["collection_name"] = image_collection_name
+    if geodf.shape[0] > 0:
+        if (producttype == "Landsat") or (producttype == "both"):
+            geodf["collection_name"] = geodf["title"].apply(lambda x: "LANDSAT/LC08/C02/T1_RT_TOA" if x.startswith("LC08") else "LANDSAT/LC09/C02/T1_TOA")
+        else:
+            geodf["collection_name"] = image_collection_name
 
     img_col = img_col.map(lambda x: _rename_add_properties(x, keys_query))
 
@@ -169,7 +170,11 @@ def query(area:Union[MultiPolygon,Polygon],
         geodf_s2["collection_name"] = "COPERNICUS/S2_HARMONIZED"
         geodf_s2.rename(keys_query_s2, axis=1, inplace=True)
         if geodf_s2.shape[0] > 0:
-            geodf = pd.concat([geodf_s2, geodf], ignore_index=True)
+            if geodf.shape[0] == 0:
+                geodf = geodf_s2
+            else:
+                geodf = pd.concat([geodf_s2, geodf], ignore_index=True)
+            
             img_col_s2 = img_col_s2.map(lambda x: _rename_add_properties(x, keys_query_s2))
             img_col = img_col.merge(img_col_s2)
 
