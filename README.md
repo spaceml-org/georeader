@@ -1,6 +1,6 @@
 # georeader
 
-Read data from rasters: very few dependencies, compatible with cloud platforms and lazy loading.
+Read data from rasters: very few dependencies, reads from cloud storage and lazy loading.
 
 ## Install
 
