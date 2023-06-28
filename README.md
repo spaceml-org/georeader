@@ -23,10 +23,9 @@ This package is work in progress. The API might change without notice. Use it wi
 # This snippet requires:
 # pip install fsspec gcsfs google-cloud-storage
 import os
-from georeader.readers import S2_SAFE_reader
-
 os.environ["GS_NO_SIGN_REQUEST"] = "YES"
 
+from georeader.readers import S2_SAFE_reader
 from georeader import read
 
 cords_read = (-104.394, 32.026) # long, lat
@@ -35,12 +34,15 @@ s2_safe_path = S2_SAFE_reader.s2_public_bucket_path("S2B_MSIL1C_20191008T173219_
 s2obj = S2_SAFE_reader.s2loader(s2_safe_path, 
                                 out_res=10, bands=["B04","B03","B02"])
 
+# copy to local avoids http errors specially when not using a Google project.
+# This will only copy the bands set up above B04, B03 and B02
+s2obj = s2obj.cache_product_to_local_dir(".")
+
+# See also read.read_from_bounds, read.read_from_polygon for different ways of croping an image
 data = read.read_from_center_coords(s2obj,cords_read, shape=(2040, 4040),
                                     crs_center_coords=crs_cords)
 
-# See also read.read_from_bounds, read.read_from_polygon
-
-data_memory = data.load() # this triggers downloading the data
+data_memory = data.load() # this loads the data to memory
 
 data_memory # GeoTensor object
 

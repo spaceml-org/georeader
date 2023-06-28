@@ -410,8 +410,27 @@ class RasterioReader:
 
     def __copy__(self) -> '__class__':
         return RasterioReader(self.paths, allow_different_shape=self.allow_different_shape,
-                              window_focus=self.window_focus, fill_value_default=self.fill_value_default,
+                              window_focus=self.window_focus, 
+                              fill_value_default=self.fill_value_default,
                               stack=self.stack, overview_level=self.overview_level,
+                              check=False)
+    
+    def overviews(self, index:int=1, time_index:int=0) -> List[int]:
+        """
+        Returns a list of the available overview levels for the current raster.
+        """
+        with rasterio.Env(**self.rio_env_options):
+            with rasterio.open(self.paths[time_index]) as src:
+                return src.overviews(index)
+    
+    def reader_overview(self, overview_level:int) -> '__class__':
+        if overview_level < 0:
+            overview_level = len(self.overviews()) + overview_level
+        
+        return RasterioReader(self.paths, allow_different_shape=self.allow_different_shape,
+                              window_focus=self.window_focus, 
+                              fill_value_default=self.fill_value_default,
+                              stack=self.stack, overview_level=overview_level,
                               check=False)
     
     def block_windows(self, bidx:int=1, time_idx:int=0) -> List[Tuple[int, rasterio.windows.Window]]:
