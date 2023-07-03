@@ -1,8 +1,8 @@
 from rasterio import features
 import rasterio
-from shapely.geometry import shape, mapping, Polygon
+from shapely.geometry import shape, mapping, Polygon, MultiPolygon
 import numpy as np
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Tuple
 from georeader.abstract_reader import GeoData
 
 
@@ -55,7 +55,9 @@ def get_polygons(binary_mask: Union[np.ndarray, GeoData], min_area:float=25.5,
     return geoms_polygons
 
 
-def transform_polygon(polygon:Polygon, transform: rasterio.Affine) -> Polygon:
+def transform_polygon(polygon:Union[Polygon, MultiPolygon], 
+                      transform: rasterio.Affine, relative:bool=False,
+                      shape_raster:Optional[Tuple[int,int]] = None) -> Union[Polygon, MultiPolygon]:
     """
     Transforms a polygon from pixel coordinates to the coordinates specified by the affine transform
 
@@ -67,15 +69,29 @@ def transform_polygon(polygon:Polygon, transform: rasterio.Affine) -> Polygon:
         polygon with coordinates transformed by the affine transformation
 
     """
+    if relative:
+        assert shape_raster is not None, "shape_raster must be provided if relative is True"
+        transform = rasterio.Affine.scale(1/shape_raster[1], 1/shape_raster[0]) * transform
+    
     geojson_dict = mapping(polygon)
-    out_coords = []
+    if geojson_dict["type"] == "Polygon":
+        geojson_dict["coordinates"] = [geojson_dict["coordinates"]]
+
+    multipol_coords = []
     for pol in geojson_dict["coordinates"]:
-        pol_out = []
-        for coords in pol:
-            pol_out.append(transform * coords)
+        pol_coords = []
+        for shell_or_holes in pol:
+            pol_out = []
+            for coords in shell_or_holes:
+                pol_out.append(transform * coords)
 
-        out_coords.append(pol_out)
+            pol_coords.append(pol_out)
+        
+        multipol_coords.append(pol_coords)
 
-    geojson_dict["coordinates"] = out_coords
+    if geojson_dict["type"] == "Polygon":
+        geojson_dict["coordinates"] = multipol_coords[0]
+    else:
+        geojson_dict["coordinates"] = multipol_coords
 
     return shape(geojson_dict)

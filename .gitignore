@@ -163,3 +163,6 @@ cython_debug/
 notebooks/database/
 notebooks/raw_data/
 weights/
+notebooks/data/LT05_L1TP_196047_19950627_20200912_02_T1.tar
+notebooks/deleteme/*
+notebooks/emit_database/*
