@@ -13,6 +13,103 @@ import time
 GeoData = Union[AbstractGeoData, GeoTensor]
 REMOTE_FILE_EXTENSIONS = ["gs://", "s3://", "az://", "http://", "https://", "abfs://"]
 
+BLOCKSIZE_DEFAULT = 256
+PROFILE_TILED_GEOTIFF_DEFAULT = {
+    "compress": "lzw",
+    "BIGTIFF": "IF_SAFER",
+    "blockxsize": BLOCKSIZE_DEFAULT,
+    "blockysize": BLOCKSIZE_DEFAULT
+}
+
+def save_tiled_geotiff(data_save:GeoData, path_tiff_save:str,
+                       profile_arg:Optional[Dict[str, Any]]=None,
+                       descriptions:Optional[List[str]] = None,
+                       tags:Optional[Dict[str, Any]]=None,
+                       dir_tmpfiles:str=".",
+                       blocksize:int=BLOCKSIZE_DEFAULT,
+                       fs:Optional[Any]=None) -> None:
+    """
+    Save data GeoData object as tiled GeoTIFF (see `save_cog` to save as a Cloud Optimized GeoTIFF)
+
+    Args:
+        data_save: GeoData (C, H, W) format with geoinformation (crs and transform).
+        descriptions: name of the bands
+        path_tiff_save: path to save the GeoTIFF
+        profile: profile dict to save the data. crs and transform will be updated from data_save.
+        tags: Dict to save as tags of the image
+        dir_tmpfiles: dir to create tempfiles if needed
+        blocksize: blocksize of the GeoTIFF
+        fs: fsspec filesystem to save the file
+
+    """
+    profile = PROFILE_TILED_GEOTIFF_DEFAULT.copy()
+    if profile_arg is not None:
+        profile.update(profile_arg)
+    
+    if len(data_save.shape) == 3:
+        out_np = np.asanyarray(data_save.values)
+    elif len(data_save.shape) == 2:
+        out_np = np.asanyarray(data_save.values[np.newaxis])
+    else:
+        raise NotImplementedError(f"Expected data with 2 or 3 dimensions found: {data_save.shape}")
+
+    profile["crs"] = data_save.crs
+    profile["transform"] = data_save.transform
+
+    if "nodata" not in profile:
+        profile["nodata"] = data_save.fill_value_default
+
+    if descriptions is not None:
+        assert len(descriptions) == out_np.shape[0], f"Unexpected band descriptions {len(descriptions)} expected {out_np.shape[0]}"
+
+    # Set count, height, width
+    for idx, c in enumerate(["count", "height", "width"]):
+        if c in profile:
+            assert profile[c] == out_np.shape[idx], f"Unexpected shape: {profile[c]} {out_np.shape}"
+        else:
+            profile[c] = out_np.shape[idx]
+
+    if "dtype" not in profile:
+        profile["dtype"] = str(out_np.dtype)
+
+    # check blocksize
+    for idx, b in enumerate(["blockysize", "blockxsize"]):
+        if b in profile:
+            profile[b] = min(profile[b], out_np.shape[idx + 1])
+
+    if (out_np.shape[1] > profile["blockysize"]) or (out_np.shape[2] > profile["blockxsize"]):
+        profile["tiled"] = True
+
+    profile["driver"] = "GTiff"
+    is_remote_file = any((path_tiff_save.startswith(ext) for ext in REMOTE_FILE_EXTENSIONS))
+
+    # Create a tempfile if is a remote file
+    if is_remote_file:
+        with tempfile.NamedTemporaryFile(dir=dir_tmpfiles, suffix=".tif", delete=True) as fileobj:
+            name_save = fileobj.name
+    else:
+        name_save = path_tiff_save
+
+    with rasterio.open(name_save, "w", **profile) as rst_out:
+        if tags is not None:
+            rst_out.update_tags(**tags)
+        rst_out.write(out_np)
+        if descriptions is not None:
+            for i in range(1, out_np.shape[0] + 1):
+                rst_out.set_band_description(i, descriptions[i - 1])
+    
+    if is_remote_file:
+        if fs is None:
+            import fsspec
+            fs = fsspec.filesystem(path_tiff_save.split(":")[0])
+        
+        if not os.path.exists(name_save):
+            raise FileNotFoundError(f"File {name_save} have not been created")
+        
+        fs.put_file(name_save, path_tiff_save, overwrite=True)
+        if os.path.exists(name_save):
+            os.remove(name_save)
+
 
 def save_cog(data_save:GeoData, path_tiff_save:str,
              profile:Optional[Dict[str, Any]]=None,
@@ -157,8 +254,6 @@ def _save_cog(out_np: np.ndarray, path_tiff_save: str, profile: dict,
                 import fsspec
                 fs = fsspec.filesystem(path_tiff_save.split(":")[0], 
                                        requester_pays=requester_pays)
-            
-            time.sleep(1)
             if not os.path.exists(name_save):
                 raise FileNotFoundError(f"File {name_save} have not been created")
             fs.put_file(name_save, path_tiff_save, overwrite=True)

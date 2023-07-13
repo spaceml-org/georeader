@@ -30,8 +30,9 @@ import rasterio.warp
 from shapely.geometry import shape
 from tqdm import tqdm
 import json
-from georeader.save_cog import save_cog
+from georeader.save import save_cog, save_tiled_geotiff
 import pandas as pd
+
 
 BANDS_S2 = ["B01", "B02","B03", "B04", "B05", "B06",
             "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
@@ -95,7 +96,7 @@ def get_filesystem(path: str, requester_pays: Optional[bool] = None):
             return fsspec.filesystem(mode, requester_pays=requester_pays)
         return fsspec.filesystem(mode)
 
-def _get_info_granules_metadata(folder):
+def _get_info_granules_metadata(folder) -> Optional[Dict[str, Any]]:
     granules_path = os.path.join(folder, "granules.json").replace("\\", "/")
     info_granules_metadata = None
     if islocalpath(granules_path) and os.path.exists(granules_path):
@@ -103,6 +104,7 @@ def _get_info_granules_metadata(folder):
             info_granules_metadata = json.load(fh)
         info_granules_metadata["granules"] = {k:os.path.join(folder,g) for k,g in info_granules_metadata["granules"].items()}
         info_granules_metadata["metadata_msi"] = os.path.join(folder, info_granules_metadata["metadata_msi"])
+        info_granules_metadata["metadata_tl"] = os.path.join(folder, info_granules_metadata["metadata_tl"])
     return info_granules_metadata
 
 class S2Image:
@@ -216,19 +218,24 @@ class S2Image:
         else:
             self._pol_crs = None
 
-    def cache_product_to_local_dir(self, path_dest:Optional[str]=None, print_progress:bool=True) -> '__class__':
+    def cache_product_to_local_dir(self, path_dest:Optional[str]=None, print_progress:bool=True,
+                                   format_bands:Optional[str]=None) -> '__class__':
         """
         Copy the product to a local directory and return a new instance of the class with the new path
 
         Args:
             path_dest: path to the destination folder. If None, the current folder ()".") is used
             print_progress: print progress bar. Default True
+            format_bands: format of the bands. Default None (keep original format). Options: "COG", "GeoTIFF"
         
         Returns:
-            A new instance of the class with the new path
+            A new instance of the class pointing to the new path
         """
         if path_dest is None:
             path_dest = "."
+        
+        if format_bands is not None:
+            assert format_bands in {"COG", "GeoTIFF"}, "Not valid format_bands. Choose 'COG' or 'GeoTIFF'"
 
         name_with_safe = f"{self.name}.SAFE"
         dest_folder = os.path.join(path_dest, name_with_safe)
@@ -254,15 +261,38 @@ class S2Image:
         with tqdm(total=len(self.bands),disable=not print_progress) as pbar:
             for b in self.bands:
                 granule = self.granules[b]
-                ext_granule = os.path.splitext(granule)[1]
+                ext_origin = os.path.splitext(granule)[1]
+
+                if format_bands is not None:
+                    if ext_origin.startswith(".tif"):
+                        convert = False
+                    else:
+                        convert = True
+                    
+                    ext_dst = ".tif"
+                else:
+                    convert = False
+                    ext_dst = ext_origin
                 
-                new_granules[b] = os.path.splitext(granules_name_metadata[b])[0]+ext_granule
+                namefile = os.path.splitext(granules_name_metadata[b])[0]
+                new_granules[b] = namefile+ext_dst
                 new_granules_path = os.path.join(dest_folder, new_granules[b])
                 if not os.path.exists(new_granules_path):
+                    new_granules_path_tmp = os.path.join(dest_folder, namefile+ext_origin)
                     pbar.set_description(f"Donwloading band {b} from {granule} to {new_granules_path}")
                     dir_granules_path = os.path.dirname(new_granules_path)
                     os.makedirs(dir_granules_path, exist_ok=True)
-                    get_file(granule, new_granules_path)
+                    get_file(granule, new_granules_path_tmp)
+                    if convert:
+                        image = RasterioReader(new_granules_path_tmp).load().squeeze()
+                        if format_bands == "COG":
+                            save_cog(image, new_granules_path, descriptions=[b])
+                        elif format_bands == "GeoTIFF":
+                            save_tiled_geotiff(image, new_granules_path, descriptions=[b])
+                        else:
+                            raise NotImplementedError(f"Not implemented {format_bands}")
+                        os.remove(new_granules_path_tmp)
+            
                 pbar.update(1)
 
         # Save granules for fast reading
@@ -607,7 +637,8 @@ class S2ImageL1C(S2Image):
         
         return out
 
-    def cache_product_to_local_dir(self, path_dest:Optional[str]=None, print_progress:bool=True) -> '__class__':
+    def cache_product_to_local_dir(self, path_dest:Optional[str]=None, print_progress:bool=True,
+                                   format_bands:Optional[str]=None) -> '__class__':
         """
         Overrides the parent method to copy the MTD_TL.xml file
 
@@ -618,7 +649,8 @@ class S2ImageL1C(S2Image):
         Returns:
             __class__: the cached object
         """
-        new_obj = super().cache_product_to_local_dir(path_dest=path_dest, print_progress=print_progress)
+        new_obj = super().cache_product_to_local_dir(path_dest=path_dest, print_progress=print_progress,
+                                                     format_bands=format_bands)
 
         if os.path.exists(new_obj.metadata_tl):
             # the cached product already exists. returns
@@ -636,11 +668,13 @@ class S2ImageL1C(S2Image):
         else:
             get_file(self.metadata_tl, new_obj.metadata_tl)
 
-        granules_metadata = _get_info_granules_metadata(new_obj.folder)
-        granules_metadata["metadata_tl"] = new_obj.metadata_tl
+        # Add metadata_tl to granules.json
         granules_path = os.path.join(new_obj.folder, "granules.json").replace("\\", "/")
+        with open(granules_path, "r") as fh:
+            info_granules_metadata = json.load(fh)
+        info_granules_metadata["metadata_tl"] = os.path.join(new_obj.granule_folder, "MTD_TL.xml").replace("\\","/")
         with open(granules_path, "w") as f:
-            json.dump(granules_metadata, f)
+            json.dump(info_granules_metadata, f)
         
         return new_obj
 
