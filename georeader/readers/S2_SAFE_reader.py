@@ -614,13 +614,9 @@ class S2ImageL1C(S2Image):
 
         first_granule = self.granules[list(self.granules.keys())[0]]
         self.granule_folder = os.path.dirname(os.path.dirname(first_granule))
-        print(f"Granule folder is: {self.granule_folder}")
         self.msk_clouds_file = os.path.join(self.granule_folder, "MSK_CLOUDS_B00.gml").replace("\\","/")
         if not hasattr(self, "metadata_tl"):
             self.metadata_tl = os.path.join(self.granule_folder, "MTD_TL.xml").replace("\\","/")
-            print(f"NO hasattr metadata_tl which is: {self.metadata_tl}")
-        else:
-            print(f"YES hasattr metadata_tl which is: {self.metadata_tl}")
         
         self.root_metadata_tl = None
 
@@ -671,11 +667,9 @@ class S2ImageL1C(S2Image):
                 if hasattr(self, atribute):
                     setattr(new_obj, atribute, getattr(self, atribute))
         else:
-            print(f"Copying from {self.metadata_tl} to {new_obj.metadata_tl}")
             get_file(self.metadata_tl, new_obj.metadata_tl)
         
         granule_folder_rel = new_obj.granule_folder.replace("\\", "/").replace(new_obj.folder.replace("\\","/")+"/", "")
-        print(granule_folder_rel)
         # Add metadata_tl to granules.json
         granules_path = os.path.join(new_obj.folder, "granules.json").replace("\\", "/")
         with open(granules_path, "r") as fh:
