@@ -271,7 +271,7 @@ class GeoTensor:
             >>> boolmask = gt.values > 0.5
             >>> gt[boolmask] = 0.5
         """
-        if isinstance(index, np.ndarray) and (index.dtype == np.bool) and (index.shape == self.values.shape):
+        if isinstance(index, np.ndarray) and (index.dtype == bool) and (index.shape == self.values.shape):
             # If the index is a boolean numpy array with the same shape as the values,
             # use it to mask the values and assign the new values to the masked values
             self.values[index] = value
