@@ -613,10 +613,15 @@ class S2ImageL1C(S2Image):
         assert self.producttype == "MSIL1C", f"Unexpected product type {self.producttype} in image {self.folder}"
 
         first_granule = self.granules[list(self.granules.keys())[0]]
-        self.granule_folder = os.path.dirname(os.path.dirname(first_granule)).replace(f"{self.folder}/", "")
-        self.msk_clouds_file = os.path.join(self.folder, self.granule_folder, "MSK_CLOUDS_B00.gml").replace("\\","/")
+        self.granule_folder = os.path.dirname(os.path.dirname(first_granule))
+        print(f"Granule folder is: {self.granule_folder}")
+        self.msk_clouds_file = os.path.join(self.granule_folder, "MSK_CLOUDS_B00.gml").replace("\\","/")
         if not hasattr(self, "metadata_tl"):
-            self.metadata_tl = os.path.join(self.folder, self.granule_folder, "MTD_TL.xml").replace("\\","/")
+            self.metadata_tl = os.path.join(self.granule_folder, "MTD_TL.xml").replace("\\","/")
+            print(f"NO hasattr metadata_tl which is: {self.metadata_tl}")
+        else:
+            print(f"YES hasattr metadata_tl which is: {self.metadata_tl}")
+        
         self.root_metadata_tl = None
 
         # Granule in L1C does not include TCI
@@ -666,13 +671,16 @@ class S2ImageL1C(S2Image):
                 if hasattr(self, atribute):
                     setattr(new_obj, atribute, getattr(self, atribute))
         else:
+            print(f"Copying from {self.metadata_tl} to {new_obj.metadata_tl}")
             get_file(self.metadata_tl, new_obj.metadata_tl)
-
+        
+        granule_folder_rel = new_obj.granule_folder.replace("\\", "/").replace(new_obj.folder.replace("\\","/")+"/", "")
+        print(granule_folder_rel)
         # Add metadata_tl to granules.json
         granules_path = os.path.join(new_obj.folder, "granules.json").replace("\\", "/")
         with open(granules_path, "r") as fh:
             info_granules_metadata = json.load(fh)
-        info_granules_metadata["metadata_tl"] = os.path.join(new_obj.granule_folder, "MTD_TL.xml").replace("\\","/")
+        info_granules_metadata["metadata_tl"] = os.path.join(granule_folder_rel, "MTD_TL.xml").replace("\\","/")
         with open(granules_path, "w") as f:
             json.dump(info_granules_metadata, f)
         
