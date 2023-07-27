@@ -2,6 +2,8 @@ from setuptools import setup, find_packages
 import codecs
 import os.path
 
+with open("README.md", "r") as fh:
+    long_description = fh.read()
 
 REQUIREMENTS_EXTRA =["scikit-image", "fsspec"]
 REQUIREMENTS_GOOGLE = ["gcsfs", "google-cloud-storage", "earthengine-api"]
@@ -50,8 +52,9 @@ def get_version(rel_path):
 setup(name="georeader",
       version=get_version("georeader/__init__.py"),
       author="Gonzalo Mateo-Garcia",
+      long_description=long_description,
       packages=find_packages(".", exclude=["tests"]),
-      description="Lightweight thead and process save readers for big rasters",
+      description="Lightweight reader for raster files",
       install_requires=parse_requirements_file("requirements.txt"),
       extras_require=EXTRAS,
       keywords=["raster reading", "rasterio"],
