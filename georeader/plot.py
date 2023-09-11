@@ -56,6 +56,8 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
     """
     if "ax" in kwargs:
         ax = kwargs.pop("ax")
+        if ax is None:
+            ax = plt.gca()
     else:
         ax = plt.gca()
     

@@ -309,7 +309,7 @@ class GeoTensor:
                          fill_value_default=self.fill_value_default)
 
     
-    def isel(self, sel: Dict[str, slice]) -> '__class__':
+    def isel(self, sel: Dict[str, Union[slice, list, int]]) -> '__class__':
         """
         Slicing with dict. It doesn't work with negative indexes!
 
@@ -332,6 +332,8 @@ class GeoTensor:
         slices_window = []
         for k in ["y", "x"]:
             if k in sel:
+                if not isinstance(sel[k], slice):
+                    raise NotImplementedError(f"Only slice selection supported for x, y dims, found {sel[k]}")
                 slices_window.append(sel[k])
             else:
                 size = self.width if (k == "x") else self.height
@@ -344,12 +346,14 @@ class GeoTensor:
         return GeoTensor(self.values[slice_list], transform_current, self.crs,
                          self.fill_value_default)
 
-    def _slice_tuple(self, sel):
+    def _slice_tuple(self, sel: Dict[str, Union[slice, list, int]]) -> tuple:
         slice_list = []
         # shape_ = self.shape
         # sel_copy = sel.copy()
         for _i, k in enumerate(self.dims):
             if k in sel:
+                if not isinstance(sel[k], slice) and not isinstance(sel[k], list) and not isinstance(sel[k], int):
+                    raise NotImplementedError(f"Only slice selection supported for x, y dims, found {sel[k]}")
                 # sel_copy[k] = slice(max(0, sel_copy[k].start), min(shape_[_i], sel_copy[k].stop))
                 slice_list.append(sel[k])
             else:
