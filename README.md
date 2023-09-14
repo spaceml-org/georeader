@@ -15,8 +15,6 @@ pip install git+https://github.com/spaceml-org/georeader#egg=georeader[google]
 pip install git+https://github.com/spaceml-org/georeader#egg=georeader[microsoftplanetary]
 ```
 
-This package is work in progress. The API might change without notice. Use it with caution.
-
 ## Getting started
 
 ```python
