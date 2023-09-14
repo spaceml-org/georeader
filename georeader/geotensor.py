@@ -133,17 +133,18 @@ class GeoTensor:
     def copy(self) -> '__class__':
         return self.__copy__()
     
-    def same_extent(self, other:'__class__') -> bool:
+    def same_extent(self, other:'__class__', precision:float=1e-3) -> bool:
         """
         Check if two GeoTensors have the same georeferencing (crs and transform)
 
         Args:
             other (__class__): GeoTensor to compare with.
+            precision (float, optional): precision to compare the transform. Defaults to 1e-3.
 
         Returns:
             bool: True if both GeoTensors have the same georeferencing.
         """
-        return (self.transform == other.transform) and window_utils.compare_crs(self.crs, other.crs) and (self.shape[-2:] == other.shape[-2:])
+        return self.transform.almost_equals(other.transform, precision=precision) and window_utils.compare_crs(self.crs, other.crs) and (self.shape[-2:] == other.shape[-2:])
     
     def __add__(self, other:Union[numbers.Number,'__class__']) -> '__class__':
         """ 
