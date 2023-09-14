@@ -49,10 +49,11 @@ def get_version(rel_path):
         raise RuntimeError("Unable to find version string.")
 
 
-setup(name="georeader",
+setup(name="georeader-spaceml",
       version=get_version("georeader/__init__.py"),
       author="Gonzalo Mateo-Garcia",
       long_description=long_description,
+      long_description_content_type="text/markdown",
       packages=find_packages(".", exclude=["tests"]),
       description="Lightweight reader for raster files",
       install_requires=parse_requirements_file("requirements.txt"),

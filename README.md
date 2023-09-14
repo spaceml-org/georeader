@@ -63,7 +63,8 @@ from rasterio.plot import show
 show(data_memory.values/3500, transform=data_memory.transform)
 
 ```
-![S2image](notebooks/images/sample_read.png)
+<img src="https://raw.githubusercontent.com/spaceml-org/georeader/main/notebooks/images/sample_read.png" alt="awesome georeader" width="50%">
+
 
 Saving the `GeoTensor` as a COG GeoTIFF: 
 
