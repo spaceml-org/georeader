@@ -22,7 +22,7 @@ import netCDF4
 from shapely.ops import unary_union
 from georeader import read
 import rasterio.warp
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def get_auth() -> Tuple[str, str]:
@@ -43,6 +43,42 @@ def get_auth() -> Tuple[str, str]:
 
     return (data["user"], data["password"])
 
+def product_name_from_params(scene_fid:str, orbit:str, daac_scene_number:str)-> str:
+    """
+    Return the product name from the scene_fid, daac_scene_number and orbit
+
+    Args:
+        scene_fid (str): scene_fid of the product. e.g. 'emit20220810t064957'
+        orbit (str): orbit of the product. e.g. '2222205'
+        daac_scene_number (str): daac_scene_number of the product. e.g. '033'
+
+    Returns:
+        str: product name. e.g. 'EMIT_L1B_RAD_001_20220810T064957_2222205_033'
+    """
+    scenedate = scene_fid[4:].replace("t", "T")
+    return f"EMIT_L1B_RAD_001_{scenedate}_{orbit}_{daac_scene_number}"
+
+
+def split_product_name(product_name:str) -> Tuple[str, str, str, datetime]:
+    """
+    Split the product name into its components
+
+    Args:
+        product_name (str): product name. e.g. 'EMIT_L1B_RAD_001_20220810T064957_2222205_033'
+
+    Returns:
+        Tuple[str, str, str, str, str]: scene_fid, orbit, daac_scene_number, datetime
+            e.g. ('emit20220810t064957', '2222205', '033', datetime('2022-08-10T06:49:57'))
+    """
+    scene_fid = f"emit{product_name.split('_')[4]}".replace("T", "t")
+    orbit = product_name.split("_")[5]
+    daac_scene_number = product_name.split("_")[6]
+    date = product_name.split("_")[3]
+    time = product_name.split("_")[4]
+
+    dt = datetime.strptime(date + time, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+
+    return scene_fid, orbit, daac_scene_number, dt
 
 def download_product(link_down:str, filename:Optional[str]=None,
                      display_progress_bar:bool=True) -> str:
@@ -71,7 +107,7 @@ def get_radiance_link(product_path:str) -> str:
     See: https://git.earthdata.nasa.gov/projects/LPDUR/repos/daac_data_download_python/browse
 
     Args:
-        product_path: path to the product or filename of the product.
+        product_path: path to the product or filename of the product or product name without extension.
             e.g. 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
 
     Example:
@@ -80,9 +116,8 @@ def get_radiance_link(product_path:str) -> str:
         'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/EMIT_L1B_RAD_001_20220827T060753_2223904_013/EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
     """
     "EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc"
-    namefile = os.path.basename(product_path)
-    if not namefile.endswith(".nc"):
-        namefile = namefile + ".nc"
+    namefile = os.path.splitext(os.path.basename(product_path))[0]
+    namefile = namefile + ".nc"
     product_id = os.path.splitext(namefile)[0]
     content_id = product_id.split("_")
     content_id[2] = "RAD"
@@ -105,9 +140,9 @@ def get_obs_link(product_path:str) -> str:
         >>> link = get_radiance_link(product_path)
         'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/EMIT_L1B_RAD_001_20220827T060753_2223904_013/EMIT_L1B_OBS_001_20220827T060753_2223904_013.nc'
     """
-    namefile = os.path.basename(product_path)
-    if not namefile.endswith(".nc"):
-        namefile = namefile + ".nc"
+    namefile = os.path.splitext(os.path.basename(product_path))[0]
+    namefile = namefile + ".nc"
+
     product_id = os.path.splitext(namefile)[0]
     content_id = product_id.split("_")
     content_id[2] = "RAD"
