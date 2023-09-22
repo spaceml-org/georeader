@@ -64,6 +64,8 @@ def transform_polygon(polygon:Union[Polygon, MultiPolygon],
     Args:
         polygon: polygon to transform
         transform: Affine transformation
+        relative: if True, the polygon is transformed to relative coordinates (from 0 to 1)
+        shape_raster: shape of the raster to which the polygon belongs. It is used only if relative is True
 
     Returns:
         polygon with coordinates transformed by the affine transformation
