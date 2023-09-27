@@ -21,6 +21,9 @@ def download_product(link_down:str, filename:Optional[str]=None, auth:Any=None,
     Returns:
         str: Filename of the downloaded product
     
+    Raises:
+        requests.exceptions.HTTPError: If the download fails.
+    
     Example:
         >>> # Download a Proba-V image
         >>> from georeader.readers.download_utils import download_product
