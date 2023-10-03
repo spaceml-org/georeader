@@ -138,7 +138,7 @@ class GeoTensor:
         Check if two GeoTensors have the same georeferencing (crs and transform)
 
         Args:
-            other (__class__): GeoTensor to compare with.
+            other (__class__ | GeoData): GeoTensor to compare with. Other GeoData object can be passed (it requires crs, transform and shape attributes)
             precision (float, optional): precision to compare the transform. Defaults to 1e-3.
 
         Returns:
@@ -160,7 +160,6 @@ class GeoTensor:
         Returns:
             GeoTensor: GeoTensor with the result of the addition.
         """
-        # Check if otther is a number
         if isinstance(other, GeoTensor):
             if self.same_extent(other):
                 other =  other.values
@@ -172,7 +171,7 @@ class GeoTensor:
         result_values = self.values + other
 
         return GeoTensor(result_values, transform=self.transform, crs=self.crs,
-                            fill_value_default=self.fill_value_default)
+                         fill_value_default=self.fill_value_default)
     
     def __sub__(self, other:Union[numbers.Number,'__class__']) -> '__class__':
         """
@@ -200,7 +199,7 @@ class GeoTensor:
         result_values = self.values - other
 
         return GeoTensor(result_values, transform=self.transform, crs=self.crs,
-                            fill_value_default=self.fill_value_default)
+                         fill_value_default=self.fill_value_default)
     
     def __mul__(self, other:Union[numbers.Number,'__class__']) -> '__class__':
         """
@@ -227,7 +226,7 @@ class GeoTensor:
         result_values = self.values * other
 
         return GeoTensor(result_values, transform=self.transform, crs=self.crs,
-                            fill_value_default=self.fill_value_default)
+                         fill_value_default=self.fill_value_default)
     
     def __truediv__(self, other:Union[ArrayLike,'__class__']) -> '__class__':
         """
