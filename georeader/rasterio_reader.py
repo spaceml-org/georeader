@@ -9,6 +9,7 @@ from collections.abc import Iterable
 from georeader import window_utils
 from georeader.window_utils import window_bounds, get_slice_pad
 from shapely.geometry import Polygon
+from georeader.abstract_reader import same_extent, GeoData
 
 # https://developmentseed.org/titiler/advanced/performance_tuning/#aws-configuration
 RIO_ENV_OPTIONS_DEFAULT = dict(
@@ -208,6 +209,20 @@ class RasterioReader:
         if self.stack:
             return len(self.paths), self.count, self.height, self.width
         return len(self.paths) * self.count, self.height, self.width
+    
+    def same_extent(self, other:Union[GeoData,'RasterioReader'], precision:float=1e-3) -> bool:
+        """
+        Check if two GeoData objects have the same extent
+
+        Args:
+            other: GeoData object to compare
+            precision: precision to compare the bounds
+
+        Returns:
+            True if both objects have the same extent
+
+        """
+        return same_extent(self, other, precision=precision)
 
     def set_window(self, window_focus:Optional[rasterio.windows.Window] = None,
                    relative:bool = True, boundless:bool=True)->None:
