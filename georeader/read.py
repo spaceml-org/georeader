@@ -522,15 +522,23 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
                 window_in_data = window_in_data.round_offsets(op="floor", pixel_precision=PIXEL_PRECISION)
                 return read_from_window(data_in, window_in_data, return_only_data=return_only_data, trigger_load=True)
 
+    isbool_dtypein = data_in.dtype == 'bool'
+    isbool_dtypedst = False
+
     cast = True
     if dtpye_dst is None:
         cast = False
         dtpye_dst = data_in.dtype
+        if isbool_dtypein:
+            isbool_dtypedst = True
+    elif np.dtype(dtpye_dst) == 'bool':
+        isbool_dtypedst = True
 
     # Create out array for reprojection
     dict_shape_window_out = {"x": window_out.width, "y": window_out.height}
     shape_out = tuple([named_shape[s] if s not in ["x", "y"] else dict_shape_window_out[s] for s in named_shape])
-    destination = np.zeros(shape_out, dtype=dtpye_dst)
+    dst_nodata = dst_nodata or data_in.fill_value_default
+    destination = np.full(shape_out,fill_value=dst_nodata, dtype=dtpye_dst)
 
     if not isinstance(data_in, GeoTensor):
         # Compute real polygon that is going to be read
@@ -543,12 +551,16 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
         geotensor_in = data_in
 
     # Triggering load makes that fill_value_default goes to nodata
-
     np_array_in = np.asanyarray(geotensor_in.values)
-    if cast:
-        np_array_in = np_array_in.astype(dtpye_dst)
 
-    dst_nodata = dst_nodata or geotensor_in.fill_value_default
+    if cast:
+        if isbool_dtypedst:
+            np_array_in = np_array_in.astype(np.float32)
+        else:
+            np_array_in = np_array_in.astype(dtpye_dst)
+    elif isbool_dtypein:
+        np_array_in = np_array_in.astype(np.float32)
+
 
     index_iter = [[(ns, i) for i in range(s)] for ns, s in named_shape.items() if ns not in ["x", "y"]]
     # e.g. if named_shape = {'time': 4, 'band': 2, 'x':10, 'y': 10} index_iter ->
@@ -560,7 +572,10 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
         i_sel_tuple = tuple(t[1] for t in current_select_tuple)
 
         np_array_iter = np_array_in[i_sel_tuple]
-        dst_iter_write = destination[i_sel_tuple]
+        if isbool_dtypedst:
+            dst_iter_write = destination[i_sel_tuple].astype(np.float32)
+        else:
+            dst_iter_write = destination[i_sel_tuple]
 
         rasterio.warp.reproject(
             np_array_iter,
@@ -572,6 +587,9 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
             src_nodata=geotensor_in.fill_value_default,
             dst_nodata=dst_nodata,
             resampling=resampling)
+        
+        if isbool_dtypedst:
+            destination[i_sel_tuple] = (dst_iter_write > .5)
 
     if return_only_data:
         return destination
