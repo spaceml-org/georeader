@@ -71,12 +71,9 @@ def split_product_name(product_name:str) -> Tuple[str, str, str, datetime]:
             e.g. ('emit20220810t064957', '2222205', '033', datetime('2022-08-10T06:49:57'))
     """
     scene_fid = f"emit{product_name.split('_')[4]}".replace("T", "t")
-    orbit = product_name.split("_")[5]
-    daac_scene_number = product_name.split("_")[6]
-    date = product_name.split("_")[3]
-    time = product_name.split("_")[4]
+    date, orbit, daac_scene_number= product_name.split("_")[4:7]
 
-    dt = datetime.strptime(date + time, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+    dt = datetime.strptime(date, "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
 
     return scene_fid, orbit, daac_scene_number, dt
 
