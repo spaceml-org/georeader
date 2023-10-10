@@ -66,7 +66,7 @@ def observation_date_correction_factor(center_coords:Tuple[float, float], date_o
 
 
 def radiance_to_reflectance(data:GeoTensor, solar_irradiance:Union[List[float], np.array],
-                            date_of_acquisition:datetime,preseve_mask:bool=True) -> GeoTensor:
+                            date_of_acquisition:datetime) -> GeoTensor:
     """
 
     toaBandX = (radianceBandX / 100 * pi * d^2) / (cos(solarzenithangle/180*pi) * solarIrradianceBandX)
@@ -83,7 +83,6 @@ def radiance_to_reflectance(data:GeoTensor, solar_irradiance:Union[List[float], 
                 microwatts per centimeter_squared per nanometer per steradian
         solar_irradiance: (C,) vector units: W/m²/nm
         date_of_acquisition: date of acquisition to compute the solar zenith angles
-        preseve_mask: if True, the mask of the input data will be preserved
 
     Returns:
         GeoTensor with ToA on each channel
