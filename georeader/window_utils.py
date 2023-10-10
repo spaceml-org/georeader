@@ -1,4 +1,5 @@
 import rasterio.windows
+import rasterio.transform
 from typing import Tuple, Dict, Optional, Union, Any, List
 import numbers
 import numpy as np

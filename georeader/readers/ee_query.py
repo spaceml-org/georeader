@@ -146,7 +146,7 @@ def query(area:Union[MultiPolygon,Polygon],
 
     geodf = img_collection_to_feature_collection(img_col,
                                                  ["system:time_start"] + list(keys_query.keys()),
-                                                as_geopandas=True, band_crs="B1")
+                                                as_geopandas=True, band_crs="B2")
 
     geodf.rename(keys_query, axis=1, inplace=True)
 
@@ -166,7 +166,7 @@ def query(area:Union[MultiPolygon,Polygon],
         keys_query_s2 = {"PRODUCT_ID": "title", 'CLOUDY_PIXEL_PERCENTAGE': "cloudcoverpercentage"}
         geodf_s2 = img_collection_to_feature_collection(img_col_s2,
                                                         ["system:time_start"] + list(keys_query_s2.keys()),
-                                                        as_geopandas=True, band_crs="B1")
+                                                        as_geopandas=True, band_crs="B2")
         geodf_s2["collection_name"] = "COPERNICUS/S2_HARMONIZED"
         geodf_s2.rename(keys_query_s2, axis=1, inplace=True)
         if geodf_s2.shape[0] > 0:
@@ -260,7 +260,9 @@ def img_collection_to_feature_collection(img_col:ee.ImageCollection,
         dictio = ee.Dictionary.fromLists(properties, values)
         dictio = dictio.set("gee_id", img.id())
         if band_crs is not None:
-            dictio = dictio.set("crs_product", img.select(band_crs).projection().crs())
+            proj = img.select(band_crs).projection()
+            dictio = dictio.set("crs_product", proj.crs())
+            dictio = dictio.set("proj", proj)
 
         return ee.Feature(img.geometry(), dictio)
 

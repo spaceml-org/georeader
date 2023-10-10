@@ -55,6 +55,9 @@ setup(name="georeader-spaceml",
       long_description=long_description,
       long_description_content_type="text/markdown",
       packages=find_packages(".", exclude=["tests"]),
+       package_data={
+        "georeader" : ["SolarIrradiance_Thuillier.csv"]
+       },
       description="Lightweight reader for raster files",
       install_requires=parse_requirements_file("requirements.txt"),
       extras_require=EXTRAS,
