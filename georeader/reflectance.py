@@ -20,7 +20,8 @@ def earth_sun_distance_correction_factor(date_of_acquisition:datetime) -> float:
      > datetime.datetime.strptime("2022-01-01", "%Y-%m-%d").timetuple().tm_yday -> 1
 
     Args:
-        date_of_acquisition:
+        date_of_acquisition: date of acquisition. The day of the year will be used 
+            to compute the correction factor
 
     Returns:
         (1-0.01673*cos(0.0172*(t-4)))
@@ -36,7 +37,7 @@ def observation_date_correction_factor(center_coords:Tuple[float, float], date_o
 
     Args:
         center_coords: location being considered (x,y) (long, lat if EPSG:4326) 
-        date_of_acquisition:
+        date_of_acquisition: date of acquisition to compute the solar zenith angles.
         crs_coords: if None it will assume center_coords are in EPSG:4326
 
     Returns:
@@ -138,6 +139,12 @@ THUILLIER_RADIANCE = None
 def load_thuillier_irradiance() -> pd.DataFrame:
     """
     https://oceancolor.gsfc.nasa.gov/docs/rsr/f0.txt
+
+    G. Thuillier et al., "The Solar Spectral Irradiance from 200 to 2400nm as 
+        Measured by the SOLSPEC Spectrometer from the Atlas and Eureca Missions",
+    Solar Physics, vol. 214, no. 1, pp. 1-22, May 2003, doi: 10.1023/A:1024048429145.
+
+
     Returns:
         pandas dataframe with columns: Nanometer, Radiance(mW/m2/nm)
     """
