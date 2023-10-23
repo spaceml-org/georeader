@@ -43,6 +43,7 @@ def save_tiled_geotiff(data_save:GeoData, path_tiff_save:str,
 
     """
     profile = PROFILE_TILED_GEOTIFF_DEFAULT.copy()
+    profile.update({"blockxsize": blocksize, "blockysize": blocksize})
     if profile_arg is not None:
         profile.update(profile_arg)
     
