@@ -255,13 +255,12 @@ def img_collection_to_feature_collection(img_col:ee.ImageCollection,
 
     properties = ee.List(properties)
 
-    def extractFeatures(img):
+    def extractFeatures(img:ee.Image) -> ee.Feature:
         values = properties.map(lambda prop: img.get(prop))
         dictio = ee.Dictionary.fromLists(properties, values)
         dictio = dictio.set("gee_id", img.id())
         if band_crs is not None:
             proj = img.select(band_crs).projection()
-            dictio = dictio.set("crs_product", proj.crs())
             dictio = dictio.set("proj", proj)
 
         return ee.Feature(img.geometry(), dictio)
