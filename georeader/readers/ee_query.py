@@ -76,6 +76,20 @@ def query_s1(area:Union[MultiPolygon,Polygon],
 
     return geodf
 
+def figure_out_collection_landsat(tile:str) -> str:
+    if tile.startswith("LC08"):
+        if tile.endswith("T1_RT") or tile.endswith("T1"):
+            return "LANDSAT/LC08/C02/T1_RT_TOA"
+        elif tile.endswith("T2"):
+            return "LANDSAT/LC08/C02/T2_TOA"
+    elif tile.startswith("LC09"):
+        if tile.endswith("T1"):
+            return "LANDSAT/LC09/C02/T1_TOA"
+        elif tile.endswith("T2"):
+            return "LANDSAT/LC09/C02/T2_TOA"
+    else:
+        raise ValueError(f"Tile {tile} not recognized")
+
 
 def query(area:Union[MultiPolygon,Polygon],
           date_start:datetime, date_end:datetime,
@@ -138,11 +152,22 @@ def query(area:Union[MultiPolygon,Polygon],
     img_col = ee.ImageCollection(image_collection_name).filterDate(date_start.replace(tzinfo=None),
                                                                    date_end.replace(tzinfo=None)).filterBounds(
         pol)
+    if "T1" in image_collection_name:
+        image_collection_name_t2 = image_collection_name.replace("T1_RT", "T2").replace("T1","T2")
+        img_col_t1 = ee.ImageCollection(image_collection_name_t2).filterDate(date_start.replace(tzinfo=None),
+                                                                     date_end.replace(tzinfo=None)).filterBounds(
+            pol)
+        img_col = img_col.merge(img_col_t1)
+    
     if (producttype == "Landsat") or (producttype == "both"):
         img_col_l9 = ee.ImageCollection("LANDSAT/LC09/C02/T1_TOA").filterDate(date_start.replace(tzinfo=None),
                                                                    date_end.replace(tzinfo=None)).filterBounds(
         pol)
         img_col = img_col.merge(img_col_l9)
+        img_col_l9_t2 = ee.ImageCollection("LANDSAT/LC09/C02/T2_TOA").filterDate(date_start.replace(tzinfo=None),
+                                                                   date_end.replace(tzinfo=None)).filterBounds(
+        pol)
+        img_col = img_col.merge(img_col_l9_t2)
 
     geodf = img_collection_to_feature_collection(img_col,
                                                  ["system:time_start"] + list(keys_query.keys()),
@@ -152,7 +177,7 @@ def query(area:Union[MultiPolygon,Polygon],
 
     if geodf.shape[0] > 0:
         if (producttype == "Landsat") or (producttype == "both"):
-            geodf["collection_name"] = geodf["title"].apply(lambda x: "LANDSAT/LC08/C02/T1_RT_TOA" if x.startswith("LC08") else "LANDSAT/LC09/C02/T1_TOA")
+            geodf["collection_name"] = geodf["title"].apply(figure_out_collection_landsat)
         else:
             geodf["collection_name"] = image_collection_name
 
