@@ -5,7 +5,10 @@ Read data from rasters: very few dependencies, reads from cloud storage and lazy
 ## Install
 
 ```bash
-# Install with minimal requirements (only rasterio, numpy as shapely)
+# From pip
+pip install georeader-spaceml
+
+# From GitHub
 pip install git+https://github.com/spaceml-org/georeader#egg=georeader
 
 # Install with Google dependencies (to read objects from Google Cloud Storage or Google Earth Engine)
