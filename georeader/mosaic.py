@@ -10,10 +10,12 @@ from georeader import slices
 from shapely.geometry import Polygon, MultiPolygon, box
 import rasterio.windows
 from collections import namedtuple
+import georeader
 
 
 def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
                    polygon:Optional[Polygon]=None,
+                   crs_polygon:Optional[str]=None,
                    dst_transform:Optional[rasterio.transform.Affine]=None,
                    bounds:Optional[Tuple[float, float, float, float]]=None,
                    dst_crs:Optional[str]=None,
@@ -31,7 +33,8 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
     Args:
         data_list: List of raster objects. each element could be a single geodata object or a tuple of an object and a
             mask (second item will be considered the invalid values mask).
-        polygon: polygon to compute the mosaic in dst_crs
+        polygon: polygon to compute the mosaic in crs_polygon
+        crs_polygon: CRS of the polygon. If not provided it will use the CRS of the first product of the list.
         bounds: bounds to compute the mosaic.
         dst_crs: CRS of the product. If not provided it will use the CRS of the first product of the list
         dst_transform: Optional dest transform. If not provided the dst_transform is a rectilinear transform computed
@@ -54,6 +57,12 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
     else:
         first_data_object = data_list[0]
         first_mask_object = None
+    
+    if dst_transform is None:
+        dst_transform = first_data_object.transform
+
+    if dst_crs is None:
+        dst_crs = first_data_object.crs
 
     if polygon is None:
         if bounds is not None:
@@ -69,12 +78,11 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
                     polygon = polygon_iter
                 else:
                     polygon = polygon.union(polygon_iter)
-
-    if dst_transform is None:
-        dst_transform = first_data_object.transform
-
-    if dst_crs is None:
-        dst_crs = first_data_object.crs
+    else:
+        if crs_polygon is None:
+            crs_polygon = dst_crs
+        elif not georeader.compare_crs(crs_polygon, dst_crs):
+            polygon = window_utils.polygon_to_crs(polygon, crs_polygon, dst_crs)
 
     GeoDataFake = namedtuple("GeoDataFake", ["transform", "crs"])
     window_polygon = read.window_from_polygon(GeoDataFake(transform=dst_transform, crs=dst_crs),
