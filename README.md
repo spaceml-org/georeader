@@ -95,12 +95,30 @@ Other:
 
 If you find this code useful please cite:
 ```
-@software{georeader,
-  author = {Mateo-García, Gonzalo},
-  month = {11},
-  title = {{georeader}},
-  url = {https://github.com/spaceml-org/georeader},
-  version = {1.0.2},
-  year = {2022}
+@article{portales-julia_global_2023,
+	title = {Global flood extent segmentation in optical satellite images},
+	volume = {13},
+	issn = {2045-2322},
+	doi = {10.1038/s41598-023-47595-7},
+	number = {1},
+	urldate = {2023-11-30},
+	journal = {Scientific Reports},
+	author = {Portalés-Julià, Enrique and Mateo-García, Gonzalo and Purcell, Cormac and Gómez-Chova, Luis},
+	month = nov,
+	year = {2023},
+	pages = {20316},
+}
+@article{ruzicka_starcop_2023,
+	title = {Semantic segmentation of methane plumes with hyperspectral machine learning models},
+	volume = {13},
+	issn = {2045-2322},
+	url = {https://www.nature.com/articles/s41598-023-44918-6},
+	doi = {10.1038/s41598-023-44918-6},
+	number = {1},
+	journal = {Scientific Reports},
+	author = {Růžička, Vít and Mateo-Garcia, Gonzalo and Gómez-Chova, Luis and Vaughan, Anna, and Guanter, Luis and Markham, Andrew},
+	month = nov,
+	year = {2023},
+	pages = {19999},
 }
 ```
