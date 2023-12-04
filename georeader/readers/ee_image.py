@@ -1,12 +1,19 @@
 from georeader.geotensor import GeoTensor, concatenate
 from georeader.abstract_reader import GeoData
 from georeader.rasterio_reader import RasterioReader
-from shapely.geometry import Polygon, MultiPolygon, mapping
-from typing import Union, Dict, Optional, Tuple, List
+from shapely.geometry import Polygon, MultiPolygon, mapping, box
+from typing import Union, Dict, Optional, Tuple, List, Any
 import ee
 import rasterio.windows
 from rasterio import Affine
 import numpy as np
+from collections import namedtuple
+from georeader import read, window_utils
+from io import BytesIO
+import rasterio
+from georeader import mosaic
+
+FakeGeoData=namedtuple("FakeGeoData",["crs", "transform"])
 
 
 def export_image_fast(image:ee.Image, geometry:Union[ee.Geometry, Polygon, MultiPolygon],
@@ -59,34 +66,94 @@ def export_image_fast(image:ee.Image, geometry:Union[ee.Geometry, Polygon, Multi
 
     return out
 
-def export_image_reproject(image: ee.Image,
-                           transform:rasterio.Affine,
-                           crs:str,
-                           dimensions:Tuple[int, int],
-                           bands:Optional[List[str]]=None,
-                           donwload_path:Optional[str]=None) -> GeoData:
-    # TODO default if not provided
-    donwload_path
+def split_bounds(bounds:Tuple[float, float, float, float]) -> List[Tuple[float, float, float, float]]:
+    min_x, min_y, max_x, max_y = bounds
+    mid_x = (min_x + max_x) / 2
+    mid_y = (min_y + max_y) / 2
 
-    download_url = image.getDownloadURL(params={
-        "name": name,
-        "bands": bands,
-        "crs_transform": list(transform)[:6],
-        "crs": str(crs).upper(),
-        "dimensions": dimensions,
-        "filePerBand": False})
+    return [
+        (min_x, min_y, mid_x, mid_y),  # Lower left quadrant
+        (mid_x, min_y, max_x, mid_y),  # Lower right quadrant
+        (min_x, mid_y, mid_x, max_y),  # Upper left quadrant
+        (mid_x, mid_y, max_x, max_y),  # Upper right quadrant
+    ]
 
-    import requests
-    r = requests.get(download_url, stream=True)
-    filenamezip = f'/home/gonzalo/Downloads/{name}.zip'
-    with open(filenamezip, "wb") as fd:
-        for chunk in r.iter_content(chunk_size=1024):
-            fd.write(chunk)
+def export_image_getpixels(asset_id: str,
+                           geometry:Union[Polygon, MultiPolygon],
+                           proj:Dict[str, Any],
+                           bands_gee:List[str],
+                           crs_polygon:str="EPSG:4326") -> GeoTensor:
+    """
+    Exports an image from the GEE as a GeoTensor. It uses the `ee.data.getPixels` method to export.
 
-    # TODO unzip?
-    filename = f'zip+file:///{filenamezip}!{name}.tif'
-    data = RasterioReader(filename)
-    return data
+    Args:
+        asset_id (str): Name of the asset
+        geometry (Union[Polygon, MultiPolygon]): geometry to export
+        proj (Dict[str, Any]): Dict with fields:
+            - crs: crs of the image
+            - transform: transform of the image
+        bands_gee (List[str]): List of bands to export
+        crs_polygon (str, optional): crs of the geometry. Defaults to "EPSG:4326".
+
+    Returns:
+        GeoTensor: GeoTensor object
+    """
+    geodata = FakeGeoData(crs=proj["crs"], transform=Affine(*proj["transform"]))
+    window_polygon = read.window_from_polygon(geodata, geometry, crs_polygon=crs_polygon,
+                                              window_surrounding=True)
+    window_polygon = window_utils.round_outer_window(window_polygon)
+    transform_window = rasterio.windows.transform(window_polygon, geodata.transform)
+
+    try:
+        data_raw = ee.data.getPixels({"assetId": asset_id, 
+                    'fileFormat':"GEO_TIFF", 
+                    'bandIds':  bands_gee,
+                    'grid': {
+                        'dimensions': {
+                            'height': window_polygon.height, 
+                            'width': window_polygon.width
+                        },
+                        'affineTransform': {
+                            'scaleX': transform_window.a,
+                            'shearX': transform_window.b,
+                            'translateX': transform_window.c,
+                            'shearY': transform_window.d,
+                            'scaleY': transform_window.e,
+                            'translateY': transform_window.f
+                        },
+                        'crsCode': geodata.crs
+                    }
+                    })
+        data = rasterio.open(BytesIO(data_raw))
+        geotensor = GeoTensor(data.read(), transform=data.transform,
+                             crs=data.crs, fill_value_default=data.nodata)
+    except ee.EEException as e:
+        # Check if the exception starts with Total request size
+        if str(e).startswith("Total request size"):
+            # Split the geometry in two and call recursively
+            bounds = geometry.bounds
+            # Split the bounds in two
+            geotensors = []
+            for sb in split_bounds(bounds):
+                # Create a polygon with the bounds
+                poly = box(*sb)
+                # Call recursively
+                gt = export_image_getpixels(asset_id, poly, 
+                                            proj, bands_gee, crs_polygon)
+                # Concatenate the GeoTensor
+                geotensors.append(gt)
+            
+            dst_crs = geotensors[0].crs
+            aoi_dst_crs = window_utils.polygon_to_crs(geometry, 
+                                                      crs_polygon=crs_polygon, 
+                                                      dst_crs=dst_crs)
+            
+            geotensor = mosaic.spatial_mosaic(geotensors, 
+                                              polygon=aoi_dst_crs, 
+                                              dst_crs=dst_crs)
+        else:
+            raise e
+    return geotensor
 
 
 

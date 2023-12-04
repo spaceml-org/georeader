@@ -5,6 +5,7 @@ from georeader.geotensor import GeoTensor
 import numpy as np
 import pandas as pd
 import pkg_resources
+from numpy.typing import ArrayLike, NDArray
 
 
 def earth_sun_distance_correction_factor(date_of_acquisition:datetime) -> float:
@@ -30,8 +31,9 @@ def earth_sun_distance_correction_factor(date_of_acquisition:datetime) -> float:
     return 1 - 0.01673 * np.cos(0.0172 * (tm_yday - 4))
 
 
-def observation_date_correction_factor(center_coords:Tuple[float, float], date_of_acquisition:datetime,
-                                       crs_coords:Optional[str]=None,) -> float:
+def observation_date_correction_factor(center_coords:Tuple[float, float], 
+                                       date_of_acquisition:datetime,
+                                       crs_coords:Optional[str]=None) -> float:
     """
     returns  (pi * d^2) / cos(solarzenithangle/180*pi)
 
@@ -65,8 +67,10 @@ def observation_date_correction_factor(center_coords:Tuple[float, float], date_o
     return np.pi*(d**2) / np.cos(sza/180.*np.pi)
 
 
-def radiance_to_reflectance(data:GeoTensor, solar_irradiance:Union[List[float], np.array],
-                            date_of_acquisition:datetime) -> GeoTensor:
+def radiance_to_reflectance(data:Union[GeoTensor, ArrayLike], solar_irradiance:Union[List[float], np.array],
+                            date_of_acquisition:datetime,
+                            center_coords:Optional[Tuple[float, float]]=None,
+                            crs_coords:Optional[str]=None ) -> Union[GeoTensor, NDArray]:
     """
 
     toaBandX = (radianceBandX / 100 * pi * d^2) / (cos(solarzenithangle/180*pi) * solarIrradianceBandX)
@@ -83,6 +87,8 @@ def radiance_to_reflectance(data:GeoTensor, solar_irradiance:Union[List[float], 
                 microwatts per centimeter_squared per nanometer per steradian
         solar_irradiance: (C,) vector units: W/m²/nm
         date_of_acquisition: date of acquisition to compute the solar zenith angles
+        center_coords: location being considered (x,y) (long, lat if EPSG:4326)
+        crs_coords: if None it will assume center_coords are in EPSG:4326
 
     Returns:
         GeoTensor with ToA on each channel
@@ -94,14 +100,26 @@ def radiance_to_reflectance(data:GeoTensor, solar_irradiance:Union[List[float], 
         f"Different number of channels {data.shape[0]} than number of radiances {len(solar_irradiance)}"
 
     # Get latitude and longitude of the center of image to compute the solar angle
-    center_coords = data.transform * (data.shape[-1] // 2, data.shape[-2] // 2)
-    constant_factor = observation_date_correction_factor(center_coords, date_of_acquisition, crs_coords=data.crs)
+    if center_coords is None:
+        assert isinstance(data, GeoTensor), "If center_coords is None, data must be a GeoTensor"
+        center_coords = data.transform * (data.shape[-1] // 2, data.shape[-2] // 2)
+        crs_coords = data.crs
+    
+    constant_factor = observation_date_correction_factor(center_coords, date_of_acquisition, crs_coords=crs_coords)
+
+    if isinstance(data, GeoTensor):
+        data_values = data.values
+    else:
+        data_values = data
 
     # µW /(nm cm² sr) to W/(nm m² sr)
-    radiances = data.values * (10**(-6) / 1) * (1 /10**(-4))
+    radiances = data_values * (10**(-6) / 1) * (1 /10**(-4))
 
     # data_toa = data.values / 100 * constant_factor / solar_irradiance
     data_toa = radiances * constant_factor / solar_irradiance
+    if not  isinstance(data, GeoTensor):
+        return data_toa
+    
     mask = data.values == data.fill_value_default
     data_toa[mask] = data.fill_value_default
 

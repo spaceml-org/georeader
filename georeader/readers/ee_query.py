@@ -97,7 +97,7 @@ def query(area:Union[MultiPolygon,Polygon],
           return_collection:bool=False,
           add_s2cloudless:bool=False)-> Union[gpd.GeoDataFrame, Tuple[gpd.GeoDataFrame, ee.ImageCollection]]:
     """
-    Query Landsat and Sentinel-2 products from the Google Earth Engine
+    Query Landsat and Sentinel-2 products from the Google Earth Engine.
 
     Args:
         area: area to query images in EPSG:4326
@@ -226,6 +226,10 @@ def query(area:Union[MultiPolygon,Polygon],
 
 
     geodf = _add_stuff(geodf, area, tz)
+
+    # Fix ids of Landsat to remove initial shit in the names
+    if geodf.satellite.str.startswith("LC0").any():
+        geodf.loc[geodf.satellite.str.startswith("LC0"),"gee_id"] = geodf.loc[geodf.satellite.str.startswith("LC0"),"gee_id"].apply(lambda x: "LC0"+x.split("LC0")[1])
 
     if filter_duplicates:
         # TODO filter prioritizing s2cloudless?
