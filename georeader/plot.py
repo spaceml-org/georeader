@@ -202,7 +202,8 @@ def plot_segmentation_mask(mask:Union[GeoData, np.array], color_array:np.array,
                            interpretation_array:Optional[List[str]]=None,
                            legend:bool=True, ax:Optional[plt.Axes]=None,
                            add_scalebar:bool=False,
-                           kwargs_scalebar:Optional[dict]=None) -> plt.Axes:
+                           kwargs_scalebar:Optional[dict]=None,
+                           bounds_in_latlng:bool=True) -> plt.Axes:
     """
     Plots a discrete segmentation mask with a legend.
 
@@ -215,6 +216,7 @@ def plot_segmentation_mask(mask:Union[GeoData, np.array], color_array:np.array,
         add_scalebar (bool, optional): Defaults to False. Add a scalebar to the plot
         kwargs_scalebar (Optional[dict], optional): Defaults to None. Keyword arguments for the scalebar. 
         See https://github.com/ppinard/matplotlib-scalebar. (install with pip install matplotlib-scalebar)
+        bounds_in_latlng (bool, optional): Defaults to True. If True, the x and y ticks are shown in latlng.
     
     Returns:
         plt.Axes
@@ -268,6 +270,27 @@ def plot_segmentation_mask(mask:Union[GeoData, np.array], color_array:np.array,
             kwargs_scalebar["dx"] = 1
         
         ax.add_artist(ScaleBar(**kwargs_scalebar))
+    
+    if bounds_in_latlng:
+        from matplotlib.ticker import FuncFormatter
+
+        xmin, ymin, xmax, ymax = mask.bounds
+
+        @FuncFormatter
+        def x_formatter(x, pos):
+            # transform x,ymin to latlng
+            longs, lats = rasterio.warp.transform(mask.crs, "epsg:4326", [x], [ymin])
+            return f"{longs[0]:.2f}"
+        
+
+        @FuncFormatter
+        def y_formatter(y, pos):
+            # transform xmin,y to latlng
+            longs, lats = rasterio.warp.transform(mask.crs, "epsg:4326", [xmin], [y])
+            return f"{lats[0]:.2f}"
+
+        ax.xaxis.set_major_formatter(x_formatter)
+        ax.yaxis.set_major_formatter(y_formatter)
 
     return ax
 
