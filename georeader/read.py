@@ -325,7 +325,7 @@ def read_reproject_like(data_in: GeoData, data_like: GeoData,
         if isinstance(resolution_dst, float):
             resolution_dst = (resolution_dst, resolution_dst)
         
-        resolution_data_like = data_like.resolution
+        resolution_data_like = data_like.res
 
         shape_out = int(round(shape_out[0] / resolution_dst[0] * resolution_data_like[0])), \
                     int(round(shape_out[1] / resolution_dst[1] * resolution_data_like[1]))
