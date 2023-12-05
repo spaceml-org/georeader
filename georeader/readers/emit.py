@@ -33,13 +33,13 @@ def get_auth() -> Tuple[str, str]:
         with open(json_file, "w") as fh:
             json.dump({"user": "SET-USER", "password": "SET-PASSWORD"}, fh)
 
-        raise FileNotFoundError(f"In order to download Proba-V images add user and password to file : {json_file}")
+        raise FileNotFoundError(f"In order to download EMIT images add user and password to file : {json_file}")
 
     with open(json_file, "r") as fh:
         data = json.load(fh)
     
     if data["user"] == "SET-USER":
-        raise FileNotFoundError(f"In order to download Proba-V images add user and password to file : {json_file}")
+        raise FileNotFoundError(f"In order to download EMIT images add user and password to file : {json_file}")
 
     return (data["user"], data["password"])
 
@@ -78,22 +78,27 @@ def split_product_name(product_name:str) -> Tuple[str, str, str, datetime]:
     return scene_fid, orbit, daac_scene_number, dt
 
 def download_product(link_down:str, filename:Optional[str]=None,
-                     display_progress_bar:bool=True) -> str:
+                     display_progress_bar:bool=True,
+                     auth:Optional[Tuple[str, str]] = None) -> str:
     """
-    Download a product from the EMIT website.
-    See: https://git.earthdata.nasa.gov/projects/LPDUR/repos/daac_data_download_python/browse
+    Download a product from the EMIT website (https://search.earthdata.nasa.gov/search). 
+    It requires that you have an account in the NASA Earthdata portal. 
+
+    This code is based on this example: https://git.earthdata.nasa.gov/projects/LPDUR/repos/daac_data_download_python/browse
 
     Args:
         link_down: link to the product
         filename: filename to save the product
         display_progress_bar: display tqdm progress bar
+        auth: tuple with user and password to download the product. If None, it will try to read the user and password from ~/.georeader/auth_emit.json 
 
     Example:
         >>> link_down = 'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/EMIT_L1B_RAD_001_20220828T051941_2224004_006/EMIT_L1B_RAD_001_20220828T051941_2224004_006.nc'
         >>> filename = download_product(link_down)
     """
-    auth_emit = get_auth()
-    return download_product_base(link_down, filename=filename, auth=auth_emit,
+    if auth is None:
+        auth = get_auth()
+    return download_product_base(link_down, filename=filename, auth=auth,
                                   display_progress_bar=display_progress_bar, 
                                   verify=False)
 

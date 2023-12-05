@@ -271,6 +271,7 @@ def plot_segmentation_mask(mask:Union[GeoData, np.array], color_array:np.array,
         
         ax.add_artist(ScaleBar(**kwargs_scalebar))
     
+    # TODO https://github.com/eelcovv/LatLonCalc
     if bounds_in_latlng:
         from matplotlib.ticker import FuncFormatter
 
