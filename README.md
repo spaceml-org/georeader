@@ -93,7 +93,7 @@ Other:
 
 Used in other projects:
 * [georeader with ml4floods to automatically download and produce flood extent maps](https://spaceml-org.github.io/ml4floods/content/ml4ops/HOWTO_postprocess_inference.html)
-* [georeader with STARCOP to simulate Sentinel-2 retrievals from AVIRIS](https://github.com/spaceml-org/STARCOP/blob/main/notebooks/simulate_aviris_2_sentinel2.ipynb)
+* [georeader with STARCOP to simulate Sentinel-2 from AVIRIS images](https://github.com/spaceml-org/STARCOP/blob/main/notebooks/simulate_aviris_2_sentinel2.ipynb)
 
 
 ## Citation
