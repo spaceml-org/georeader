@@ -1,4 +1,4 @@
-cff-version: 1.0
+cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 authors:
 - family-names: "Mateo-Garcia"
@@ -6,6 +6,7 @@ authors:
   orcid: "https://orcid.org/0000-0002-0569-393X"
   affiliation: "Universitat de Valencia"
 title: "georeader"
-version: 1.0
+version: 1.0.9
+doi: 10.1038/s41598-023-47595-7
 date-released: 2022-11-01
 url: "https://github.com/spaceml-org/georeader"
