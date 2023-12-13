@@ -9,7 +9,7 @@ Some of the functions of this module are based on the official EMIT repo: https:
 """
 import os
 import json
-from typing import Tuple, Optional, Any, Union
+from typing import Tuple, Optional, Any, Union, Dict
 from georeader.readers.download_utils import download_product as download_product_base
 from georeader.abstract_reader import AbstractGeoData
 import rasterio
@@ -24,6 +24,8 @@ from georeader import read
 import rasterio.warp
 from datetime import datetime, timezone
 
+AUTH_METHOD = "auth" # "auth" or "token"
+TOKEN = None
 
 def get_auth() -> Tuple[str, str]:
     home_dir = os.path.join(os.path.expanduser('~'),".georeader")
@@ -42,6 +44,15 @@ def get_auth() -> Tuple[str, str]:
         raise FileNotFoundError(f"In order to download EMIT images add user and password to file : {json_file}")
 
     return (data["user"], data["password"])
+
+
+def get_headers() -> Optional[Dict[str, str]]:
+    if TOKEN is None:
+        return
+    
+    headers = {"Authorization": f"Bearer {TOKEN}"}
+    return headers
+
 
 def product_name_from_params(scene_fid:str, orbit:str, daac_scene_number:str)-> str:
     """
@@ -77,6 +88,7 @@ def split_product_name(product_name:str) -> Tuple[str, str, str, datetime]:
 
     return scene_fid, orbit, daac_scene_number, dt
 
+
 def download_product(link_down:str, filename:Optional[str]=None,
                      display_progress_bar:bool=True,
                      auth:Optional[Tuple[str, str]] = None) -> str:
@@ -96,11 +108,18 @@ def download_product(link_down:str, filename:Optional[str]=None,
         >>> link_down = 'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/EMIT_L1B_RAD_001_20220828T051941_2224004_006/EMIT_L1B_RAD_001_20220828T051941_2224004_006.nc'
         >>> filename = download_product(link_down)
     """
+    headers = None
     if auth is None:
-        auth = get_auth()
+        if AUTH_METHOD == "auth":
+            auth = get_auth()
+        elif AUTH_METHOD == "token":
+            assert TOKEN is not None, "You need to set the TOKEN variable to download EMIT images"
+            headers = get_headers()
+    
     return download_product_base(link_down, filename=filename, auth=auth,
-                                  display_progress_bar=display_progress_bar, 
-                                  verify=False)
+                                 headers=headers,
+                                 display_progress_bar=display_progress_bar, 
+                                 verify=False)
 
 
 def get_radiance_link(product_path:str) -> str:
