@@ -1,4 +1,5 @@
 # georeader
+[![Article DOI:10.1038/s41598-023-47595-7](https://img.shields.io/badge/Article%20DOI-10.1109%2FTGRS.2020.2976888-blue)](https://doi.org/10.1038/s41598-023-47595-7)  ![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/spaceml-org/georeader?sort=semver) ![PyPI](https://img.shields.io/pypi/v/georeader-spaceml) ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/georeader-spaceml) ![PyPI - License](https://img.shields.io/pypi/l/georeader-spaceml)
 
 Read data from rasters: very few dependencies, reads from cloud storage and lazy loading.
 
