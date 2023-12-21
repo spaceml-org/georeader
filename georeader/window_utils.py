@@ -81,10 +81,7 @@ def figure_out_transform(transform: Optional[rasterio.Affine] = None,
     if resolution_dst is None:
         dst_transform = transform
     else:
-        resolution_or = res(transform)
-        transform_scale = rasterio.Affine.scale(resolution_dst[0] / resolution_or[0],
-                                                resolution_dst[1] / resolution_or[1])
-        dst_transform = transform * transform_scale
+        dst_transform = transform_to_resolution_dst(transform, resolution_dst)
 
     if bounds is not None:
         # Shift the transform to start in the bounds
@@ -93,6 +90,27 @@ def figure_out_transform(transform: Optional[rasterio.Affine] = None,
         dst_transform = rasterio.windows.transform(window_current_transform, dst_transform)
 
     return dst_transform
+
+
+def transform_to_resolution_dst(transform: rasterio.Affine, 
+                                resolution_dst: Union[float, Tuple[float, float]]) -> rasterio.Affine:
+    """
+    Change the transform to the given resolution
+
+    Args:
+        transform: transform to transform
+        resolution_dst: resolution of the output transform
+
+    Returns:
+        transformed transform
+    """
+    if isinstance(resolution_dst, numbers.Number):
+            resolution_dst = (abs(resolution_dst), abs(resolution_dst))
+
+    resolution_or = res(transform)
+    transform_scale = rasterio.Affine.scale(resolution_dst[0] / resolution_or[0],
+                                            resolution_dst[1] / resolution_or[1])
+    return transform * transform_scale
 
 
 def round_outer_window(window:rasterio.windows.Window)-> rasterio.windows.Window:

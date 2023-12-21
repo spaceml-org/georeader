@@ -12,6 +12,7 @@ from georeader import window_utils
 from georeader import read
 import rasterio.windows
 import rasterio.transform
+from shapely.geometry import box
 
 def read_from_tileserver(tile_server:str, geometry:Union[Polygon, MultiPolygon],
                          zoom:int=16, crs_geometry:Any="EPSG:4326") -> GeoTensor:
@@ -31,10 +32,12 @@ def read_from_tileserver(tile_server:str, geometry:Union[Polygon, MultiPolygon],
         geometry = window_utils.polygon_to_crs(geometry, crs_geometry, "EPSG:4326")
 
     min_lon, min_lat, max_lon, max_lat = geometry.bounds
-    tiles = mercantile.simplify(mercantile.tiles(min_lon, min_lat, max_lon, max_lat, 
-                                                 zooms=zoom))
+    tiles = mercantile.tiles(min_lon, min_lat, max_lon, max_lat, zooms=zoom)
     geotensors = []
     for tile in tiles:
+        if not box(*mercantile.bounds(tile)).intersects(geometry):
+            continue
+        
         rsp = requests.get(tile_server.format(x=tile.x, y=tile.y, z=tile.z))
         img = Image.open(BytesIO(rsp.content))
         xmin, ymin, xmax, ymax = window_utils.normalize_bounds(mercantile.xy_bounds(tile))
