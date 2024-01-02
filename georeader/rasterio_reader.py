@@ -1,7 +1,7 @@
 import rasterio
 import rasterio.windows
 import numpy as np
-from typing import Tuple, Dict, List, Optional, Union
+from typing import Tuple, Dict, List, Optional, Union, Any
 import warnings
 import numbers
 from georeader import geotensor
@@ -10,6 +10,7 @@ from georeader import window_utils
 from georeader.window_utils import window_bounds, get_slice_pad
 from shapely.geometry import Polygon
 from georeader.abstract_reader import same_extent, GeoData
+from georeader import read
 
 # https://developmentseed.org/titiler/advanced/performance_tuning/#aws-configuration
 RIO_ENV_OPTIONS_DEFAULT = dict(
@@ -650,6 +651,37 @@ class RasterioReader:
                                          axis=0)
 
         return obj_out
+    
+    def read_from_tile(self, x:int, y:int, z:int, 
+                       out_shape:Tuple[int,int]=(read.SIZE_DEFAULT, read.SIZE_DEFAULT),
+                       dst_crs:Optional[Any]=read.WEB_MERCATOR_CRS) -> geotensor.GeoTensor:
+        """
+        Read a web mercator tile from a raster.
+        
+        Tiles are TMS tiles defined as: (https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames)
+
+        Args:
+            x (int): x coordinate of the tile in the TMS system.
+            y (int): y coordinate of the tile in the TMS system.
+            z (int): z coordinate of the tile in the TMS system.
+            out_shape (Tuple[int,int]: size of the tile to read. Defaults to (read.SIZE_DEFAULT, read.SIZE_DEFAULT).
+            dst_crs (Optional[Any], optional): CRS of the output tile. Defaults to read.WEB_MERCATOR_CRS.
+            
+        Returns:
+            geotensor.GeoTensor: geotensor with the tile data.
+        """
+        window = read.window_from_tile(self, x, y, z)
+        window = window_utils.round_outer_window(window)
+        data = read_out_shape(self, out_shape=out_shape, window=window)
+
+        if window_utils.compare_crs(self.crs, dst_crs):
+            return data
+        
+        # window = window_utils.pad_window(window, (1, 1))
+        # data = read_out_shape(self, out_shape=size_out, window=window)
+
+        return read.read_from_tile(data, x, y, z, dst_crs=dst_crs, out_shape=out_shape)
+        
 
 def _get_pad_list(pad_width:Dict[str,Tuple[int,int]]):
     pad_list_np = [(0, 0)]
@@ -698,17 +730,12 @@ def read_out_shape(reader:Union[RasterioReader, rasterio.DatasetReader],
 
     transform = reader.transform if window is None else rasterio.windows.transform(window, reader.transform)
 
-    if indexes is None:
-        nbands = reader.count
-    elif isinstance(indexes, (list, tuple)):
+    if (indexes is not None) and isinstance(indexes, (list, tuple)):
         if len(out_shape) == 2:
             out_shape = (len(indexes),) + out_shape
     
     input_output_factor = (shape[0] / out_shape[-2], shape[1] / out_shape[-1])    
     transform = transform * rasterio.Affine.scale(input_output_factor[1], input_output_factor[0])
-        # transform = rasterio.Affine(transform.a * input_output_factor[1], transform.b, transform.c,
-        #                             transform.d, transform.e * input_output_factor[0], transform.f)
-
 
     output = reader.read(indexes=indexes, out_shape=out_shape, window=window)
 

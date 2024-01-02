@@ -14,6 +14,12 @@ from georeader.window_utils import PIXEL_PRECISION, pad_window, round_outer_wind
 from georeader.abstract_reader import GeoData
 from itertools import product
 from shapely.geometry import Polygon, MultiPolygon
+import mercantile
+from shapely.geometry import box
+import rasterio.transform
+
+SIZE_DEFAULT = 256
+WEB_MERCATOR_CRS = "EPSG:3857"
 
 
 def _round_all(x):
@@ -145,6 +151,28 @@ def window_from_center_coords(data_in: Union[GeoData, rasterio.DatasetReader],
     window = rasterio.windows.Window(row_off=pixel_upper_left[1], col_off=pixel_upper_left[0],
                                      width=shape[1], height=shape[0])
     return window
+
+
+def window_from_tile(data_in: Union[GeoData, rasterio.DatasetReader],
+                     x:int, y:int, z:int) -> rasterio.windows.Window:
+    """
+    Returns the window corresponding to the x,y,z tile in the data_in.
+
+    Tiles are TMS tiles defined as: (https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames)
+
+    Args:
+        data_in (Union[GeoData, rasterio.DatasetReader]):  GeoData object
+        x (int): x coordinate of the tile in the TMS system.
+        y (int): y coordinate of the tile in the TMS system.
+        z (int): z coordinate of the tile in the TMS system.
+
+    Returns:
+        rasterio.windows.Window: window corresponding to the tile
+    """
+    bounds_wgs = mercantile.xy_bounds(int(x), int(y), int(z))
+    polygon_crs_webmercator = box(bounds_wgs.left, bounds_wgs.bottom, bounds_wgs.right, bounds_wgs.top)
+    return window_from_polygon(data_in, polygon_crs_webmercator, WEB_MERCATOR_CRS,
+                               window_surrounding=True)
 
 
 def read_from_window(data_in: GeoData,
@@ -289,12 +317,14 @@ def read_from_polygon(data_in: GeoData, polygon: Union[Polygon, MultiPolygon],
     Returns:
         sliced GeoData
     """
-    window_in = window_from_polygon(data_in, polygon, crs_polygon, window_surrounding=window_surrounding)
+    window_in = window_from_polygon(data_in, polygon, crs_polygon, 
+                                    window_surrounding=window_surrounding)
     if any(p > 0 for p in pad_add):
         window_in = pad_window(window_in, pad_add)  # Add padding for bicubic int or for co-registration
     window_in = round_outer_window(window_in)
 
-    return read_from_window(data_in, window_in, return_only_data=return_only_data, trigger_load=trigger_load,
+    return read_from_window(data_in, window_in, return_only_data=return_only_data, 
+                            trigger_load=trigger_load,
                             boundless=boundless)
 
 
@@ -425,6 +455,7 @@ def resize(data_in:GeoData, resolution_dst:Union[float, Tuple[float, float]],
                           resampling=resampling, return_only_data=return_only_data)
 
 
+
 def read_to_crs(data_in:GeoData, dst_crs:Any, 
                 resampling:rasterio.warp.Resampling = rasterio.warp.Resampling.cubic_spline,
                 resolution_dst_crs:Optional[Union[float, Tuple[float, float]]]=None,
@@ -479,6 +510,7 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
         dst_transform: Optional dest transform. If not provided the dst_transform is a rectilinear transform computed
         with the bounds and resolution_dst_crs.
         window_out: Window out to read w.r.t `dst_transform`. If not provided it is computed from the bounds.
+            Window out if provided has the output width and height of the reprojected data.
         resampling: specifies how data is reprojected from `rasterio.warp.Resampling`.
         dtpye_dst: if None it will be data_in.dtype
         return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
@@ -538,11 +570,17 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
     dict_shape_window_out = {"x": window_out.width, "y": window_out.height}
     shape_out = tuple([named_shape[s] if s not in ["x", "y"] else dict_shape_window_out[s] for s in named_shape])
     dst_nodata = dst_nodata or data_in.fill_value_default
-    destination = np.full(shape_out,fill_value=dst_nodata, dtype=dtpye_dst)
+    destination = np.full(shape_out, fill_value=dst_nodata, dtype=dtpye_dst)
+
+    polygon_dst_crs = window_utils.window_polygon(window_out, dst_transform)
+    
+    # If the polygon does not intersect the data return a GeoTensor with nodata
+    if not data_in.footprint(crs=dst_crs).intersects(polygon_dst_crs):
+        return GeoTensor(destination, transform=dst_transform, crs=dst_crs,
+                         fill_value_default=dst_nodata)
 
     if not isinstance(data_in, GeoTensor):
         # Compute real polygon that is going to be read
-        polygon_dst_crs = window_utils.window_polygon(window_out, dst_transform)
         # Read a padded window of the input data. This data will be then used for reprojection
         geotensor_in = read_from_polygon(data_in, polygon_dst_crs, crs_polygon=dst_crs,
                                          pad_add=(3, 3), return_only_data=False,
@@ -596,3 +634,65 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
 
     return GeoTensor(destination, transform=dst_transform, crs=dst_crs,
                      fill_value_default=dst_nodata)
+
+
+def read_from_tile(data:GeoData, x:int, y:int, z:int, dst_crs:Optional[Any]=WEB_MERCATOR_CRS, 
+                   out_shape:Optional[Tuple[int,int]]=(SIZE_DEFAULT, SIZE_DEFAULT), 
+                   resolution_dst_crs:Optional[Union[float, Tuple[float, float]]]=None,
+                   assert_if_not_intersects:bool=False) -> GeoTensor:
+    """
+    Read a web mercator tile from a GeoData object. Tiles are TMS tiles defined as: (https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames)
+
+    Args:
+        data (GeoData): GeoData object
+        x (int): x. x coordinate of the tile in the TMS system.
+        y (int): y. y coordinate of the tile in the TMS system.
+        z (int): z. zoom level
+        dst_crs (Optional[Any], optional): output crs. Defaults to WEB_MERCATOR_CRS. If None uses the crs of data.
+        out_shape (Optional[Tuple[int,int]], optional): output size. Defaults to (SIZE_DEFAULT, SIZE_DEFAULT). If None it will be the size
+            of the tile in the input resolution.
+        resolution_dst_crs (Optional[Union[float, Tuple[float, float]]], optional): output resolution. Defaults to None. 
+            If out_shape is not None it will be ignored. If None and out_shape is None the output will be at the resolution of the input data.
+        assert_if_not_intersects (bool, optional): If True it will raise an error if the tile does not intersect the data. Defaults to False.
+
+    Returns:
+        GeoTensor: GeoTensor covering the tile.
+    """
+    bounds_wgs = mercantile.xy_bounds(int(x), int(y), int(z))
+    polygon_crs_webmercator = box(bounds_wgs.left, bounds_wgs.bottom, bounds_wgs.right, bounds_wgs.top)
+    if assert_if_not_intersects:
+        assert polygon_crs_webmercator.intersects(data.footprint(crs=WEB_MERCATOR_CRS)), "Tile does not intersect data"
+
+    if out_shape is not None and hasattr(data, "read_from_tile"):
+        return data.read_from_tile(x, y, z, dst_crs=dst_crs, out_shape=out_shape)
+    
+    if dst_crs is None:
+        dst_crs = data.crs
+        
+    if window_utils.compare_crs(data.crs, dst_crs) and (out_shape is None) and (resolution_dst_crs is None):
+        # read from polygon handles the case where the data does not intersect the polygon
+        return read_from_polygon(data, polygon_crs_webmercator, WEB_MERCATOR_CRS, window_surrounding=True).load()
+    
+    polygon_crs_dst = window_utils.polygon_to_crs(polygon_crs_webmercator, WEB_MERCATOR_CRS, dst_crs)
+    bounds_dst = polygon_crs_dst.bounds
+    if out_shape is not None:
+        dst_transform = rasterio.transform.from_bounds(*bounds_dst, 
+                                                       width=out_shape[1], height=out_shape[0])
+        window_data = rasterio.windows.Window(0, 0, width=out_shape[1], height=out_shape[0])
+    else:
+        in_height, in_width = data.shape[-2:]
+        if resolution_dst_crs is not None:
+            if isinstance(resolution_dst_crs, numbers.Number):
+                resolution_dst_crs = (abs(resolution_dst_crs), abs(resolution_dst_crs))
+            
+        dst_transform, width, height = rasterio.warp.calculate_default_transform(data.crs, dst_crs, in_width, in_height, 
+                                                                                 *data.bounds,
+                                                                                 resolution=resolution_dst_crs)
+        window_data = rasterio.windows.Window(0, 0, width=width, height=height)
+
+
+    return read_reproject(data, dst_crs=dst_crs, dst_transform=dst_transform, 
+                          window_out=window_data)
+    
+    
+
