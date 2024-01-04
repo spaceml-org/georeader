@@ -10,7 +10,7 @@ from georeader import window_utils
 from georeader.window_utils import window_bounds, get_slice_pad
 from shapely.geometry import Polygon
 from georeader.abstract_reader import same_extent, GeoData
-from georeader import read
+from georeader.read import WEB_MERCATOR_CRS, SIZE_DEFAULT, window_from_tile, read_from_tile
 
 # https://developmentseed.org/titiler/advanced/performance_tuning/#aws-configuration
 RIO_ENV_OPTIONS_DEFAULT = dict(
@@ -653,8 +653,8 @@ class RasterioReader:
         return obj_out
     
     def read_from_tile(self, x:int, y:int, z:int, 
-                       out_shape:Tuple[int,int]=(read.SIZE_DEFAULT, read.SIZE_DEFAULT),
-                       dst_crs:Optional[Any]=read.WEB_MERCATOR_CRS) -> geotensor.GeoTensor:
+                       out_shape:Tuple[int,int]=(SIZE_DEFAULT, SIZE_DEFAULT),
+                       dst_crs:Optional[Any]=WEB_MERCATOR_CRS) -> geotensor.GeoTensor:
         """
         Read a web mercator tile from a raster.
         
@@ -670,7 +670,7 @@ class RasterioReader:
         Returns:
             geotensor.GeoTensor: geotensor with the tile data.
         """
-        window = read.window_from_tile(self, x, y, z)
+        window = window_from_tile(self, x, y, z)
         window = window_utils.round_outer_window(window)
         data = read_out_shape(self, out_shape=out_shape, window=window)
 
@@ -680,7 +680,7 @@ class RasterioReader:
         # window = window_utils.pad_window(window, (1, 1))
         # data = read_out_shape(self, out_shape=size_out, window=window)
 
-        return read.read_from_tile(data, x, y, z, dst_crs=dst_crs, out_shape=out_shape)
+        return read_from_tile(data, x, y, z, dst_crs=dst_crs, out_shape=out_shape)
         
 
 def _get_pad_list(pad_width:Dict[str,Tuple[int,int]]):
