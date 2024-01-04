@@ -77,12 +77,12 @@ def query_s1(area:Union[MultiPolygon,Polygon],
     return geodf
 
 def figure_out_collection_landsat(tile:str) -> str:
-    if tile.startswith("LC08"):
+    if tile.startswith("LC08") or tile.startswith("LO08"):
         if tile.endswith("T1_RT") or tile.endswith("T1"):
             return "LANDSAT/LC08/C02/T1_RT_TOA"
         elif tile.endswith("T2"):
             return "LANDSAT/LC08/C02/T2_TOA"
-    elif tile.startswith("LC09"):
+    elif tile.startswith("LC09") or tile.startswith("LO09"):
         if tile.endswith("T1"):
             return "LANDSAT/LC09/C02/T1_TOA"
         elif tile.endswith("T2"):
