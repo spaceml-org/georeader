@@ -6,6 +6,7 @@ import numpy as np
 from shapely.geometry import Polygon, MultiPolygon, shape, mapping
 import rasterio.warp
 from georeader import compare_crs
+import math
 
 PIXEL_PRECISION = 3
 
@@ -113,10 +114,15 @@ def transform_to_resolution_dst(transform: rasterio.Affine,
     return transform * transform_scale
 
 
-def round_outer_window(window:rasterio.windows.Window)-> rasterio.windows.Window:
+def round_outer_window(window:rasterio.windows.Window, precision=PIXEL_PRECISION)-> rasterio.windows.Window:
     """ Rounds a rasterio.windows.Window object to outer (larger) window """
-    return window.round_lengths(op="ceil", pixel_precision=PIXEL_PRECISION).round_offsets(op="floor",
-                                                                                          pixel_precision=PIXEL_PRECISION)
+    row_dst = math.ceil(round(window.row_off + window.height, ndigits=precision))
+    col_dst = math.ceil(round(window.col_off + window.width, ndigits=precision))
+    col_off = math.floor(round(window.col_off, ndigits=precision))
+    row_off = math.floor(round(window.row_off, ndigits=precision))
+
+    return rasterio.windows.Window(col_off, row_off, 
+                                   col_dst-col_off, row_dst-row_off)
 
 # Precision to round the windows before applying ceiling/floor. e.g. 3.0001 will be rounded to 3 but 3.001 will not
 def _is_exact_round(x, precision=PIXEL_PRECISION):

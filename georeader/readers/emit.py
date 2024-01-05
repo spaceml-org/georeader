@@ -22,10 +22,12 @@ import netCDF4
 from shapely.ops import unary_union
 from georeader import read
 import rasterio.warp
+from numpy.typing import NDArray
 from datetime import datetime, timezone
 
 AUTH_METHOD = "auth" # "auth" or "token"
 TOKEN = None
+
 
 def get_auth() -> Tuple[str, str]:
     home_dir = os.path.join(os.path.expanduser('~'),".georeader")
@@ -172,6 +174,63 @@ def get_obs_link(product_path:str) -> str:
     return link
 
 
+def get_ch4enhancement_link(tile:str) -> str:
+    """
+    Get the link to download a product from the EMIT website.
+    See: https://git.earthdata.nasa.gov/projects/LPDUR/repos/daac_data_download_python/browse
+
+    Args:
+        product_path: path to the product or filename of the product.
+            e.g. 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
+
+    Example:
+        >>> product_path = 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
+        >>> link = get_radiance_link(product_path)
+        'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL2BCH4ENH.001/EMIT_L2B_CH4ENH_001_20220810T064957_2222205_033/EMIT_L2B_CH4ENH_001_20220810T064957_2222205_033.tif'
+    """
+    namefile = os.path.splitext(os.path.basename(tile))[0]
+    namefile = namefile + ".tif"
+
+    product_id = os.path.splitext(namefile)[0]
+    content_id = product_id.split("_")
+    content_id[1] = "L2B"
+    content_id[2] = "CH4ENH"
+    product_id = "_".join(content_id)
+    namefilenew = namefile.replace("_RAD_","_CH4ENH_").replace("_L1B_","_L2B_")
+    link = f"https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL2BCH4ENH.001/{product_id}/{namefilenew}"
+    return link
+
+
+def get_l2amask_link(tile:str) -> str:
+    """
+    Get the link to download a product from the EMIT website (https://search.earthdata.nasa.gov/search)
+
+
+    Args:
+        tile (str): path to the product or filename of the L1B product.
+            e.g. 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
+        
+    Returns:
+        str: link to the L2A mask product
+    
+    Example:
+        >>> tile = 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
+        >>> link = get_l2amask_link(tile)
+        'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL2ARFL.001/EMIT_L2A_RFL_001_20220827T060753_2223904_013/EMIT_L2A_MASK_001_20220827T060753_2223904_013.nc'
+    """
+    namefile = os.path.splitext(os.path.basename(tile))[0]
+    namefile = namefile + ".nc"
+
+    product_id = os.path.splitext(namefile)[0]
+    content_id = product_id.split("_")
+    content_id[1] = "L2A"
+    content_id[2] = "RFL"
+    product_id = "_".join(content_id)
+    namefilenew = namefile.replace("_RAD_","_MASK_").replace("_L1B_","_L2A_")
+    link = f"https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL2ARFL.001/{product_id}/{namefilenew}"
+    return link
+
+
 class EMITImage:
     """
     Class to read L1B EMIT images.
@@ -188,13 +247,15 @@ class EMITImage:
         >>> emit_utm = emit.to_crs(crs_utm)
 
     """
-    attributes_set_if_exists = ["_pol", "_nc_ds_obs", "_mean_sza", "_mean_vza", "_observation_bands"]
+    attributes_set_if_exists = ["_pol", "_nc_ds_obs", "_mean_sza", "_mean_vza", "_observation_bands", "_nc_ds_l2amask", "_mask_bands"]
     def __init__(self, filename:str, glt:Optional[GeoTensor]=None, 
                  band_selection:Optional[Union[int, Tuple[int, ...],slice]]=slice(None)):
         self.filename = filename
         self.nc_ds = netCDF4.Dataset(self.filename, 'r', format='NETCDF4')
         self._nc_ds_obs:Optional[netCDF4.Dataset] = None
+        self._nc_ds_l2amask:Optional[netCDF4.Dataset] = None
         self._observation_bands = None
+        self._mask_bands = None
         self.nc_ds.set_auto_mask(False) # disable automatic masking when reading data
         # self.real_shape = (self.nc_ds['radiance'].shape[-1],) + self.nc_ds['radiance'].shape[:-1]
 
@@ -343,6 +404,113 @@ class EMITImage:
         self._nc_ds_obs = netCDF4.Dataset(obs_file)
         self._nc_ds_obs.set_auto_mask(False)
         self._observation_bands = self._nc_ds_obs['sensor_band_parameters']['observation_bands'][:]
+    
+    @property
+    def nc_ds_l2amask(self, l2amaskfile:Optional[str]=None) -> netCDF4.Dataset:
+        """
+        Loads the L2A mask file. In this file we have information about the cloud mask.
+
+        This function downloads the L2A mask file if it does not exist from the JPL portal.
+
+        It caches the L2A mask file in the object. (self.nc_ds_l2amask)
+
+        See https://lpdaac.usgs.gov/products/emitl2arflv001/ for info about the L2A mask file.
+
+        Args:
+            l2amaskfile (Optional[str], optional): Path to the L2A mask file. 
+                Defaults to None. If none it will download the L2A mask file 
+                from the EMIT server.
+        """
+        if self._nc_ds_l2amask is not None:
+            return self._nc_ds_l2amask
+        
+        if l2amaskfile is None:
+            link_l2amaskfile = get_l2amask_link(self.filename)
+            l2amaskfile = os.path.join(os.path.dirname(self.filename), os.path.basename(link_l2amaskfile))
+            if not os.path.exists(l2amaskfile):
+                download_product(link_l2amaskfile, l2amaskfile)
+        
+        self._nc_ds_l2amask = netCDF4.Dataset(l2amaskfile)
+        self._nc_ds_l2amask.set_auto_mask(False)
+        self._mask_bands = self._nc_ds_l2amask["sensor_band_parameters"]["mask_bands"][:]
+    
+    @property
+    def mask_bands(self) -> np.array:
+        """ Returns the mask bands -> ['Cloud flag', 'Cirrus flag', 'Water flag', 'Spacecraft Flag',
+       'Dilated Cloud Flag', 'AOD550', 'H2O (g cm-2)', 'Aggregate Flag'] """
+        self.nc_ds_l2amask
+        return self._mask_bands
+    
+    def validmask(self, with_buffer:bool=True) -> GeoTensor:
+        """
+        Return the validmask mask
+
+    
+        Returns:
+            GeoTensor: bool mask. True means that the pixel is valid.
+        """
+
+        validmask = ~self.invalid_mask_raw(with_buffer=with_buffer)
+
+        return self.georreference(validmask,
+                                  fill_value_default=False)
+    
+    def invalid_mask_raw(self, with_buffer:bool=True) -> NDArray:
+        """
+        Returns the non georreferenced quality mask. True means that the pixel is not valid.
+
+        This mask is computed as the sum of the Cloud flag, Cirrus flag, Spacecraft flag and Dilated Cloud Flag.
+        True means that the pixel is not valid.
+
+        From: https://github.com/nasa/EMIT-Data-Resources/blob/main/python/how-tos/How_to_use_EMIT_Quality_data.ipynb
+        and https://github.com/nasa/EMIT-Data-Resources/blob/main/python/modules/emit_tools.py#L277
+
+
+        """
+        band_index =  [0,1,3]
+        if with_buffer:
+            band_index.append(4)
+        
+        slice_y, slice_x = self.window_raw.toslices()
+        mask_arr = self.nc_ds_l2amask['mask'][slice_y, slice_x, band_index]
+        mask_arr = np.sum(mask_arr, axis=-1)
+        mask_arr = (mask_arr >= 1)
+        return mask_arr
+    
+    @property
+    def percentage_clear(self) -> float:
+        """
+        Return the percentage of clear pixels in the image
+
+        Returns:
+            float: percentage of clear pixels
+        """
+        
+        invalids = self.invalid_mask_raw(with_buffer=False)
+        return 100 * (1 - np.sum(invalids) / np.prod(invalids.shape))
+
+
+    def mask(self, mask_name:str="cloud_mask") -> GeoTensor:
+        """
+        Return the mask layer with the given name.
+        Mask shall be one of self.mask_bands -> ['Cloud flag', 'Cirrus flag', 'Water flag', 'Spacecraft Flag',
+       'Dilated Cloud Flag', 'AOD550', 'H2O (g cm-2)', 'Aggregate Flag']
+
+        Args:
+            mask_name (str, optional): Name of the mask. Defaults to "cloud_mask".
+
+        Returns:
+            GeoTensor: mask
+        """
+        band_index = self.mask_bands.tolist().index(mask_name)
+        slice_y, slice_x = self.window_raw.toslices()
+        mask_arr = self.nc_ds_l2amask['mask'][slice_y, slice_x, band_index]
+        return self.georreference(mask_arr,
+                                  fill_value_default=self.nc_ds_l2amask['mask']._FillValue)
+    
+    def water_mask(self) -> GeoTensor:
+        """ Returns the water mask """
+        return self.mask("Water flag")
     
     @property
     def observation_bands(self) -> np.array:
