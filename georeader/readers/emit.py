@@ -404,6 +404,7 @@ class EMITImage:
         self._nc_ds_obs = netCDF4.Dataset(obs_file)
         self._nc_ds_obs.set_auto_mask(False)
         self._observation_bands = self._nc_ds_obs['sensor_band_parameters']['observation_bands'][:]
+        return self._nc_ds_obs
     
     @property
     def nc_ds_l2amask(self, l2amaskfile:Optional[str]=None) -> netCDF4.Dataset:
@@ -433,6 +434,7 @@ class EMITImage:
         self._nc_ds_l2amask = netCDF4.Dataset(l2amaskfile)
         self._nc_ds_l2amask.set_auto_mask(False)
         self._mask_bands = self._nc_ds_l2amask["sensor_band_parameters"]["mask_bands"][:]
+        return self._nc_ds_l2amask
     
     @property
     def mask_bands(self) -> np.array:

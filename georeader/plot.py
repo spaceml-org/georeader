@@ -149,7 +149,8 @@ def add_shape_to_plot(shape:Union[gpd.GeoDataFrame, List[Geometry], Geometry], a
                       crs_plot:Optional[Any]=None,
                       crs_shape:Optional[Any]=None,
                       polygon_no_fill:bool=False,
-                      kwargs_geopandas_plot:Optional[Any]=None) -> plt.Axes:
+                      kwargs_geopandas_plot:Optional[Any]=None,
+                      title:Optional[str]=None) -> plt.Axes:
     """
     Adds a shape to a plot. It uses geopandas.plot.
 
@@ -160,6 +161,7 @@ def add_shape_to_plot(shape:Union[gpd.GeoDataFrame, List[Geometry], Geometry], a
         crs_shape (Optional[Any], optional): Defaults to None. crs of the shape. If None, the crs of the plot is used.
         polygon_no_fill: If True, the polygons are plotted without fill.
         kwargs_geopandas_plot (Optional[Any], optional): Defaults to None. Keyword arguments for geopandas.plot
+        title (Optional[str], optional): Defaults to None. Title of the plot.
 
     Returns:
         plt.Axes: 
@@ -188,6 +190,9 @@ def add_shape_to_plot(shape:Union[gpd.GeoDataFrame, List[Geometry], Geometry], a
         shape.boundary.plot(ax=ax, **kwargs_geopandas_plot)
     else:
         shape.plot(ax=ax, **kwargs_geopandas_plot)
+    
+    if title is not None:
+        ax.set_title(title)
 
     # if legend and color is not None:
     #     color_unique = color.unique()
