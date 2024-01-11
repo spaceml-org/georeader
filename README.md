@@ -1,5 +1,5 @@
 # georeader
-[![Article DOI:10.1038/s41598-023-47595-7](https://img.shields.io/badge/Article%20DOI-10.1038%2Fs41598.023.47595.7-blue)](https://doi.org/10.1038/s41598-023-47595-7)  ![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/spaceml-org/georeader?sort=semver) ![PyPI](https://img.shields.io/pypi/v/georeader-spaceml) ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/georeader-spaceml) ![PyPI - License](https://img.shields.io/pypi/l/georeader-spaceml)
+[![Article DOI:10.1038/s41598-023-47595-7](https://img.shields.io/badge/Article%20DOI-10.1038%2Fs41598.023.47595.7-blue)](https://doi.org/10.1038/s41598-023-47595-7)  [![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/spaceml-org/georeader?sort=semver)](https://github.com/spaceml-org/georeader/releases) [![PyPI](https://img.shields.io/pypi/v/georeader-spaceml)](https://pypi.org/project/georeader-spaceml/) [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/georeader-spaceml)](https://pypi.org/project/georeader-spaceml/) [![PyPI - License](https://img.shields.io/pypi/l/georeader-spaceml)](https://github.com/spaceml-org/georeader/blob/main/LICENSE)
 
 Read data from rasters: very few dependencies, reads from cloud storage and lazy loading.
 
@@ -93,8 +93,9 @@ Other:
 * [Read high resolution tile layers](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_from_tileserver.ipynb)
 
 Used in other projects:
-* [georeader with ml4floods to automatically download and produce flood extent maps](https://spaceml-org.github.io/ml4floods/content/ml4ops/HOWTO_postprocess_inference.html)
+* [georeader with ml4floods to automatically download and produce flood extent maps: the Kherson Dam Break example](https://spaceml-org.github.io/ml4floods/content/ml4ops/HOWTO_postprocess_inference.html)
 * [georeader with STARCOP to simulate Sentinel-2 from AVIRIS images](https://github.com/spaceml-org/STARCOP/blob/main/notebooks/simulate_aviris_2_sentinel2.ipynb)
+* [georeader with STARCOP to run plume detection in EMIT images](https://github.com/spaceml-org/STARCOP/blob/main/notebooks/inference_on_raw_EMIT_nc_file.ipynb)
 
 
 ## Citation
