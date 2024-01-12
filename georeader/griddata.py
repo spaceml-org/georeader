@@ -179,3 +179,51 @@ def reproject(data:NDArray, lons: NDArray, lats: NDArray,
 
     return GeoTensor(dataout, transform=transform, 
                      crs=dst_crs, fill_value_default=fill_value_default)
+
+
+def georreference(glt:GeoTensor, data:NDArray, valid_glt:Optional[NDArray] = None,
+                  fill_value_default:Optional[Union[int,float]]=None) -> GeoTensor:
+    """
+        Georreference an image in sensor coordinates to coordinates of the current 
+        georreferenced object. If you do some processing with the raw data, you can 
+        georreference the raw output with this function.
+
+        Args:
+            data (np.array): raw data (C, H, W) or (H, W). 
+            glt (GeoTensor): (2, H', W') GeoTensor with the geolocation data. This array tells
+                the coordinates of each pixel in the raw data. That is:
+                    output_data[:, i, j] = data[:, glt.values[1, i, j], glt.values[0, i, j]]
+            valid_glt (Optional[np.array], optional): 2D array of valid pixels. Defaults to None.
+                If None, the valid pixels are the ones that are not equal to the fill_value_default
+                in the glt array.
+            fill_value_default (Optional[Union[int,float]], optional): fill value for the output array.
+
+        Returns:
+            GeoTensor: georreferenced version of data (C, H', W') or (H', W')
+        
+    """
+    spatial_shape = glt.shape[-2:]
+    if len(data.shape) == 3:
+        shape = data.shape[:-2] + spatial_shape
+    elif len(data.shape) == 2:
+        shape = spatial_shape
+    else:
+        raise ValueError(f"Data shape {data.shape} not supported")
+
+    if fill_value_default is None:
+        fill_value_default = 0
+    outdat = np.full(shape, dtype=data.dtype, 
+                      fill_value=fill_value_default)
+
+    if valid_glt is None:
+        valid_glt = np.all(glt.values != glt.fill_value_default, axis=0)
+    
+    if len(data.shape) == 3:
+        outdat[:, valid_glt] = data[:, glt.values[1, valid_glt], 
+                                            glt.values[0, valid_glt]]
+    else:
+        outdat[valid_glt] = data[glt.values[1, valid_glt], 
+                                 glt.values[0, valid_glt]]
+        
+    return GeoTensor(values=outdat, transform=glt.transform, crs=glt.crs,
+                     fill_value_default=fill_value_default)

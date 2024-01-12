@@ -24,10 +24,19 @@ from georeader import read
 import rasterio.warp
 from numpy.typing import NDArray
 from datetime import datetime, timezone
+from georeader.griddata import georreference
+from georeader import get_utm_epsg
 
 AUTH_METHOD = "auth" # "auth" or "token"
 TOKEN = None
 
+def _bounds_indexes_raw(glt:NDArray, valid_glt:NDArray) -> Tuple[int, int, int, int]:
+        """ Return the bounds of the raw data: (min_x, min_y, max_x, max_y) """
+        min_x = np.min(glt[0, valid_glt])
+        max_x = np.max(glt[0, valid_glt])
+        min_y = np.min(glt[1, valid_glt])
+        max_y = np.max(glt[1, valid_glt])
+        return min_x, min_y, max_x, max_y
 
 def get_auth() -> Tuple[str, str]:
     home_dir = os.path.join(os.path.expanduser('~'),".georeader")
@@ -247,7 +256,10 @@ class EMITImage:
         >>> emit_utm = emit.to_crs(crs_utm)
 
     """
-    attributes_set_if_exists = ["_pol", "_nc_ds_obs", "_mean_sza", "_mean_vza", "_observation_bands", "_nc_ds_l2amask", "_mask_bands"]
+    attributes_set_if_exists = ["_pol", "_nc_ds_obs", "_mean_sza", "_mean_vza", 
+                                "_observation_bands", "_nc_ds_l2amask", "_mask_bands", 
+                                "_nc_ds", "obs_file",
+                                "l2amaskfile"]
     def __init__(self, filename:str, glt:Optional[GeoTensor]=None, 
                  band_selection:Optional[Union[int, Tuple[int, ...],slice]]=slice(None)):
         self.filename = filename
@@ -261,6 +273,8 @@ class EMITImage:
 
         self._mean_sza = None
         self._mean_vza = None
+        self.obs_file:Optional[str] = None
+        self.l2amaskfile:Optional[str] = None
 
         self.real_transform = rasterio.Affine(self.nc_ds.geotransform[1], self.nc_ds.geotransform[2], self.nc_ds.geotransform[0],
                                               self.nc_ds.geotransform[4], self.nc_ds.geotransform[5], self.nc_ds.geotransform[3])
@@ -292,9 +306,9 @@ class EMITImage:
 
         # glt has the absolute indexes of the netCDF object
         # glt_relative has the relative indexes
-        self.glt_relative = self.glt.values.copy()
-        self.glt_relative[0, self.valid_glt] -= xmin
-        self.glt_relative[1, self.valid_glt] -= ymin
+        self.glt_relative = self.glt.copy()
+        self.glt_relative.values[0, self.valid_glt] -= xmin
+        self.glt_relative.values[1, self.valid_glt] -= ymin
 
         self.window_raw = rasterio.windows.Window(col_off=xmin-1, row_off=ymin-1, 
                                                   width=xmax-xmin+1, height=ymax-ymin+1)
@@ -401,6 +415,7 @@ class EMITImage:
             if not os.path.exists(obs_file):
                 download_product(link_obs_file, obs_file)
         
+        self.obs_file = obs_file
         self._nc_ds_obs = netCDF4.Dataset(obs_file)
         self._nc_ds_obs.set_auto_mask(False)
         self._observation_bands = self._nc_ds_obs['sensor_band_parameters']['observation_bands'][:]
@@ -431,6 +446,7 @@ class EMITImage:
             if not os.path.exists(l2amaskfile):
                 download_product(link_l2amaskfile, l2amaskfile)
         
+        self.l2amaskfile = l2amaskfile
         self._nc_ds_l2amask = netCDF4.Dataset(l2amaskfile)
         self._nc_ds_l2amask.set_auto_mask(False)
         self._mask_bands = self._nc_ds_l2amask["sensor_band_parameters"]["mask_bands"][:]
@@ -575,7 +591,8 @@ class EMITImage:
     def copy(self) -> '__class__':
         return self.__copy__()
     
-    def to_crs(self, crs:Any, resolution_dst_crs:Optional[Union[float, Tuple[float, float]]]=60) -> '__class__':
+    def to_crs(self, crs:Any="UTM", 
+               resolution_dst_crs:Optional[Union[float, Tuple[float, float]]]=60) -> '__class__':
         """
         Reproject the image to a new crs
 
@@ -587,9 +604,12 @@ class EMITImage:
         
         Example:
             >>> emit_image = EMITImage("path/to/emit_image.nc")
-            >>> crs_utm = georeader.get_utm_epsg(emit_image.footprint("EPSG:4326"))
-            >>> emit_image_utm = emit_image.to_crs(crs_utm)
+            >>> emit_image_utm = emit_image.to_crs(crs="UTM")
         """
+        if crs == "UTM":
+            footprint = self.glt.footprint("EPSG:4326")
+            crs = get_utm_epsg(footprint)
+
         glt = read.read_to_crs(self.glt, crs, resampling=rasterio.warp.Resampling.nearest, 
                                resolution_dst_crs=resolution_dst_crs)
 
@@ -628,11 +648,7 @@ class EMITImage:
 
     def _bounds_indexes_raw(self) -> Tuple[int, int, int, int]:
         """ Return the bounds of the raw data: (min_x, min_y, max_x, max_y) """
-        min_x = np.min(self.glt.values[0, self.valid_glt])
-        max_x = np.max(self.glt.values[0, self.valid_glt])
-        min_y = np.min(self.glt.values[1, self.valid_glt])
-        max_y = np.max(self.glt.values[1, self.valid_glt])
-        return min_x, min_y, max_x, max_y
+        return _bounds_indexes_raw(self.glt.values, self.valid_glt)
 
 
     def load_raw(self, transpose:bool=True) -> np.array:
@@ -680,28 +696,8 @@ class EMITImage:
             >>> data_rgb = emit_image_rgb.load_raw() # (3, H, W)
             >>> data_rgb_ortho = emit_image.georreference(data_rgb) # (3, H', W')
         """
-        spatial_shape = self.shape[-2:]
-        if len(data.shape) == 3:
-            shape = data.shape[:-2] + spatial_shape
-        elif len(data.shape) == 2:
-            shape = spatial_shape
-        else:
-            raise ValueError(f"Data shape {data.shape} not supported")
-
-        if fill_value_default is None:
-            fill_value_default = self.fill_value_default
-        outdat = np.full(shape, dtype=data.dtype, 
-                         fill_value=fill_value_default)
-        
-        if len(data.shape) == 3:
-            outdat[:, self.valid_glt] = data[:, self.glt_relative[1, self.valid_glt], 
-                                             self.glt_relative[0, self.valid_glt]]
-        else:
-            outdat[self.valid_glt] = data[self.glt_relative[1, self.valid_glt], 
-                                          self.glt_relative[0, self.valid_glt]]
-            
-        return GeoTensor(values=outdat, transform=self.transform, crs=self.crs,
-                         fill_value_default=fill_value_default)
+        return georreference(self.glt_relative, data, self.valid_glt, 
+                             fill_value_default=fill_value_default)
 
         
     @property
@@ -719,3 +715,67 @@ class EMITImage:
          CRS: {self.crs}
          units: {self.units}
         """
+
+
+def valid_mask(filename:str, with_buffer:bool=False, 
+               dst_crs:Optional[Any]="UTM", 
+               resolution_dst_crs:Optional[Union[float, Tuple[float, float]]]=60) -> Tuple[GeoTensor, float]:
+    """
+    Loads the valid mask from the EMIT L2AMASK file.
+
+    Args:
+        filename (str): path to the L2AMASK file. e.g. EMIT_L2A_MASK_001_20220827T060753_2223904_013.nc
+        with_buffer (bool, optional): If True, the buffer band is used to compute the valid mask. Defaults to False.
+
+    Returns:
+        GeoTensor: valid mask
+    """
+    
+    nc_ds = netCDF4.Dataset(filename, 'r', format='NETCDF4')
+    nc_ds.set_auto_mask(False)
+
+    real_transform = rasterio.Affine(nc_ds.geotransform[1], nc_ds.geotransform[2], nc_ds.geotransform[0],
+                                     nc_ds.geotransform[4], nc_ds.geotransform[5], nc_ds.geotransform[3])
+    
+    glt_arr = np.zeros((2,) + nc_ds.groups['location']['glt_x'].shape, dtype=np.int32)
+    glt_arr[0] = np.array(nc_ds.groups['location']['glt_x'])
+    glt_arr[1] = np.array(nc_ds.groups['location']['glt_y'])
+    # glt_arr -= 1 # account for 1-based indexing
+
+    # https://rasterio.readthedocs.io/en/stable/api/rasterio.crs.html
+    glt = GeoTensor(glt_arr, transform=real_transform, 
+                    crs=rasterio.crs.CRS.from_wkt(nc_ds.spatial_ref),
+                    fill_value_default=0)
+    
+    if dst_crs is not None:
+        if dst_crs == "UTM":
+            footprint = glt.footprint("EPSG:4326")
+            dst_crs = get_utm_epsg(footprint)
+
+        glt = read.read_to_crs(glt, dst_crs=dst_crs, 
+                               resampling=rasterio.warp.Resampling.nearest, 
+                               resolution_dst_crs=resolution_dst_crs)
+    
+    valid_glt = np.all(glt.values != glt.fill_value_default, axis=0)
+    xmin = np.min(glt.values[0, valid_glt])
+    ymin = np.min(glt.values[1, valid_glt])
+
+    glt_relative = glt.copy()
+    glt_relative.values[0, valid_glt] -= xmin
+    glt_relative.values[1, valid_glt] -= ymin
+    # mask_bands = nc_ds["sensor_band_parameters"]["mask_bands"][:]
+
+    band_index =  [0,1,3]
+    if with_buffer:
+        band_index.append(4)
+    
+    mask_arr = nc_ds['mask'][:, :, band_index]
+    invalidmask_raw = np.sum(mask_arr, axis=-1)
+    invalidmask_raw = (invalidmask_raw >= 1)
+
+    validmask = ~invalidmask_raw
+
+    percentage_clear = 100 * (np.sum(validmask) / np.prod(validmask.shape))
+
+    return georreference(glt_relative, validmask, valid_glt,
+                         fill_value_default=False), percentage_clear
