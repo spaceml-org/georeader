@@ -5,7 +5,6 @@ import numbers
 import numpy as np
 from shapely.geometry import Polygon, MultiPolygon, shape, mapping
 import rasterio.warp
-from georeader import compare_crs
 import math
 
 PIXEL_PRECISION = 3
