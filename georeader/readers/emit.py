@@ -566,7 +566,7 @@ class EMITImage:
         
         band_index = self.observation_bands.tolist().index('To-sun zenith (0 to 90 degrees from zenith)')
         sza_arr = self.nc_ds_obs['obs'][..., band_index]
-        self._mean_sza = np.mean(sza_arr[sza_arr != self.nc_ds_obs['obs']._FillValue])
+        self._mean_sza = float(np.mean(sza_arr[sza_arr != self.nc_ds_obs['obs']._FillValue]))
         return self._mean_sza
     
     @property
@@ -576,7 +576,7 @@ class EMITImage:
             return self._mean_vza
         band_index = self.observation_bands.tolist().index('To-sensor zenith (0 to 90 degrees from zenith)')
         vza_arr = self.nc_ds_obs['obs'][..., band_index]
-        self._mean_vza = np.mean(vza_arr[vza_arr != self.nc_ds_obs['obs']._FillValue])
+        self._mean_vza = float(np.mean(vza_arr[vza_arr != self.nc_ds_obs['obs']._FillValue]))
         return self._mean_vza
         
     def __copy__(self) -> '__class__':

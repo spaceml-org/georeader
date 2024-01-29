@@ -281,7 +281,11 @@ def normalize_bounds(bounds:Tuple[float, float, float, float], margin_add_if_equ
     return xmin, ymin, xmax, ymax
 
 
-def polygon_to_crs(polygon:Union[Polygon, MultiPolygon], crs_polygon:Any, dst_crs:Any) -> Union[Polygon, MultiPolygon]:
+def polygon_to_crs(polygon:Union[Polygon, MultiPolygon], 
+                   crs_polygon:Any, dst_crs:Any) -> Union[Polygon, MultiPolygon]:
+    if compare_crs(crs_polygon, dst_crs):
+        return polygon
+    
     return shape(rasterio.warp.transform_geom(crs_polygon, dst_crs, mapping(polygon)))
 
 
