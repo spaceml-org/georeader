@@ -666,8 +666,7 @@ def concatenate(geotensors:List[GeoTensor]) -> GeoTensor:
     array_out[0] = first_geotensor.values
 
     for i, geo in enumerate(geotensors[1:]):
-        assert geo.crs == first_geotensor.crs, f"Different crs in concat"
-        assert geo.transform == first_geotensor.transform, f"Different transform in concat"
+        assert geo.same_extent(first_geotensor), f"Different size in concat"
         assert geo.shape == first_geotensor.shape, f"Different shape in concat"
         assert geo.fill_value_default == first_geotensor.fill_value_default, "Different fill_value_default in concat"
         array_out[i + 1] = geo.values
