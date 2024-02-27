@@ -2,7 +2,6 @@ import os
 import shutil
 from typing import Optional, Any
 import requests
-from tqdm import tqdm
 
 def download_product(link_down:str, filename:Optional[str]=None, auth:Any=None, 
                      display_progress_bar:bool=True, verify:bool=True, 
@@ -32,6 +31,7 @@ def download_product(link_down:str, filename:Optional[str]=None, auth:Any=None,
         >>> link_down = "https://www.vito-eodata.be/PDF/datapool/Free_Data/PROBA-V_100m/S1_TOA_100_m_C1/2019/2/9/PV_S1_TOA-20190209_100M_V101/PROBAV_S1_TOA_X07Y05_20190209_100M_V101.HDF5"
         >>> filename = download_product(link_down, auth=auth)
     """
+    from tqdm import tqdm
 
     if filename is None:
         filename = os.path.basename(link_down)
