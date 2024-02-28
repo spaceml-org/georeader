@@ -5,9 +5,10 @@ from georeader.geotensor import GeoTensor
 from typing import Tuple, Any, Optional, Dict
 from numpy.typing import NDArray
 import numpy as np
+from collections import OrderedDict
 
 
-def coords_to_transform(coords: xr.Coordinate) -> rasterio.Affine:
+def coords_to_transform(coords: xr.Coordinates) -> rasterio.Affine:
     """
     Compute the bounds and the geotransform from the coordinates of a xr.DataArray object.
 
@@ -73,11 +74,14 @@ def toDataArray(x:GeoTensor) -> xr.DataArray:
         xr.DataArray: Output xr.DataArray
     """
     coords = getcoords_from_transform_shape(x.transform, x.shape[-2:])
+    cords_ordered = OrderedDict()
     for d in x.dims:
         if d not in coords:
-            coords[d] = np.arange(x.shape[x.dims.index(d)])
+            cords_ordered[d] = np.arange(x.shape[x.dims.index(d)])
+        else:
+            cords_ordered[d] = coords[d]
     
-    return xr.DataArray(x.data, coords=coords, 
+    return xr.DataArray(x.values, coords=coords, 
                         attrs={"crs":x.crs})
 
 
