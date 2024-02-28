@@ -61,7 +61,7 @@ def getcoords_from_transform_shape(transform:rasterio.Affine, shape:Tuple[int, i
 
 
 def toDataArray(x:GeoTensor) -> xr.DataArray:
-    coords = getcoords_from_transform_shape(x.transform, x.shape)
+    coords = getcoords_from_transform_shape(x.transform, x.shape[-2:])
     return xr.DataArray(x.data, coords=coords, 
                         attrs={"crs":x.crs})
 
