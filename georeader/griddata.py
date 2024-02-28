@@ -82,9 +82,9 @@ def read_to_crs(data:NDArray, lons: NDArray, lats:NDArray,
     Reprojects data to the given dst_crs figuring out the transform and shape.
 
     Args:
-        data (Array): 2D or 3D in the form (height, width, bands)
-        lons (Array): 2D array of longitudes
-        lats (Array): 2D array of latitudes
+        data (Array): 2D or 3D in the form (H, W, bands)
+        lons (Array): 2D array of longitudes (H, W).
+        lats (Array): 2D array of latitudes (H, W).
         resolution_dst (Union[float, Tuple[float,float]]): Output resolution
         dst_crs (Optional[Any], optional): Output crs. If None, 
             the dst_crs will be the UTM crs of the center of the data. Defaults to None.
