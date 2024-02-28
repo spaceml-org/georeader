@@ -82,6 +82,7 @@ def toDataArray(x:GeoTensor) -> xr.DataArray:
             cords_ordered[d] = coords[d]
     
     return xr.DataArray(x.values, coords=coords, 
+                        dims=x.dims,
                         attrs={"crs":x.crs})
 
 
