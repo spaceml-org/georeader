@@ -2,7 +2,7 @@ import xarray as xr
 import rasterio
 import rasterio.windows
 from georeader.geotensor import GeoTensor
-from typing import Tuple, Any, Optional, Dict
+from typing import Tuple, Any, Optional, Dict, Union
 from numpy.typing import NDArray
 import numpy as np
 from collections import OrderedDict
@@ -83,16 +83,19 @@ def toDataArray(x:GeoTensor) -> xr.DataArray:
     
     return xr.DataArray(x.values, coords=coords, 
                         dims=x.dims,
-                        attrs={"crs":x.crs})
+                        attrs={"crs":x.crs , 
+                               "fill_value_default":x.fill_value_default})
 
 
-def fromDataArray(x: xr.DataArray, crs:Optional[Any]=None) -> GeoTensor:
+def fromDataArray(x: xr.DataArray, crs:Optional[Any]=None, 
+                  fill_value_default:Optional[Union[float, int]]=None) -> GeoTensor:
     """
     Convert a xr.DataArray to a GeoTensor object.
 
     Args:
         x (xr.DataArray): Input xr.DataArray
         crs (Optional[Any], optional): crs. Defaults to None.
+        fill_value_default (Optional[Union[float, int]], optional): fill value. Defaults to None.
 
     Returns:
         GeoTensor: Output GeoTensor
@@ -100,5 +103,8 @@ def fromDataArray(x: xr.DataArray, crs:Optional[Any]=None) -> GeoTensor:
     if crs is None:
         crs = x.attrs.get("crs", None)
     
+    if fill_value_default is None:
+        fill_value_default = x.attrs.get("fill_value_default", None)
+    
     return GeoTensor(x.values, transform=coords_to_transform(x.coords), 
-                     crs=crs)
+                     crs=crs, fill_value_default=fill_value_default)
