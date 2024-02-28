@@ -2,7 +2,8 @@ import xarray as xr
 import rasterio
 import rasterio.windows
 from georeader.geotensor import GeoTensor
-from typing import Tuple, Any, Optional
+from typing import Tuple, Any, Optional, Dict
+from numpy.typing import NDArray
 import numpy as np
 
 
@@ -39,7 +40,8 @@ def coords_to_transform(coords: xr.Coordinate) -> rasterio.Affine:
     return transform
 
 
-def getcoords_from_transform_shape(transform:rasterio.Affine, shape:Tuple[int, int]) -> xr.Coordinates:
+def getcoords_from_transform_shape(transform:rasterio.Affine, 
+                                   shape:Tuple[int, int]) -> Dict[str, NDArray]:
     """
      This function creates the coordinates for an xr.DataArray object from a transform and a shape tuple.
      This code is taken from xr.open_rasterio.
@@ -49,7 +51,7 @@ def getcoords_from_transform_shape(transform:rasterio.Affine, shape:Tuple[int, i
         shape:
 
     Returns:
-        Coordinates for an xr.DataArray object
+        Dict with the coordinates for a xr.DataArray object
     """
     assert transform.is_rectilinear, "Expected rectilinear transform (i.e. transform.b and transform.d equal to zero)"
 
@@ -57,16 +59,39 @@ def getcoords_from_transform_shape(transform:rasterio.Affine, shape:Tuple[int, i
     x, _ = transform * (np.arange(nx) + 0.5, np.zeros(nx) + 0.5)
     _, y = transform * (np.zeros(ny) + 0.5, np.arange(ny) + 0.5)
 
-    return xr.Coordinates({"x": x, "y": y})
+    return {"x": x, "y": y}
 
 
 def toDataArray(x:GeoTensor) -> xr.DataArray:
+    """
+    Convert a GeoTensor to a xr.DataArray object.
+
+    Args:
+        x (GeoTensor): Input GeoTensor
+
+    Returns:
+        xr.DataArray: Output xr.DataArray
+    """
     coords = getcoords_from_transform_shape(x.transform, x.shape[-2:])
+    for d in x.dims:
+        if d not in coords:
+            coords[d] = np.arange(x.shape[x.dims.index(d)])
+    
     return xr.DataArray(x.data, coords=coords, 
                         attrs={"crs":x.crs})
 
 
 def fromDataArray(x: xr.DataArray, crs:Optional[Any]=None) -> GeoTensor:
+    """
+    Convert a xr.DataArray to a GeoTensor object.
+
+    Args:
+        x (xr.DataArray): Input xr.DataArray
+        crs (Optional[Any], optional): crs. Defaults to None.
+
+    Returns:
+        GeoTensor: Output GeoTensor
+    """
     if crs is None:
         crs = x.attrs.get("crs", None)
     
