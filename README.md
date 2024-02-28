@@ -90,7 +90,7 @@ Other:
 * [Tutorial to read overlapping tiles from a GeoTIFF and a Sentinel-2 image](https://github.com/spaceml-org/georeader/blob/main/notebooks/reading_overlapping_sentinel2_aviris.ipynb)
 * [Example of reading a Proba-V image overlapping with Sentinel-2 forcing same resolution](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_overlapping_probav_and_sentinel2.ipynb)
 * [Work with EMIT images](https://github.com/spaceml-org/georeader/blob/main/notebooks/emit_explore.ipynb)
-* [Read overlapping images of PRISMA and EMIT](ttps://github.com/spaceml-org/georeader/blob/main/notebooks/simultaneous_prisma_emit.ipynb)
+* [Read overlapping images of PRISMA and EMIT](https://github.com/spaceml-org/georeader/blob/main/notebooks/simultaneous_prisma_emit.ipynb)
 * [Read high resolution tile layers](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_from_tileserver.ipynb)
 
 Used in other projects:
