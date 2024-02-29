@@ -82,6 +82,7 @@ def export_image_getpixels(asset_id: str,
                            geometry:Union[Polygon, MultiPolygon],
                            proj:Dict[str, Any],
                            bands_gee:List[str],
+                           dtype_dst:Optional[str]=None,
                            crs_polygon:str="EPSG:4326") -> GeoTensor:
     """
     Exports an image from the GEE as a GeoTensor. It uses the `ee.data.getPixels` method to export.
@@ -127,6 +128,9 @@ def export_image_getpixels(asset_id: str,
         data = rasterio.open(BytesIO(data_raw))
         geotensor = GeoTensor(data.read(), transform=data.transform,
                              crs=data.crs, fill_value_default=data.nodata)
+        if dtype_dst is not None:
+            geotensor = geotensor.astype(dtype_dst)
+            
     except ee.EEException as e:
         # Check if the exception starts with Total request size
         if str(e).startswith("Total request size"):
@@ -137,9 +141,11 @@ def export_image_getpixels(asset_id: str,
             for sb in split_bounds(bounds):
                 # Create a polygon with the bounds
                 poly = box(*sb)
+                if not geometry.intersects(poly):
+                    continue
                 # Call recursively
                 gt = export_image_getpixels(asset_id, poly, 
-                                            proj, bands_gee, crs_polygon)
+                                            proj, bands_gee, dtype_dst, crs_polygon)
                 # Concatenate the GeoTensor
                 geotensors.append(gt)
             
@@ -149,6 +155,7 @@ def export_image_getpixels(asset_id: str,
                                                       dst_crs=dst_crs)
             
             geotensor = mosaic.spatial_mosaic(geotensors, 
+                                              dtype_dst=dtype_dst,
                                               polygon=aoi_dst_crs, 
                                               dst_crs=dst_crs)
         else:

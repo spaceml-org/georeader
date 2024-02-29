@@ -496,7 +496,7 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
                    dst_transform:Optional[rasterio.Affine]=None,
                    window_out:Optional[rasterio.windows.Window]=None,
                    resampling: rasterio.warp.Resampling = rasterio.warp.Resampling.cubic_spline,
-                   dtpye_dst=None, return_only_data: bool = False, dst_nodata: Optional[int] = None) -> Union[
+                   dtype_dst=None, return_only_data: bool = False, dst_nodata: Optional[int] = None) -> Union[
     GeoTensor, np.ndarray]:
     """
     This function slices the data by the bounds and reprojects it to the dst_crs and resolution_dst_crs
@@ -558,19 +558,19 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
     isbool_dtypedst = False
 
     cast = True
-    if dtpye_dst is None:
+    if dtype_dst is None:
         cast = False
-        dtpye_dst = data_in.dtype
+        dtype_dst = data_in.dtype
         if isbool_dtypein:
             isbool_dtypedst = True
-    elif np.dtype(dtpye_dst) == 'bool':
+    elif np.dtype(dtype_dst) == 'bool':
         isbool_dtypedst = True
 
     # Create out array for reprojection
     dict_shape_window_out = {"x": window_out.width, "y": window_out.height}
     shape_out = tuple([named_shape[s] if s not in ["x", "y"] else dict_shape_window_out[s] for s in named_shape])
     dst_nodata = dst_nodata or data_in.fill_value_default
-    destination = np.full(shape_out, fill_value=dst_nodata, dtype=dtpye_dst)
+    destination = np.full(shape_out, fill_value=dst_nodata, dtype=dtype_dst)
 
     polygon_dst_crs = window_utils.window_polygon(window_out, dst_transform)
     
@@ -595,7 +595,7 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
         if isbool_dtypedst:
             np_array_in = np_array_in.astype(np.float32)
         else:
-            np_array_in = np_array_in.astype(dtpye_dst)
+            np_array_in = np_array_in.astype(dtype_dst)
     elif isbool_dtypein:
         np_array_in = np_array_in.astype(np.float32)
 

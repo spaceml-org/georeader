@@ -19,6 +19,7 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
                    dst_transform:Optional[rasterio.transform.Affine]=None,
                    bounds:Optional[Tuple[float, float, float, float]]=None,
                    dst_crs:Optional[str]=None,
+                   dtype_dst:Optional[str]=None,
                    window_size: Optional[Tuple[int, int]]= None,
                    resampling:rasterio.warp.Resampling=rasterio.warp.Resampling.cubic_spline,
                    masking_function:Optional[Callable[[GeoData], GeoData]]=None,
@@ -98,6 +99,7 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
     data_return = read_reproject(first_data_object,
                                  dst_crs=dst_crs, dst_transform=dst_transform,
                                  resampling=resampling,
+                                 dtype_dst=dtype_dst,
                                  window_out=rasterio.windows.Window(row_off=0, col_off=0, width=window_polygon.width,
                                                                     height=window_polygon.height),
                                  dst_nodata=dst_nodata)
@@ -203,6 +205,7 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
 
             data_read = read_reproject(geodata, dst_crs=dst_crs, window_out=window_reproject_iter,
                                        dst_transform=dst_transform_iter, resampling=resampling,
+                                       dtype_dst=dtype_dst,
                                        dst_nodata=dst_nodata)
 
             if (geomask is None) and (masking_function is not None):
