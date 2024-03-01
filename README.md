@@ -22,7 +22,7 @@ pip install git+https://github.com/spaceml-org/georeader#egg=georeader[microsoft
 
 ## Getting started
 
-> Read from a Sentinel-2 image a fixed size subimage on an specific `lon,lat` location. It reads directly from the [public Google Cloud bucket](https://cloud.google.com/storage/docs/public-datasets/sentinel-2?hl=es-419):
+> Read from a Sentinel-2 image a fixed size subimage on an specific `lon,lat` location. It reads directly from the [S2 public Google Cloud bucket](https://cloud.google.com/storage/docs/public-datasets/sentinel-2?hl=es-419):
  
 ```python
 # This snippet requires:
