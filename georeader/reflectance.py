@@ -72,6 +72,7 @@ def radiance_to_reflectance(data:Union[GeoTensor, ArrayLike], solar_irradiance:U
                             center_coords:Optional[Tuple[float, float]]=None,
                             crs_coords:Optional[str]=None ) -> Union[GeoTensor, NDArray]:
     """
+    Convert the radiance to ToA reflectance using the solar irradiance and the date of acquisition.
 
     toaBandX = (radianceBandX / 100 * pi * d^2) / (cos(solarzenithangle/180*pi) * solarIrradianceBandX)
 
@@ -91,7 +92,7 @@ def radiance_to_reflectance(data:Union[GeoTensor, ArrayLike], solar_irradiance:U
         crs_coords: if None it will assume center_coords are in EPSG:4326
 
     Returns:
-        GeoTensor with ToA on each channel
+        GeoTensor with ToA reflectance values (C, H, W)
     """
 
     solar_irradiance = np.array(solar_irradiance)[:, np.newaxis, np.newaxis] # (C, 1, 1)
@@ -116,14 +117,14 @@ def radiance_to_reflectance(data:Union[GeoTensor, ArrayLike], solar_irradiance:U
     radiances = data_values * (10**(-6) / 1) * (1 /10**(-4))
 
     # data_toa = data.values / 100 * constant_factor / solar_irradiance
-    data_toa = radiances * constant_factor / solar_irradiance
+    data_toa_reflectance = radiances * constant_factor / solar_irradiance
     if not  isinstance(data, GeoTensor):
-        return data_toa
+        return data_toa_reflectance
     
     mask = data.values == data.fill_value_default
-    data_toa[mask] = data.fill_value_default
+    data_toa_reflectance[mask] = data.fill_value_default
 
-    return GeoTensor(values=data_toa, crs=data.crs, transform=data.transform,
+    return GeoTensor(values=data_toa_reflectance, crs=data.crs, transform=data.transform,
                      fill_value_default=data.fill_value_default)
 
 
