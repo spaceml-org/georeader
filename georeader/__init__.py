@@ -1,4 +1,4 @@
-__version__ = "1.0.22"
+__version__ = "1.0.23"
 
 import math
 from typing import Tuple, Any, Union
