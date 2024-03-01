@@ -257,7 +257,8 @@ class PRISMA:
             
             ltoa_img.append(img)
         
-        ltoa_img = np.stack(ltoa_img, axis=0)
+        # Transpose to row major
+        ltoa_img = np.transpose(np.stack(ltoa_img, axis=0), (0, 2, 1))
         
         if as_reflectance:
             thuiller = reflectance.load_thuillier_irradiance()
