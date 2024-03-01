@@ -18,6 +18,7 @@ import numpy as np
 from georeader import window_utils
 from shapely.geometry import Polygon
 from georeader.geotensor import GeoTensor
+from georeader import reflectance
 import netCDF4
 from shapely.ops import unary_union
 from georeader import read
@@ -29,6 +30,7 @@ from georeader import get_utm_epsg
 
 AUTH_METHOD = "auth" # "auth" or "token"
 TOKEN = None
+WAVELENGTHS_RGB = np.array([640, 550, 460])
 
 def _bounds_indexes_raw(glt:NDArray, valid_glt:NDArray) -> Tuple[int, int, int, int]:
         """ Return the bounds of the raw data: (min_x, min_y, max_x, max_y) """
@@ -566,7 +568,7 @@ class EMITImage:
         
         band_index = self.observation_bands.tolist().index('To-sun zenith (0 to 90 degrees from zenith)')
         sza_arr = self.nc_ds_obs['obs'][..., band_index]
-        self._mean_sza = np.mean(sza_arr[sza_arr != self.nc_ds_obs['obs']._FillValue])
+        self._mean_sza = float(np.mean(sza_arr[sza_arr != self.nc_ds_obs['obs']._FillValue]))
         return self._mean_sza
     
     @property
@@ -576,7 +578,7 @@ class EMITImage:
             return self._mean_vza
         band_index = self.observation_bands.tolist().index('To-sensor zenith (0 to 90 degrees from zenith)')
         vza_arr = self.nc_ds_obs['obs'][..., band_index]
-        self._mean_vza = np.mean(vza_arr[vza_arr != self.nc_ds_obs['obs']._FillValue])
+        self._mean_vza = float(np.mean(vza_arr[vza_arr != self.nc_ds_obs['obs']._FillValue]))
         return self._mean_vza
         
     def __copy__(self) -> '__class__':
@@ -585,7 +587,7 @@ class EMITImage:
         # copy nc_ds_obs if it exists
         for attrname in self.attributes_set_if_exists:
             if hasattr(self, attrname):
-                setattr(out, attrname, self.nc_ds_obs)
+                setattr(out, attrname, getattr(self, attrname))
 
         return out
     def copy(self) -> '__class__':
@@ -637,10 +639,25 @@ class EMITImage:
         copy.set_band_selection(bands)
         return copy
   
-    def load(self, boundless:bool=True)-> GeoTensor:
+    def load(self, boundless:bool=True, as_reflectance:bool=False)-> GeoTensor:
         data = self.load_raw() # (C, H, W) or (H, W)
+        if as_reflectance:
+            thuiller = reflectance.load_thuillier_irradiance()
+            response = reflectance.srf(self.wavelengths, self.fwhm, thuiller["Nanometer"].values)
+            solar_irradiance_norm = thuiller["Radiance(mW/m2/nm)"].values.dot(response) / 1_000
+            centroid = self.footprint("EPSG:4326").centroid.coords[0]
+            data = reflectance.radiance_to_reflectance(data, solar_irradiance_norm,
+                                                       self.time_coverage_start, 
+                                                       center_coords=centroid,
+                                                       crs_coords="EPSG:4326")
+
         return self.georreference(data)
     
+    def load_rgb(self, as_reflectance:bool=True) -> GeoTensor:
+        bands_read = np.argmin(np.abs(WAVELENGTHS_RGB[:, np.newaxis] - self.wavelengths), axis=1).tolist()
+        ei_rgb = self.read_from_bands(bands_read)
+        return ei_rgb.load(boundless=True, as_reflectance=as_reflectance)
+
     @property
     def shape_raw(self) -> Tuple[int, int, int]:
         """ Return the shape of the raw data in (C, H, W) format """

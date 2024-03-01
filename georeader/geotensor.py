@@ -7,16 +7,17 @@ from georeader import window_utils
 from georeader.window_utils import window_bounds
 from numpy.typing import ArrayLike
 from itertools import product
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, MultiPolygon
 import numbers
+from numpy.typing import NDArray
 
 try:
     import torch
     import torch.nn.functional
-    Tensor = Union[torch.Tensor, np.ndarray]
+    Tensor = Union[torch.Tensor, NDArray]
     torch_installed = True
 except ImportError:
-    Tensor =np.ndarray
+    Tensor = NDArray
     torch_installed = False
 
 ORDERS = {
@@ -379,6 +380,38 @@ class GeoTensor:
             return pol
 
         return window_utils.polygon_to_crs(pol, self.crs, crs)
+    
+    def valid_footprint(self, crs:Optional[str]=None, method:str="all") -> Union[MultiPolygon, Polygon]:
+        """
+        vectorizes the valid values of the GeoTensor and returns the footprint as a Polygon.
+
+        Args:
+            crs (Optional[str], optional): Coordinate reference system. Defaults to None.
+            method (str, optional): "all" or "any" to aggregate the channels of the image. Defaults to "all".
+
+        Returns:
+            Polygon or MultiPolygon: footprint of the GeoTensor.
+        """
+        valid_values = self.values != self.fill_value_default
+        if len(valid_values.shape) > 2:
+            if method == "all":
+                valid_values = np.all(valid_values, 
+                                      axis=tuple(np.arange(0, len(valid_values.shape)-2).tolist()))
+            elif method == "any":
+                valid_values = np.any(valid_values, 
+                                      axis=tuple(np.arange(0, len(valid_values.shape)-2).tolist()))
+            else:
+                raise NotImplementedError(f"Method {method} to aggregate channels not implemented")
+
+        from georeader import vectorize
+        polygons = vectorize.get_polygons(valid_values, transform=self.transform)
+        if len(polygons) == 0:
+            raise ValueError("GeoTensor has no valid values")
+        elif len(polygons) == 1:
+            pol = polygons[0]
+        else:
+            pol = MultiPolygon(polygons)
+        return window_utils.polygon_to_crs(pol, self.crs, crs)
 
     def __repr__(self)->str:
         return f""" 
@@ -633,8 +666,7 @@ def concatenate(geotensors:List[GeoTensor]) -> GeoTensor:
     array_out[0] = first_geotensor.values
 
     for i, geo in enumerate(geotensors[1:]):
-        assert geo.crs == first_geotensor.crs, f"Different crs in concat"
-        assert geo.transform == first_geotensor.transform, f"Different transform in concat"
+        assert geo.same_extent(first_geotensor), f"Different size in concat"
         assert geo.shape == first_geotensor.shape, f"Different shape in concat"
         assert geo.fill_value_default == first_geotensor.fill_value_default, "Different fill_value_default in concat"
         array_out[i + 1] = geo.values

@@ -1,9 +1,10 @@
 # georeader
 [![Article DOI:10.1038/s41598-023-47595-7](https://img.shields.io/badge/Article%20DOI-10.1038%2Fs41598.023.47595.7-blue)](https://doi.org/10.1038/s41598-023-47595-7)  [![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/spaceml-org/georeader?sort=semver)](https://github.com/spaceml-org/georeader/releases) [![PyPI](https://img.shields.io/pypi/v/georeader-spaceml)](https://pypi.org/project/georeader-spaceml/) [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/georeader-spaceml)](https://pypi.org/project/georeader-spaceml/) [![PyPI - License](https://img.shields.io/pypi/l/georeader-spaceml)](https://github.com/spaceml-org/georeader/blob/main/LICENSE)
 
-Read data from rasters: very few dependencies, reads from cloud storage and lazy loading.
+**georeader** is a package to process raster data from different satellite missions. **georeader** makes easy to [read specific areas of your image](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_S2_SAFE_from_bucket.ipynb), to [reproject images from different satellites to a common grid](https://github.com/spaceml-org/georeader/blob/main/notebooks/reading_overlapping_sentinel2_aviris.ipynb) and to go from vector to raster formats ([`vectorize`](https://github.com/spaceml-org/georeader/blob/main/georeader/vectorize.py) and [`rasterize`](https://github.com/spaceml-org/georeader/blob/main/georeader/rasterize.py)). **georeader** is mainly used to process satellite data for scientific usage, to create ML-ready datasets and to implement [end-to-end operational inference pipelines](https://spaceml-org.github.io/ml4floods/content/ml4ops/HOWTO_postprocess_inference.html). 
 
 ## Install
+The core package has [very few dependencies](https://github.com/spaceml-org/georeader/blob/main/requirements.txt); it is build on top of the geospatial libraries `rasterio`, `shapely` and `geopandas`.
 
 ```bash
 # From pip
@@ -21,6 +22,8 @@ pip install git+https://github.com/spaceml-org/georeader#egg=georeader[microsoft
 
 ## Getting started
 
+> Read from a Sentinel-2 image a fixed size subimage on an specific `lon,lat` location. It reads directly from the [S2 public Google Cloud bucket](https://cloud.google.com/storage/docs/public-datasets/sentinel-2?hl=es-419):
+ 
 ```python
 # This snippet requires:
 # pip install fsspec gcsfs google-cloud-storage
@@ -36,7 +39,7 @@ s2_safe_path = S2_SAFE_reader.s2_public_bucket_path("S2B_MSIL1C_20191008T173219_
 s2obj = S2_SAFE_reader.s2loader(s2_safe_path, 
                                 out_res=10, bands=["B04","B03","B02"])
 
-# copy to local avoids http errors specially when not using a Google project.
+# copy to local avoids http errors specially when not using a Google Cloud project.
 # This will only copy the bands set up above B04, B03 and B02
 s2obj = s2obj.cache_product_to_local_dir(".")
 
@@ -90,6 +93,7 @@ Other:
 * [Tutorial to read overlapping tiles from a GeoTIFF and a Sentinel-2 image](https://github.com/spaceml-org/georeader/blob/main/notebooks/reading_overlapping_sentinel2_aviris.ipynb)
 * [Example of reading a Proba-V image overlapping with Sentinel-2 forcing same resolution](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_overlapping_probav_and_sentinel2.ipynb)
 * [Work with EMIT images](https://github.com/spaceml-org/georeader/blob/main/notebooks/emit_explore.ipynb)
+* [Read overlapping images of PRISMA and EMIT](https://github.com/spaceml-org/georeader/blob/main/notebooks/simultaneous_prisma_emit.ipynb)
 * [Read high resolution tile layers](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_from_tileserver.ipynb)
 
 Used in other projects:
