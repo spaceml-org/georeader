@@ -39,7 +39,7 @@ s2_safe_path = S2_SAFE_reader.s2_public_bucket_path("S2B_MSIL1C_20191008T173219_
 s2obj = S2_SAFE_reader.s2loader(s2_safe_path, 
                                 out_res=10, bands=["B04","B03","B02"])
 
-# copy to local avoids http errors specially when not using a Google project.
+# copy to local avoids http errors specially when not using a Google Cloud project.
 # This will only copy the bands set up above B04, B03 and B02
 s2obj = s2obj.cache_product_to_local_dir(".")
 
