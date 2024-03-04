@@ -331,7 +331,7 @@ def read_from_polygon(data_in: GeoData, polygon: Union[Polygon, MultiPolygon],
 def read_reproject_like(data_in: GeoData, data_like: GeoData,
                         resolution_dst:Optional[Union[float, Tuple[float, float]]]=None,
                         resampling: rasterio.warp.Resampling = rasterio.warp.Resampling.cubic_spline,
-                        dtpye_dst=None, return_only_data: bool = False,
+                        dtype_dst=None, return_only_data: bool = False,
                         dst_nodata: Optional[int] = None) -> Union[GeoTensor, np.ndarray]:
     """
     Reads from `data_in` and reprojects to have the same extent and resolution than `data_like`.
@@ -341,7 +341,7 @@ def read_reproject_like(data_in: GeoData, data_like: GeoData,
         data_like: GeoData to get the bounds and resolution to reproject `data_in`.
         resampling: specifies how data is reprojected from `rasterio.warp.Resampling`.
         resolution_dst: if not None it will overwrite the resolution of `data_like`.
-        dtpye_dst: if None it will be inferred
+        dtype_dst: if None it will be inferred
         return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
             returns an GeoTensor object (georreferenced array).
         dst_nodata: dst_nodata value
@@ -363,7 +363,7 @@ def read_reproject_like(data_in: GeoData, data_like: GeoData,
     return read_reproject(data_in, dst_crs=data_like.crs, dst_transform=data_like.transform,
                           resolution_dst_crs=resolution_dst,
                           window_out=rasterio.windows.Window(0,0, width=shape_out[-1], height=shape_out[-2]),
-                          resampling=resampling,dtpye_dst=dtpye_dst, return_only_data=return_only_data,
+                          resampling=resampling,dtype_dst=dtype_dst, return_only_data=return_only_data,
                           dst_nodata=dst_nodata)
 
 
@@ -512,7 +512,7 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
         window_out: Window out to read w.r.t `dst_transform`. If not provided it is computed from the bounds.
             Window out if provided has the output width and height of the reprojected data.
         resampling: specifies how data is reprojected from `rasterio.warp.Resampling`.
-        dtpye_dst: if None it will be data_in.dtype
+        dtype_dst: if None it will be data_in.dtype
         return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
             returns an GeoTensor object (georreferenced array).
         dst_nodata: dst_nodata value
