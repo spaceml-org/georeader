@@ -129,11 +129,11 @@ class RasterioReader:
 
         # Assert all paths have same tranform and crs
         #  (checking width and height will not be needed since we're reading with boundless option but I don't see the point to ignore it)
-        if check:
+        if check and len(self.paths) > 1:
             for p in self.paths:
                 with rasterio.Env(**self.rio_env_options):
                     with rasterio.open(p, "r", overview_level=overview_level) as src:
-                        if not src.transform == self.real_transform:
+                        if not src.transform.almost_equals(self.real_transform, 1e-6):
                             raise ValueError(f"Different transform in {self.paths[0]} and {p}: {self.real_transform} {src.transform}")
                         if not str(src.crs).lower() == str(self.crs).lower():
                             raise ValueError(f"Different CRS in {self.paths[0]} and {p}: {self.crs} {src.crs}")
