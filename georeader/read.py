@@ -363,11 +363,7 @@ def read_reproject_like(data_in: GeoData, data_like: GeoData,
     return read_reproject(data_in, dst_crs=data_like.crs, dst_transform=data_like.transform,
                           resolution_dst_crs=resolution_dst,
                           window_out=rasterio.windows.Window(0,0, width=shape_out[-1], height=shape_out[-2]),
-<<<<<<< HEAD
                           resampling=resampling,dtype_dst=dtype_dst, return_only_data=return_only_data,
-=======
-                          resampling=resampling,dtype_dst=dtpye_dst, return_only_data=return_only_data,
->>>>>>> d2a477a (parallel export image getpixels)
                           dst_nodata=dst_nodata)
 
 
