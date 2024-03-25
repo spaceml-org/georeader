@@ -12,6 +12,7 @@ from georeader import read, window_utils
 from io import BytesIO
 import rasterio
 from georeader import mosaic
+from concurrent.futures import ThreadPoolExecutor
 
 FakeGeoData=namedtuple("FakeGeoData",["crs", "transform"])
 
@@ -136,18 +137,20 @@ def export_image_getpixels(asset_id: str,
         if str(e).startswith("Total request size"):
             # Split the geometry in two and call recursively
             bounds = geometry.bounds
-            # Split the bounds in two
-            geotensors = []
-            for sb in split_bounds(bounds):
-                # Create a polygon with the bounds
+
+            def process_bound(sb):
                 poly = box(*sb)
                 if not geometry.intersects(poly):
-                    continue
-                # Call recursively
+                    return None
                 gt = export_image_getpixels(asset_id, poly, 
                                             proj, bands_gee, dtype_dst, crs_polygon)
-                # Concatenate the GeoTensor
-                geotensors.append(gt)
+                return gt
+
+            with ThreadPoolExecutor() as executor:
+                geotensors = list(executor.map(process_bound, split_bounds(bounds)))
+
+            # Remove None values from the list
+            geotensors = [gt for gt in geotensors if gt is not None]
             
             dst_crs = geotensors[0].crs
             aoi_dst_crs = window_utils.polygon_to_crs(geometry, 
