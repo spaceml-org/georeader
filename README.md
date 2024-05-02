@@ -7,17 +7,7 @@
 The core package has [very few dependencies](https://github.com/spaceml-org/georeader/blob/main/requirements.txt); it is build on top of the geospatial libraries `rasterio`, `shapely` and `geopandas`.
 
 ```bash
-# From pip
 pip install georeader-spaceml
-
-# From GitHub
-pip install git+https://github.com/spaceml-org/georeader#egg=georeader
-
-# Install with Google dependencies (to read objects from Google Cloud Storage or Google Earth Engine)
-pip install git+https://github.com/spaceml-org/georeader#egg=georeader[google]
-
-# Install with Planetary Computer requirements
-pip install git+https://github.com/spaceml-org/georeader#egg=georeader[microsoftplanetary]
 ```
 
 ## Getting started
