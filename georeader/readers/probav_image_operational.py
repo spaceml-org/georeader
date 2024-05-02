@@ -251,9 +251,6 @@ class ProbaV:
     def load_sm_cloud_mask(self, mask_undefined:bool=False, boundless:bool=True) -> geotensor.GeoTensor:
         sm = self.load_sm(boundless=boundless)
         cloud_mask = sm_cloud_mask(sm.values, mask_undefined=mask_undefined)
-        cloud_mask+=1
-        invalids = mask_only_sm(sm.values)
-        cloud_mask[invalids] = 0
         return geotensor.GeoTensor(cloud_mask, transform=self.transform, crs=self.crs, fill_value_default=0)
 
     def is_recompressed_and_chunked(self) -> bool:
