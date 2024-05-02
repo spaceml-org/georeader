@@ -1,3 +1,12 @@
+"""
+Proba-V reader
+
+Unnoficial Proba-V reader. This reader is based in the Proba-V user manual: 
+https://publications.vito.be/2017-1333-probav-products-user-manual.pdf
+
+Author:  Gonzalo Mateo-García
+"""
+
 import numpy as np
 import h5py
 from datetime import datetime
@@ -12,6 +21,7 @@ from typing import Tuple, List, Optional, Union
 from georeader import window_utils, geotensor
 from numbers import Number
 from shapely.geometry import Polygon
+import rasterio.crs
 
 
 FILTERS_HDF5 = { 'gzip': h5z.FILTER_DEFLATE,
@@ -97,7 +107,7 @@ class ProbaV:
             self.map_projection_wkt = " ".join(self.metadata["MAP_PROJECTION_WKT"].astype(str).tolist())
 
         # Proba-V images are lat/long
-        self.crs = {'init': 'epsg:4326'}
+        self.crs = rasterio.crs.CRS({'init': 'epsg:4326'})
 
         # Proba-V images have four bands
         self.level_name = level_name
@@ -130,6 +140,10 @@ class ProbaV:
             return pol
 
         return window_utils.polygon_to_crs(pol, self.crs, crs)
+    
+    def valid_footprint(self, crs:Optional[str]=None) -> Polygon:
+        valids = self.load_mask()
+        return valids.valid_footprint(crs=crs)
 
     def _load_bands(self, bands_names:Union[List[str],str], boundless:bool=True,
                     fill_value_default:Number=0) -> geotensor.GeoTensor:
@@ -145,7 +159,7 @@ class ProbaV:
             bands_arrs = []
             for band in bands_names:
                 data = read_band_toa(input_f, band, slice_)
-                if pad_list_np:
+                if pad_list_np is not None:
                     data = np.pad(data, tuple(pad_list_np), mode="constant",
                                   constant_values=fill_value_default)
 
@@ -220,9 +234,27 @@ class ProbaV:
         return self._load_bands(f'{self.level_name}/QUALITY/SM', boundless=boundless, fill_value_default=0)
 
     def load_mask(self,boundless:bool=True) -> geotensor.GeoTensor:
+        """
+        Returns the valid mask (False if the pixel is out of swath or is invalid). This function loads the SM band
+
+        Args:
+            boundless (bool, optional): boundless option to load the SM band. Defaults to True.
+
+        Returns:
+            geotensor.GeoTensor: mask with the same shape as the image
+        """
+        valids = self.load_sm(boundless=boundless)
+        valids.values = ~mask_only_sm(valids.values)
+        valids.fill_value_default = False
+        return valids
+    
+    def load_sm_cloud_mask(self, mask_undefined:bool=False, boundless:bool=True) -> geotensor.GeoTensor:
         sm = self.load_sm(boundless=boundless)
-        sm.values = mask_only_sm(sm.values)
-        return sm
+        cloud_mask = sm_cloud_mask(sm.values, mask_undefined=mask_undefined)
+        cloud_mask+=1
+        invalids = mask_only_sm(sm.values)
+        cloud_mask[invalids] = 0
+        return geotensor.GeoTensor(cloud_mask, transform=self.transform, crs=self.crs, fill_value_default=0)
 
     def is_recompressed_and_chunked(self) -> bool:
         original_bands = [f"{self.level_name}/RADIOMETRY/{b}/{self.toatoc}" for b in BAND_NAMES]
@@ -380,9 +412,9 @@ class ProbaVSM(ProbaV):
 
 def sm_cloud_mask(sm:np.ndarray, mask_undefined:bool=False) -> np.ndarray:
     """
-    Returns a binary cloud mask: 1 cloudy values 0 rest
+    Returns a binary cloud mask: 2 if cloud, 1 if clear, 0 if invalid
 
-    From user manual http://www.vito-eodata.be/PDF/image/PROBAV-Products_User_Manual.pdf pag 67
+    From user manual https://publications.vito.be/2017-1333-probav-products-user-manual.pdf Pag 64
         * Clear  ->    000
         * Shadow ->    001
         * Undefined -> 010
@@ -390,29 +422,40 @@ def sm_cloud_mask(sm:np.ndarray, mask_undefined:bool=False) -> np.ndarray:
         * Ice    ->    100
 
     :param sm: (H, W) sm flags as loaded from ProbaVImageOperational.load_sm() method
-    :param mask_undefined: True returns np.ma.masked_array with undefined values masked
+    :param mask_undefined: if True returns also as clouds pixels those marked as undefined
     :return:
     """
-    cloud_mask = np.uint8((sm & 1 != 0) & (sm & 2**1 != 0) & (sm & 2**2 == 0))
+    cloud_mask = np.uint8(((sm & 1) != 0) & ((sm & 2**1) != 0) & ((sm & 2**2) == 0))
     if mask_undefined:
-        undefined_mask = (sm & 1 == 0) & (sm & 2**1 != 0) & (sm & 2**2 == 0)
-        cloud_mask = np.ma.masked_array(cloud_mask,undefined_mask)
+        undefined_mask = ((sm & 1) == 0) & ((sm & 2**1) != 0) & ((sm & 2**2) == 0)
+        cloud_mask |= undefined_mask
+    
+    cloud_mask += 1
+    invalids = mask_only_sm(sm)
+    cloud_mask[invalids] = 0
 
     return cloud_mask
 
 
 def mask_only_sm(sm:np.ndarray) -> np.ndarray:
+    """
+    Returns a invalid mask: True if the pixel is out of swath
+
+    https://publications.vito.be/2017-1333-probav-products-user-manual.pdf Pag 64
+
+    Bits 8..11: SWIR, NIR, RED, BLUE coverage flags
+
+    (If any of those bits is 0 the pixel is not covered, set as invalid)
+
+    Args:
+        sm (np.ndarray): sm flags as loaded from ProbaVImageOperational.load_sm() method
+
+    Returns:
+        np.ndarray: mask with the same shape as the image
+    """
     mascara = np.zeros(sm.shape, dtype=bool)
     for i in range(4):
         mascara |= ((sm & (2 ** (i + 8))) == 0)
-
-    return mascara
-
-
-def mask_operational(bands:np.ndarray, sm:np.ndarray)-> np.ndarray:
-    # http://www.vito-eodata.be/PDF/image/PROBAV-Products_User_Manual.pdf
-    mascara = np.any(bands < 0, axis=-1)
-    mascara |= mask_only_sm(sm)
 
     return mascara
 

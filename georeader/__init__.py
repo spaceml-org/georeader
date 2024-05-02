@@ -1,4 +1,4 @@
-__version__ = "1.0.27"
+__version__ = "1.1"
 
 import math
 from typing import Tuple, Any, Union
@@ -66,7 +66,8 @@ def get_utm_from_mgrs(mgrs_tile:str) -> Any:
     # lat, lon = mgrs.MGRS().toLatLon(mgrs_tile)
 
 
-    crs = CRS.from_dict({"proj":"utm", "zone": int(mgrs_tile[:2]), 
+    crs = CRS.from_dict({"proj":"utm", 
+                         "zone": int(mgrs_tile[:2]), 
                          "south": mgrs_tile[2] < "N"})
     return crs
 

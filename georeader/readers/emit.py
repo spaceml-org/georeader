@@ -339,6 +339,14 @@ class EMITImage:
             return self.glt.shape
 
     @property
+    def width(self) -> int:
+        return self.shape[-1]
+    
+    @property
+    def height(self) -> int:
+        return self.shape[-2]
+
+    @property
     def transform(self) -> rasterio.Affine:
         return self.glt.transform
 

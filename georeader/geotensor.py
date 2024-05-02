@@ -411,6 +411,9 @@ class GeoTensor:
             pol = polygons[0]
         else:
             pol = MultiPolygon(polygons)
+        if crs is None:
+            return pol
+        
         return window_utils.polygon_to_crs(pol, self.crs, crs)
 
     def __repr__(self)->str:

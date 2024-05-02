@@ -1,6 +1,8 @@
 """
 Sentinel-2 reader inherited from https://github.com/IPL-UV/DL-L8S2-UV.
 
+Authors: Gonzalo Mateo-García, Dan Lopez-Puigdollers
+
 It has several enhancements:
 * Support for S2L2A images
 * It can read directly images from a GCP bucket (for example data from  [here](https://cloud.google.com/storage/docs/public-datasets/sentinel-2))
