@@ -69,7 +69,7 @@ def getcoords_from_transform_shape(transform:rasterio.Affine,
     return {x_axis_name: x, y_axis_name: y}
 
 
-def toDataArray(x:GeoTensor, x_axis_name:str="x", y_axis_name:str="y") -> xr.DataArray:
+def toDataArray(x:GeoTensor, x_axis_name:str="x", y_axis_name:str="y", extra_coords:Optional[Dict[str, Any]]=None) -> xr.DataArray:
     """
     Convert a GeoTensor to a xr.DataArray object.
 
@@ -77,6 +77,7 @@ def toDataArray(x:GeoTensor, x_axis_name:str="x", y_axis_name:str="y") -> xr.Dat
         x (GeoTensor): Input GeoTensor
         x_axis_name (str, optional): name to the x axis. Defaults to "x".
         y_axis_name (str, optional): name to the y axis. Defaults to "y".
+        extra_coords (Optional[Dict[str, Any]], optional): Extra coordinates. Defaults to None.
 
     Returns:
         xr.DataArray: Output xr.DataArray
@@ -85,12 +86,14 @@ def toDataArray(x:GeoTensor, x_axis_name:str="x", y_axis_name:str="y") -> xr.Dat
                                             x_axis_name=x_axis_name, y_axis_name=y_axis_name)
     cords_ordered = OrderedDict()
     for d in x.dims:
-        if d not in coords:
-            cords_ordered[d] = np.arange(x.shape[x.dims.index(d)])
-        else:
+        if (extra_coords is not None) and (d in extra_coords):
+            cords_ordered[d] = extra_coords[d]
+        elif d in coords:
             cords_ordered[d] = coords[d]
+        else:
+            cords_ordered[d] = np.arange(x.shape[x.dims.index(d)])
     
-    return xr.DataArray(x.values, coords=coords, 
+    return xr.DataArray(x.values, coords=cords_ordered, 
                         dims=x.dims,
                         attrs={"crs":x.crs , 
                                "fill_value_default":x.fill_value_default})

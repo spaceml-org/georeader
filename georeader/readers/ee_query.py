@@ -95,7 +95,9 @@ def query(area:Union[MultiPolygon,Polygon],
           date_start:datetime, date_end:datetime,
           producttype:str='S2', filter_duplicates:bool=True,
           return_collection:bool=False,
-          add_s2cloudless:bool=False)-> Union[gpd.GeoDataFrame, Tuple[gpd.GeoDataFrame, ee.ImageCollection]]:
+          add_s2cloudless:bool=False,
+          extra_metadata_keys:Optional[List[str]]=None
+          )-> Union[gpd.GeoDataFrame, Tuple[gpd.GeoDataFrame, ee.ImageCollection]]:
     """
     Query Landsat and Sentinel-2 products from the Google Earth Engine.
 
@@ -108,6 +110,7 @@ def query(area:Union[MultiPolygon,Polygon],
         return_collection: returns also the corresponding image collection
         add_s2cloudless: Adds a column that indicates if the s2cloudless image is available (from collection
             COPERNICUS/S2_CLOUD_PROBABILITY collection)
+        extra_metadata_keys: list of extra metadata keys to add to the geodataframe.
 
     Returns:
         geodataframe with available products in the given area and time range
@@ -169,8 +172,11 @@ def query(area:Union[MultiPolygon,Polygon],
         pol)
         img_col = img_col.merge(img_col_l9_t2)
 
+    if extra_metadata_keys is None:
+        extra_metadata_keys = []
+
     geodf = img_collection_to_feature_collection(img_col,
-                                                 ["system:time_start"] + list(keys_query.keys()),
+                                                 ["system:time_start"] + list(keys_query.keys()) + extra_metadata_keys,
                                                 as_geopandas=True, band_crs="B2")
 
     geodf.rename(keys_query, axis=1, inplace=True)
@@ -190,7 +196,7 @@ def query(area:Union[MultiPolygon,Polygon],
             pol)
         keys_query_s2 = {"PRODUCT_ID": "title", 'CLOUDY_PIXEL_PERCENTAGE': "cloudcoverpercentage"}
         geodf_s2 = img_collection_to_feature_collection(img_col_s2,
-                                                        ["system:time_start"] + list(keys_query_s2.keys()),
+                                                        ["system:time_start"] + list(keys_query_s2.keys()) + extra_metadata_keys,
                                                         as_geopandas=True, band_crs="B2")
         geodf_s2["collection_name"] = "COPERNICUS/S2_HARMONIZED"
         geodf_s2.rename(keys_query_s2, axis=1, inplace=True)

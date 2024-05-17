@@ -13,6 +13,8 @@ from io import BytesIO
 import rasterio
 from georeader import mosaic
 from concurrent.futures import ThreadPoolExecutor
+import geopandas as gpd
+from tqdm import tqdm
 
 FakeGeoData=namedtuple("FakeGeoData",["crs", "transform"])
 
@@ -136,18 +138,20 @@ def export_image_getpixels(asset_id: str,
         # Check if the exception starts with Total request size
         if str(e).startswith("Total request size"):
             # Split the geometry in two and call recursively
-            bounds = geometry.bounds
+            pols_execute = []
+            for sb in split_bounds(geometry.bounds):
+                pol = box(*sb)
+                if not geometry.intersects(pol):
+                    continue
+                pols_execute.append(pol.intersection(geometry))
 
-            def process_bound(sb):
-                poly = box(*sb)
-                if not geometry.intersects(poly):
-                    return None
+            def process_bound(poly):
                 gt = export_image_getpixels(asset_id, poly, 
                                             proj, bands_gee, dtype_dst, crs_polygon)
                 return gt
 
             with ThreadPoolExecutor() as executor:
-                geotensors = list(executor.map(process_bound, split_bounds(bounds)))
+                geotensors = list(executor.map(process_bound, pols_execute))
 
             # Remove None values from the list
             geotensors = [gt for gt in geotensors if gt is not None]
@@ -166,8 +170,75 @@ def export_image_getpixels(asset_id: str,
     return geotensor
 
 
+def export_cube(query:gpd.GeoDataFrame, geometry:Union[Polygon, MultiPolygon], 
+                transform:Optional[Affine]=None, crs:Optional[str]=None,
+                dtype_dst:Optional[str]=None,
+                crs_polygon:str="EPSG:4326",
+                display_progress:bool=True) -> Optional[GeoTensor]:
+    """
+    Download all images in the query that intersects the geometry. 
+
+    Note: This function is intended for small areas. If the area is too big that there are several images per day that intesesects the geometry 
+         it will not group the images by day.
+
+    Args:
+        query (gpd.GeoDataFrame): dataframe from `georeaders.readers.query`. Required columns: gee_id, collection_name, bands_gee
+        geometry (Union[Polygon, MultiPolygon]): geometry to export
+        transform (Optional[Affine], optional): transform of the geometry. If None it will use the transform of the first image translated to the geometry. 
+            Defaults to None.
+        crs (Optional[str], optional): crs of the geometry. If None it will use the crs of the first image. Defaults to None.
+        dtype_dst (Optional[str], optional): dtype of the output GeoTensor. Defaults to None.
+        crs_polygon (_type_, optional): crs of the geometry. Defaults to "EPSG:4326".
+        display_progress (bool, optional): Display progress bar. Defaults to False.
+
+    Returns:
+        GeoTensor: GeoTensor object with 4 dimensions: (time, band, y, x)
+    """
+
+    # TODO group by solar_day and satellite??
+    if query.shape[0] == 0:
+        return None
+    
+    # Check required columns
+    required_columns = ["gee_id", "collection_name", "bands_gee"]
+    if not all([col in query.columns for col in required_columns]):
+        raise ValueError(f"Columns {required_columns} are required in the query dataframe")
+
+    # Get the first image to get the crs and transform if not provided
+    if crs is None:
+        first_image = query.iloc[0]
+        if "proj" not in first_image:
+            raise ValueError("proj column is required in the query dataframe if crs is not provided")
+        crs = first_image["proj"]["crs"]
+    
+    if transform is None:
+        first_image = query.iloc[0]
+        if "proj" not in first_image:
+            raise ValueError("proj column is required in the query dataframe if transform is not provided")
+        transform = Affine(*first_image["proj"]["transform"])
+    
+    proj = {
+            "crs": crs,
+            "transform": list(transform)[:6]
+        }
+    
+    # geotensor_list = []
+    # for i, image in query.iterrows():
+    #     asset_id = f'{image["collection_name"]}/{image["gee_id"]}'
+    #     geotensor = export_image_getpixels(asset_id, geometry, proj, image["bands_gee"], crs_polygon=crs_polygon, dtype_dst=dtype_dst)
+    #     geotensor_list.append(geotensor)
+    
+    def process_query_image(tuple_row):
+        _, image = tuple_row
+        asset_id = f'{image["collection_name"]}/{image["gee_id"]}'
+        geotensor = export_image_getpixels(asset_id, geometry, proj, image["bands_gee"], crs_polygon=crs_polygon, dtype_dst=dtype_dst)
+        return geotensor
+
+    with ThreadPoolExecutor() as executor:
+        geotensor_list = list(tqdm(executor.map(process_query_image, query.iterrows()), total=query.shape[0], disable=not display_progress))
+    
+    return concatenate(geotensor_list)
+    
 
 
-
-
-
+                

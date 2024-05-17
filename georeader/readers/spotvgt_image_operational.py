@@ -21,6 +21,7 @@ import numpy as np
 import datetime as dt
 from glob import glob
 from pyhdf.SD import SD, SDC
+import warnings
 
 
 FILES = ['1BL', '1BO', 'AG', 'B0', 'B2', 'B3', 'MIR',
@@ -118,13 +119,13 @@ class SpotVGT:
         hh, mm, ss = re.match(r'(\d{2})(\d{2})(\d{2})', self.metadata['SEGM_FIRST_TIME']).groups()
 
         self.start_date = dt.datetime(day=int(day), month=int(month), year=int(year),
-                                      hour=int(hh), minute=int(mm), second=int(ss)).strftime("%Y-%m-%d %H:%M:%S")
+                                      hour=int(hh), minute=int(mm), second=int(ss), tzinfo=dt.timezone.utc)
 
         year, month, day = re.match(r'(\d{4})(\d{2})(\d{2})', self.metadata['SEGM_LAST_DATE']).groups()
         hh, mm, ss = re.match(r'(\d{2})(\d{2})(\d{2})', self.metadata['SEGM_LAST_TIME']).groups()
 
         self.end_date = dt.datetime(day=int(day), month=int(month), year=int(year),
-                                    hour=int(hh), minute=int(mm), second=int(ss)).strftime("%Y-%m-%d %H:%M:%S")
+                                    hour=int(hh), minute=int(mm), second=int(ss), tzinfo=dt.timezone.utc)
 
         # self.map_projection_wkt
 
