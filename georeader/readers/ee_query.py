@@ -78,15 +78,19 @@ def query_s1(area:Union[MultiPolygon,Polygon],
 
 def figure_out_collection_landsat(tile:str) -> str:
     if tile.startswith("LC08") or tile.startswith("LO08"):
-        if tile.endswith("T1_RT") or tile.endswith("T1"):
+        if tile.endswith("T1_RT") or tile.endswith("T1") or tile.endswith("RT"):
             return "LANDSAT/LC08/C02/T1_RT_TOA"
         elif tile.endswith("T2"):
             return "LANDSAT/LC08/C02/T2_TOA"
+        else:
+            raise ValueError(f"Tile of Landsat-8 {tile} not recognized")
     elif tile.startswith("LC09") or tile.startswith("LO09"):
         if tile.endswith("T1"):
             return "LANDSAT/LC09/C02/T1_TOA"
         elif tile.endswith("T2"):
             return "LANDSAT/LC09/C02/T2_TOA"
+        else:
+            raise ValueError(f"Tile of Landsat-9 {tile} not recognized")
     else:
         raise ValueError(f"Tile {tile} not recognized")
 
@@ -156,7 +160,8 @@ def query(area:Union[MultiPolygon,Polygon],
                                                                    date_end.replace(tzinfo=None)).filterBounds(
         pol)
     if "T1" in image_collection_name:
-        image_collection_name_t2 = image_collection_name.replace("T1_RT", "T2").replace("T1","T2")
+        # Add tier 2 data to the query
+        image_collection_name_t2 = image_collection_name.replace("T1_RT", "T2").replace("T1", "T2")
         img_col_t1 = ee.ImageCollection(image_collection_name_t2).filterDate(date_start.replace(tzinfo=None),
                                                                      date_end.replace(tzinfo=None)).filterBounds(
             pol)
@@ -182,10 +187,8 @@ def query(area:Union[MultiPolygon,Polygon],
     geodf.rename(keys_query, axis=1, inplace=True)
 
     if geodf.shape[0] > 0:
-        if (producttype == "Landsat") or (producttype == "both"):
+        if (producttype == "Landsat") or (producttype == "both") or (producttype == "L8") or (producttype == "L9"):
             geodf["collection_name"] = geodf["title"].apply(figure_out_collection_landsat)
-        else:
-            geodf["collection_name"] = image_collection_name
 
     img_col = img_col.map(lambda x: _rename_add_properties(x, keys_query))
 
