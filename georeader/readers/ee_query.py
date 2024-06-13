@@ -91,6 +91,20 @@ def figure_out_collection_landsat(tile:str) -> str:
             return "LANDSAT/LC09/C02/T2_TOA"
         else:
             raise ValueError(f"Tile of Landsat-9 {tile} not recognized")
+    elif tile.startswith("LT05") or tile.startswith("LC05"):
+        if tile.endswith("T1"):
+            return "LANDSAT/LT05/C02/T1_TOA"
+        elif tile.endswith("T2"):
+            return "LANDSAT/LT05/C02/T2_TOA"
+        else:
+            raise ValueError(f"Tile of Landsat-5 {tile} not recognized")
+    elif tile.startswith("LT04") or tile.startswith("LC04"):
+        if tile.endswith("T1"):
+            return "LANDSAT/LT04/C02/T1_TOA"
+        elif tile.endswith("T2"):
+            return "LANDSAT/LT04/C02/T2_TOA"
+        else:
+            raise ValueError(f"Tile of Landsat-4 {tile} not recognized")
     else:
         raise ValueError(f"Tile {tile} not recognized")
 
@@ -255,6 +269,116 @@ def query(area:Union[MultiPolygon,Polygon],
 
     return geodf
 
+def query_landsat_457(area:Union[MultiPolygon,Polygon],
+                      date_start:datetime, date_end:datetime,
+                      producttype:str="all",
+                      filter_duplicates:bool=True,
+                      return_collection:bool=False,
+                      extra_metadata_keys:Optional[List[str]]=None
+          )-> Union[gpd.GeoDataFrame, Tuple[gpd.GeoDataFrame, ee.ImageCollection]]:
+    """
+    Query Landsat-7, Landsat-5 or Landsat-4 products from the Google Earth Engine.
+
+    Args:
+        area (Union[MultiPolygon,Polygon]): area to query images in EPSG:4326
+        date_start (datetime): datetime in a given timezone. If tz not provided UTC will be assumed.
+        date_end (datetime): datetime in UTC. If tz not provided UTC will be assumed.
+        producttype (str, optional): 'all' -> {"L4", "L5", "L7"}, "L4", "L5" or "L7". Defaults to "all".
+        filter_duplicates (bool, optional): filter duplicate images over the same area. Defaults to True.
+        return_collection (bool, optional): returns also the corresponding image collection. Defaults to False.
+        extra_metadata_keys (Optional[List[str]], optional): extra metadata keys to add to the geodataframe. Defaults to None.
+
+    Returns:
+        Union[gpd.GeoDataFrame, Tuple[gpd.GeoDataFrame, ee.ImageCollection]]: geodataframe with available products in the given area and time range
+    """
+    
+    pol = ee.Geometry(mapping(area))
+
+    if date_start.tzinfo is not None:
+        tz = date_start.tzinfo
+        if isinstance(tz, ZoneInfo):
+            tz = tz.key
+
+        date_start = date_start.astimezone(timezone.utc)
+        date_end = date_end.astimezone(timezone.utc)
+    else:
+        tz = timezone.utc
+
+    assert date_end >= date_start, f"Date end: {date_end} prior to date start: {date_start}"
+
+    if extra_metadata_keys is None:
+        extra_metadata_keys = []
+
+    if producttype == "all" or producttype == "L5":
+        image_collection_name = "LANDSAT/LT05/C02/T1_TOA"
+    elif producttype == "L4":
+        image_collection_name = "LANDSAT/LT04/C02/T1_TOA"
+    elif producttype == "L7":
+        image_collection_name = "LANDSAT/LE07/C02/T1_TOA"
+    else:
+        raise NotImplementedError(f"Unknown product type {producttype}")
+    
+    keys_query = {"LANDSAT_PRODUCT_ID": "title", 'CLOUD_COVER': "cloudcoverpercentage"}
+    img_col = ee.ImageCollection(image_collection_name).filterDate(date_start.replace(tzinfo=None),
+                                                                   date_end.replace(tzinfo=None)).filterBounds(
+        pol)
+    # Merge T2 collection
+    img_col_t2 = ee.ImageCollection(image_collection_name.replace("T1", "T2")).filterDate(date_start.replace(tzinfo=None),
+                                                                   date_end.replace(tzinfo=None)).filterBounds(
+        pol)
+    img_col = img_col.merge(img_col_t2)
+
+    if producttype == "all":
+        img_col_l4 = ee.ImageCollection("LANDSAT/LT04/C02/T1_TOA").filterDate(date_start.replace(tzinfo=None),
+                                                                   date_end.replace(tzinfo=None)).filterBounds(
+        pol)
+        img_col_l4_t2 = ee.ImageCollection("LANDSAT/LT04/C02/T2_TOA").filterDate(date_start.replace(tzinfo=None),
+                                                                     date_end.replace(tzinfo=None)).filterBounds(
+            pol)
+        img_col_l4 = img_col_l4.merge(img_col_l4_t2)
+        img_col = img_col.merge(img_col_l4)
+
+        # Add L7 T1 and T2
+        img_col_l7 = ee.ImageCollection("LANDSAT/LE07/C02/T1_TOA").filterDate(date_start.replace(tzinfo=None),
+                                                                   date_end.replace(tzinfo=None)).filterBounds(
+        pol)
+        img_col_l7_t2 = ee.ImageCollection("LANDSAT/LE07/C02/T2_TOA").filterDate(date_start.replace(tzinfo=None),
+                                                                        date_end.replace(tzinfo=None)).filterBounds(
+                pol)
+        img_col_l7 = img_col_l7.merge(img_col_l7_t2)
+        img_col = img_col.merge(img_col_l7)
+
+    geodf = img_collection_to_feature_collection(img_col,
+                                                 ["system:time_start"] + list(keys_query.keys()) + extra_metadata_keys,
+                                                as_geopandas=True, band_crs="B2")
+
+    geodf.rename(keys_query, axis=1, inplace=True)
+
+    if geodf.shape[0] == 0:
+        warnings.warn(f"Not images found of collection {producttype} between dates {date_start} and {date_end}")
+        if return_collection:
+            return geodf, img_col
+        return geodf
+    
+    img_col = img_col.map(lambda x: _rename_add_properties(x, keys_query))
+    geodf["collection_name"] = geodf.title.apply(lambda x: figure_out_collection_landsat(x))
+
+    geodf = _add_stuff(geodf, area, tz)
+
+    if filter_duplicates:
+        geodf = query_utils.filter_products_overlap(area, geodf,
+                                                    groupkey=["solarday", "satellite"]).copy()
+        # filter img_col:
+        img_col = img_col.filter(ee.Filter.inList("title", ee.List(geodf.index.tolist())))
+
+    geodf.sort_values("utcdatetime")
+    img_col = img_col.sort("system:time_start")
+
+    if return_collection:
+        return geodf, img_col
+
+    return geodf
+    
 
 def images_by_query_grid(images_available_gee:gpd.GeoDataFrame, grid:gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     aois_images = images_available_gee.reset_index().sjoin(grid, how="inner").reset_index(drop=True)

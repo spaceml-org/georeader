@@ -9,13 +9,12 @@ It has several enhancements:
 * Windowed read and read and reproject in the same function (see `load_bands_bbox`)
 * Creation of the image only involves reading one metadata file (`xxx.SAFE/MTD_{self.producttype}.xml`)
 * Compatible with `georeader.read` functions
-* It reads from pyramid if possible
+* It can read from the pyramid if available.
 
 
 https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/document-library
 
 """
-from rasterio import windows
 from shapely.geometry import Polygon
 import xml.etree.ElementTree as ET
 import datetime
@@ -1067,7 +1066,7 @@ def DN_to_radiance(s2obj: S2ImageL1C, dn_data:Optional[GeoTensor]=None) -> GeoTe
      by default this is applied in the S2Image class.
 
      ToA formula from ESA:
-     https://sentinels.copernicus.eu/web/sentinel/technical-guides/sentinel-2-msi/level-1c/algorithm
+     https://sentiwiki.copernicus.eu/web/s2-processing#S2Processing-TOAReflectanceComputation
 
      Here they say U should be in the numerator
      https://gis.stackexchange.com/questions/285996/convert-sentinel-2-1c-product-from-reflectance-to-radiance
@@ -1075,11 +1074,18 @@ def DN_to_radiance(s2obj: S2ImageL1C, dn_data:Optional[GeoTensor]=None) -> GeoTe
      toaBandX = dn_dataBandX / 10000
      radianceBandX = (toaBandX * cos(SZA) * solarIrradianceBandX * U) / pi
 
-     U should be:
-        U = 1. / (1-0.01673*cos(0.0172*(t-4)))^2
-
+     U is:
+        U = 1. / d^2
+    
+    Where d is the Earth-Sun distance correction factor given by:
+        d = 1-0.01673*cos(0.0172*(t-4))
+    
      0.0172 = 360/365.256363 * np.pi/180.
      t = datenum(Y,M,D) - datenum(Y,1,1) + 1;
+     0.01673 is the Earth eccentricity
+
+    In this function we take U from the metadata of the Sentinel-2 image. In the `reflectance` module there are functions
+    to obtain this factor from the date of acquisition of the image.
 
     Args:
         s2obj: s2obj where data has been read
