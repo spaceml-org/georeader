@@ -371,6 +371,9 @@ def query_landsat_457(area:Union[MultiPolygon,Polygon],
     geodf["collection_name"] = geodf.title.apply(lambda x: figure_out_collection_landsat(x))
 
     geodf = _add_stuff(geodf, area, tz)
+    
+    # Fix ids of Landsat to remove initial shit in the names
+    geodf["gee_id"] = geodf["gee_id"].apply(lambda x: "L"+x.split("L")[1])
 
     if filter_duplicates:
         geodf = query_utils.filter_products_overlap(area, geodf,
