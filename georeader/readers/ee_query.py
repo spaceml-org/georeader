@@ -91,20 +91,27 @@ def figure_out_collection_landsat(tile:str) -> str:
             return "LANDSAT/LC09/C02/T2_TOA"
         else:
             raise ValueError(f"Tile of Landsat-9 {tile} not recognized")
-    elif tile.startswith("LT05") or tile.startswith("LC05"):
+    elif tile.startswith("LT05"):
         if tile.endswith("T1"):
             return "LANDSAT/LT05/C02/T1_TOA"
         elif tile.endswith("T2"):
             return "LANDSAT/LT05/C02/T2_TOA"
         else:
             raise ValueError(f"Tile of Landsat-5 {tile} not recognized")
-    elif tile.startswith("LT04") or tile.startswith("LC04"):
+    elif tile.startswith("LT04"):
         if tile.endswith("T1"):
             return "LANDSAT/LT04/C02/T1_TOA"
         elif tile.endswith("T2"):
             return "LANDSAT/LT04/C02/T2_TOA"
         else:
             raise ValueError(f"Tile of Landsat-4 {tile} not recognized")
+    elif tile.startswith("LE07"):
+        if tile.endswith("T1"):
+            return "LANDSAT/LE07/C02/T1_TOA"
+        elif tile.endswith("T2"):
+            return "LANDSAT/LE07/C02/T2_TOA"
+        else:
+            raise ValueError(f"Tile of Landsat-7 {tile} not recognized")
     else:
         raise ValueError(f"Tile {tile} not recognized")
 
