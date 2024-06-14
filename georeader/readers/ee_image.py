@@ -173,6 +173,7 @@ def export_image_getpixels(asset_id: str,
 def export_cube(query:gpd.GeoDataFrame, geometry:Union[Polygon, MultiPolygon], 
                 transform:Optional[Affine]=None, crs:Optional[str]=None,
                 dtype_dst:Optional[str]=None,
+                bands_gee:Optional[List[str]]=None,
                 crs_polygon:str="EPSG:4326",
                 display_progress:bool=True) -> Optional[GeoTensor]:
     """
@@ -188,6 +189,7 @@ def export_cube(query:gpd.GeoDataFrame, geometry:Union[Polygon, MultiPolygon],
             Defaults to None.
         crs (Optional[str], optional): crs of the geometry. If None it will use the crs of the first image. Defaults to None.
         dtype_dst (Optional[str], optional): dtype of the output GeoTensor. Defaults to None.
+        bands_gee (Optional[List[str]], optional): List of bands to export. If None it will use the bands_gee column in the query. Defaults to None.
         crs_polygon (_type_, optional): crs of the geometry. Defaults to "EPSG:4326".
         display_progress (bool, optional): Display progress bar. Defaults to False.
 
@@ -200,7 +202,9 @@ def export_cube(query:gpd.GeoDataFrame, geometry:Union[Polygon, MultiPolygon],
         return None
     
     # Check required columns
-    required_columns = ["gee_id", "collection_name", "bands_gee"]
+    required_columns = ["gee_id", "collection_name"]
+    if bands_gee is None:
+        required_columns.append("bands_gee")
     if not all([col in query.columns for col in required_columns]):
         raise ValueError(f"Columns {required_columns} are required in the query dataframe")
 
@@ -231,11 +235,17 @@ def export_cube(query:gpd.GeoDataFrame, geometry:Union[Polygon, MultiPolygon],
     def process_query_image(tuple_row):
         _, image = tuple_row
         asset_id = f'{image["collection_name"]}/{image["gee_id"]}'
-        geotensor = export_image_getpixels(asset_id, geometry, proj, image["bands_gee"], crs_polygon=crs_polygon, dtype_dst=dtype_dst)
+        if bands_gee is None:
+            bands_gee_iter = image["bands_gee"]
+        else:
+            bands_gee_iter = bands_gee
+        geotensor = export_image_getpixels(asset_id, geometry, proj, bands_gee_iter, 
+                                           crs_polygon=crs_polygon, dtype_dst=dtype_dst)
         return geotensor
 
     with ThreadPoolExecutor() as executor:
-        geotensor_list = list(tqdm(executor.map(process_query_image, query.iterrows()), total=query.shape[0], disable=not display_progress))
+        geotensor_list = list(tqdm(executor.map(process_query_image, query.iterrows()), 
+                                   total=query.shape[0], disable=not display_progress))
     
     return concatenate(geotensor_list)
     
