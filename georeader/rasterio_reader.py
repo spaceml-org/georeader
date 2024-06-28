@@ -16,8 +16,7 @@ from georeader.read import WEB_MERCATOR_CRS, SIZE_DEFAULT, window_from_tile, rea
 RIO_ENV_OPTIONS_DEFAULT = dict(
     GDAL_DISABLE_READDIR_ON_OPEN='EMPTY_DIR',
     GDAL_HTTP_MERGE_CONSECUTIVE_RANGES="YES",
-    GDAL_CACHEMAX=2000, # GDAL raster block cache size. If its value is small (less than 100000), 
-    # it is assumed to be measured in megabytes, otherwise in bytes. https://trac.osgeo.org/gdal/wiki/ConfigOptions#GDAL_CACHEMAX
+    GDAL_CACHEMAX=2_000_000_000, # 2 Gb 
     GDAL_HTTP_MULTIPLEX="YES"
 )
 
