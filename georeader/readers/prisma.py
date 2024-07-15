@@ -64,16 +64,23 @@ class PRISMA:
         # self.time_coverage_start = self.attributes_prisma['Product_StartTime']
         self.time_coverage_start = datetime.fromisoformat(self.attributes_prisma['Product_StartTime'].decode("utf-8")).replace(tzinfo=timezone.utc)
         self.time_coverage_end = datetime.fromisoformat(self.attributes_prisma['Product_StopTime'].decode("utf-8")).replace(tzinfo=timezone.utc)
-
-        self.units = "W/m^2/SR/um" # same as mW/m^2/SR/nm
+        self.units = "mW/m2/sr/nm" # same as W/m^2/SR/um 
 
         self._footprint = griddata.footprint(self.lons, self.lats)
+        self._observation_date_correction_factor:Optional[float] = None
     
     def footprint(self, crs:Optional[str]=None) -> GeoTensor:
         if (crs is None) or compare_crs("EPSG:4326", crs):
             return self._footprint
         
         return window_utils.polygon_to_crs(self._footprint, crs_polygon="EPSG:4326", crs_dst=crs)
+    
+    @property
+    def observation_date_correction_factor(self) -> float:
+        if self._observation_date_correction_factor is None:
+            self._observation_date_correction_factor = reflectance.observation_date_correction_factor(date_of_acquisition=self.time_coverage_start,
+                                                                                                      center_coords=self.footprint("EPSG:4326").centroid.coords[0])
+        return self._observation_date_correction_factor
     
     @property
     def bounds(self) -> Tuple[float, float, float, float]:
@@ -267,10 +274,9 @@ class PRISMA:
             solar_irradiance_norm = thuiller["Radiance(mW/m2/nm)"].values.dot(response) # mW/m$^2$/nm
             solar_irradiance_norm/=1_000  # W/m$^2$/nm
 
-            center_coords = np.median(self.lons), np.median(self.lats)
-
-            ltoa_img = reflectance.radiance_to_reflectance(ltoa_img/10, solar_irradiance_norm,
-                                                           self.time_coverage_start, center_coords=center_coords)
+            ltoa_img = reflectance.radiance_to_reflectance(ltoa_img, solar_irradiance_norm,
+                                                           units=self.units,
+                                                           observation_date_corr_factor=self.observation_date_correction_factor)
         
         if raw:
             return ltoa_img

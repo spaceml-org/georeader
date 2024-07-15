@@ -258,7 +258,7 @@ class EMITImage:
         >>> emit_utm = emit.to_crs(crs_utm)
 
     """
-    attributes_set_if_exists = ["_pol", "_nc_ds_obs", "_mean_sza", "_mean_vza", 
+    attributes_set_if_exists = ["_nc_ds_obs", "_mean_sza", "_mean_vza", 
                                 "_observation_bands", "_nc_ds_l2amask", "_mask_bands", 
                                 "_nc_ds", "obs_file",
                                 "l2amaskfile"]
@@ -325,7 +325,15 @@ class EMITImage:
         self.band_selection = band_selection
         self.wavelengths = self.nc_ds['sensor_band_parameters'][self.bandname_dimension][self.band_selection]
         self.fwhm = self.nc_ds['sensor_band_parameters']['fwhm'][self.band_selection]
+        self._observation_date_correction_factor:Optional[float] = None
 
+    @property
+    def observation_date_correction_factor(self) -> float:
+        if self._observation_date_correction_factor is None:
+            self._observation_date_correction_factor = reflectance.observation_date_correction_factor(date_of_acquisition=self.time_coverage_start,
+                                                                                                      center_coords=self.footprint("EPSG:4326").centroid.coords[0])
+        return self._observation_date_correction_factor
+    
     @property
     def crs(self) -> Any:
         return self.glt.crs
@@ -626,7 +634,7 @@ class EMITImage:
         out = EMITImage(self.filename, glt=glt, band_selection=self.band_selection)
         # Copy _pol attribute if it exists
         if hasattr(self, '_pol'):
-            setattr(out, '_pol', self._pol)
+            setattr(out, '_pol', window_utils.polygon_to_crs(self._pol, self.crs, crs))
         
         return out
 
@@ -653,11 +661,9 @@ class EMITImage:
             thuiller = reflectance.load_thuillier_irradiance()
             response = reflectance.srf(self.wavelengths, self.fwhm, thuiller["Nanometer"].values)
             solar_irradiance_norm = thuiller["Radiance(mW/m2/nm)"].values.dot(response) / 1_000
-            centroid = self.footprint("EPSG:4326").centroid.coords[0]
             data = reflectance.radiance_to_reflectance(data, solar_irradiance_norm,
-                                                       self.time_coverage_start, 
-                                                       center_coords=centroid,
-                                                       crs_coords="EPSG:4326")
+                                                       units=self.units,
+                                                       observation_date_corr_factor=self.observation_date_correction_factor)
 
         return self.georreference(data)
     

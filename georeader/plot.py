@@ -203,7 +203,7 @@ def add_shape_to_plot(shape:Union[gpd.GeoDataFrame, List[Geometry], Geometry], a
     
     
 
-def plot_segmentation_mask(mask:Union[GeoData, np.array], color_array:np.array,
+def plot_segmentation_mask(mask:GeoData, color_array:np.array,
                            interpretation_array:Optional[List[str]]=None,
                            legend:bool=True, ax:Optional[plt.Axes]=None,
                            add_scalebar:bool=False,
@@ -228,29 +228,20 @@ def plot_segmentation_mask(mask:Union[GeoData, np.array], color_array:np.array,
 
     """
     cmap_categorical = colors.ListedColormap(color_array)
-
-    if ax is None:
-        ax = plt.gca()
-
+    color_array = np.array(color_array)
     norm_categorical = colors.Normalize(vmin=-.5,
                                         vmax=color_array.shape[0] - .5)
 
-    color_array = np.array(color_array)
+    
     if interpretation_array is not None:
         assert len(interpretation_array) == color_array.shape[
             0], f"Different numbers of colors and interpretation {len(interpretation_array)} {color_array.shape[0]}"
 
-    if hasattr(mask, "values"):
-        mask_values = mask.values.squeeze()
-        transform = mask.transform
-    else:
-        mask_values = mask
-        transform = None
 
-    assert mask_values.ndim == 2, f"Expected 2 D array found {mask_values.shape}"
-
-    rasterioplt.show(mask_values, transform=transform, ax=ax,
-                     cmap=cmap_categorical, norm=norm_categorical, interpolation='nearest')
+    ax = show(mask, ax=ax,
+              cmap=cmap_categorical, norm=norm_categorical, 
+              interpolation='nearest', add_scalebar=add_scalebar,
+              kwargs_scalebar=kwargs_scalebar, bounds_in_latlng=bounds_in_latlng)
 
     if legend:
         patches = []
@@ -260,43 +251,5 @@ def plot_segmentation_mask(mask:Union[GeoData, np.array], color_array:np.array,
         ax.legend(handles=patches,
                   loc='upper right')
     
-    if add_scalebar:
-        assert transform is not None, "Cannot show scalebar without transform"
-        try:
-             from matplotlib_scalebar.scalebar import ScaleBar
-        except ImportError as e:
-            raise ImportError("Install matplotlib-scalebar to use scalebar"
-                              "pip install matplotlib-scalebar"
-                              f"{e}")
-        
-        if kwargs_scalebar is None:
-            kwargs_scalebar = {"dx":1}
-        if "dx" not in kwargs_scalebar:
-            kwargs_scalebar["dx"] = 1
-        
-        ax.add_artist(ScaleBar(**kwargs_scalebar))
-    
-    # TODO https://github.com/eelcovv/LatLonCalc
-    if bounds_in_latlng:
-        from matplotlib.ticker import FuncFormatter
-
-        xmin, ymin, xmax, ymax = mask.bounds
-
-        @FuncFormatter
-        def x_formatter(x, pos):
-            # transform x,ymin to latlng
-            longs, lats = rasterio.warp.transform(mask.crs, "epsg:4326", [x], [ymin])
-            return f"{longs[0]:.2f}"
-        
-
-        @FuncFormatter
-        def y_formatter(y, pos):
-            # transform xmin,y to latlng
-            longs, lats = rasterio.warp.transform(mask.crs, "epsg:4326", [xmin], [y])
-            return f"{lats[0]:.2f}"
-
-        ax.xaxis.set_major_formatter(x_formatter)
-        ax.yaxis.set_major_formatter(y_formatter)
-
     return ax
 
