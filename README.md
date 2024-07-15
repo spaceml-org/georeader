@@ -72,7 +72,7 @@ from georeader.save import save_cog
 save_cog(data_memory, "s2_crop.tif", descriptions=s2obj.bands)
 ```
 
-## Tutorials
+## Examples
 
 Sentinel-2:
 * [Reading Sentinel-2 images from the public Google bucket](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_S2_SAFE_from_bucket.ipynb)
@@ -90,6 +90,7 @@ Used in other projects:
 * [georeader with ml4floods to automatically download and produce flood extent maps: the Kherson Dam Break example](https://spaceml-org.github.io/ml4floods/content/ml4ops/HOWTO_postprocess_inference.html)
 * [georeader with STARCOP to simulate Sentinel-2 from AVIRIS images](https://github.com/spaceml-org/STARCOP/blob/main/notebooks/simulate_aviris_2_sentinel2.ipynb)
 * [georeader with STARCOP to run plume detection in EMIT images](https://github.com/spaceml-org/STARCOP/blob/main/notebooks/inference_on_raw_EMIT_nc_file.ipynb)
+* [georeader with CloudSEN12 to run cloud detection in Sentinel-2 images](https://github.com/IPL-UV/cloudsen12_models/blob/main/notebooks/run_in_gee_image.ipynb)
 
 
 ## Citation
