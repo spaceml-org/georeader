@@ -128,16 +128,22 @@ class EnMAP:
                  fs:Optional[fsspec.AbstractFileSystem]=None) -> None:
         self.xml_file = xml_file
         self.by_folder = by_folder
+        if not self.xml_file.endswith('.xml') and not self.xml_file.endswith('.XML'):
+            raise ValueError(f"Invalid SWIR file path {self.xml_file} must be a XML file")
+    
         if self.by_folder:
             assert PRODUCT_FOLDERS['METADATA'] in self.xml_file, \
                 f"Invalid SWIR file path {self.xml_file} must contain {PRODUCT_FOLDERS['METADATA']} if by folder"
             self.swir_file = self.xml_file.replace(PRODUCT_FOLDERS['METADATA'], 
-                                                   PRODUCT_FOLDERS['SPECTRAL_IMAGE_SWIR']).replace('.XML', '.TIF')
+                                                   PRODUCT_FOLDERS['SPECTRAL_IMAGE_SWIR']).replace('.XML', '.TIF').replace('.xml', '.tif')
         else:
             assert 'METADATA' in self.xml_file, \
                 f"Invalid SWIR file path {self.xml_file} must contain METADATA if not by folder"
-            self.swir_file = self.xml_file.replace('METADATA', 'SPECTRAL_IMAGE_SWIR').replace('.XML', '.TIF')
+            self.swir_file = self.xml_file.replace('METADATA', 'SPECTRAL_IMAGE_SWIR').replace('.XML', '.TIF').replace('.xml', '.tif')
         
+        if not self.swir_file.endswith('.tif') and not self.swir_file.endswith('.TIF'):
+            raise ValueError(f"Invalid SWIR file path {self.swir_file} must be a TIF file")
+
         if self.xml_file.startswith("gs://") or self.xml_file.startswith("az://"):
             assert fs is not None, "Filesystem must be provided if using cloud storage"
             self.fs = fs
