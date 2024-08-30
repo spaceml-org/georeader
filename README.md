@@ -1,5 +1,6 @@
-# georeader
 [![Article DOI:10.1038/s41598-023-47595-7](https://img.shields.io/badge/Article%20DOI-10.1038%2Fs41598.023.47595.7-blue)](https://doi.org/10.1038/s41598-023-47595-7)  [![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/spaceml-org/georeader?sort=semver)](https://github.com/spaceml-org/georeader/releases) [![PyPI](https://img.shields.io/pypi/v/georeader-spaceml)](https://pypi.org/project/georeader-spaceml/) [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/georeader-spaceml)](https://pypi.org/project/georeader-spaceml/) [![PyPI - License](https://img.shields.io/pypi/l/georeader-spaceml)](https://github.com/spaceml-org/georeader/blob/main/LICENSE)
+
+# georeader
 
 **georeader** is a package to process raster data from different satellite missions. **georeader** makes easy to [read specific areas of your image](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_S2_SAFE_from_bucket.ipynb), to [reproject images from different satellites to a common grid](https://github.com/spaceml-org/georeader/blob/main/notebooks/reading_overlapping_sentinel2_aviris.ipynb) and to go from vector to raster formats ([`vectorize`](https://github.com/spaceml-org/georeader/blob/main/georeader/vectorize.py) and [`rasterize`](https://github.com/spaceml-org/georeader/blob/main/georeader/rasterize.py)). **georeader** is mainly used to process satellite data for scientific usage, to create ML-ready datasets and to implement [end-to-end operational inference pipelines](https://spaceml-org.github.io/ml4floods/content/ml4ops/HOWTO_postprocess_inference.html). 
 
@@ -124,3 +125,8 @@ If you find this code useful please cite:
 	pages = {19999},
 }
 ```
+
+## Acknowledgments
+This research has been supported by the DEEPCLOUD project (PID2019-109026RB-I00) funded by the Spanish Ministry of Science and Innovation (MCIN/AEI/10.13039/501100011033) and the European Union (NextGenerationEU).
+
+<img width="300" title="DEEPCLOUD project (PID2019-109026RB-I00, University of Valencia) funded by MCIN/AEI/10.13039/501100011033." alt="DEEPCLOUD project (PID2019-109026RB-I00, University of Valencia) funded by MCIN/AEI/10.13039/501100011033." src="https://www.uv.es/chovago/logos/logoMICIN.jpg">
