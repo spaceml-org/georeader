@@ -11,7 +11,11 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import rasterio.warp
 import warnings
 import rasterio
-from shapely import Geometry
+try:
+    # This only works with shapely>=2.0
+    from shapely import Geometry
+except ImportError:
+    from shapely.geometry.base import BaseGeometry as Geometry
 import geopandas as gpd
 import pandas as pd
 from matplotlib.patches import Patch

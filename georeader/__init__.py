@@ -1,9 +1,8 @@
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 
 import math
 from typing import Tuple, Any, Union
 from shapely.geometry.base import BaseGeometry
-from shapely import Geometry
 from shapely.geometry import shape, mapping
 import rasterio.warp
 from rasterio.crs import CRS
@@ -20,7 +19,7 @@ def compare_crs(a_crs:str, b_crs:str) -> bool:
     return _normalize_crs(a_crs) == _normalize_crs(b_crs)
 
 
-def get_utm_epsg(point_or_geom: Union[Tuple[float,float],Geometry], 
+def get_utm_epsg(point_or_geom: Union[Tuple[float,float],BaseGeometry], 
                  crs_point_or_geom:str="EPSG:4326") -> str:
     """
     Based on lat and lng, return best utm epsg-code. For geometries it uses the centroid.
