@@ -267,8 +267,14 @@ def query(area:Union[MultiPolygon,Polygon],
     geodf = _add_stuff(geodf, area, tz)
 
     # Fix ids of Landsat to remove initial shit in the names
+    # projects/earthengine-public/assets/LANDSAT/LC09/C02/T1_TOA/1_2_LO09_037031_20220315
     if geodf.satellite.str.startswith("LC0").any():
         geodf.loc[geodf.satellite.str.startswith("LC0"),"gee_id"] = geodf.loc[geodf.satellite.str.startswith("LC0"),"gee_id"].apply(lambda x: "LC0"+x.split("LC0")[1])
+    
+    # Fix ids of Landsat to remove initial shit in the names also if satellite starts with LO0
+    if geodf.satellite.str.startswith("LO0").any():
+        geodf.loc[geodf.satellite.str.startswith("LO0"),"gee_id"] = geodf.loc[geodf.satellite.str.startswith("LO0"),"gee_id"].apply(lambda x: "LO0"+x.split("LO0")[1])
+
 
     if filter_duplicates:
         # TODO filter prioritizing s2cloudless?
