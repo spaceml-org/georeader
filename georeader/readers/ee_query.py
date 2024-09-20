@@ -217,6 +217,8 @@ def query(area:Union[MultiPolygon,Polygon],
     if geodf.shape[0] > 0:
         if (producttype == "Landsat") or (producttype == "both") or (producttype == "L8") or (producttype == "L9"):
             geodf["collection_name"] = geodf["title"].apply(figure_out_collection_landsat)
+        else:
+            geodf["collection_name"] = image_collection_name
 
     img_col = img_col.map(lambda x: _rename_add_properties(x, keys_query))
 

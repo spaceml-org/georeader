@@ -141,7 +141,7 @@ def get_radiance_link(product_path:str) -> str:
     See: https://git.earthdata.nasa.gov/projects/LPDUR/repos/daac_data_download_python/browse
 
     Args:
-        product_path: path to the product or filename of the product or product name without extension.
+        product_path: path to the product or filename of the product or product name with or without extension.
             e.g. 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
 
     Example:
@@ -151,12 +151,13 @@ def get_radiance_link(product_path:str) -> str:
     """
     "EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc"
     namefile = os.path.splitext(os.path.basename(product_path))[0]
-    namefile = namefile + ".nc"
     product_id = os.path.splitext(namefile)[0]
     content_id = product_id.split("_")
+    content_id[1] = "L1B"
     content_id[2] = "RAD"
+    content_id[3] = content_id[3].replace("V", "")
     product_id = "_".join(content_id)
-    link = f"https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/{product_id}/{namefile}"
+    link = f"https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/{product_id}/{product_id}.nc"
     return link
 
 
@@ -166,7 +167,7 @@ def get_obs_link(product_path:str) -> str:
     See: https://git.earthdata.nasa.gov/projects/LPDUR/repos/daac_data_download_python/browse
 
     Args:
-        product_path: path to the product or filename of the product.
+        product_path: path to the product or filename of the product with or without extension.
             e.g. 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
 
     Example:
@@ -175,13 +176,18 @@ def get_obs_link(product_path:str) -> str:
         'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/EMIT_L1B_RAD_001_20220827T060753_2223904_013/EMIT_L1B_OBS_001_20220827T060753_2223904_013.nc'
     """
     namefile = os.path.splitext(os.path.basename(product_path))[0]
-    namefile = namefile + ".nc"
 
     product_id = os.path.splitext(namefile)[0]
     content_id = product_id.split("_")
+    content_id[1] = "L1B"
     content_id[2] = "RAD"
+    content_id[3] = content_id[3].replace("V", "")
     product_id = "_".join(content_id)
-    link = f"https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/{product_id}/{namefile.replace('RAD', 'OBS')}"
+
+    content_id[2] = "OBS"
+    namefile = "_".join(content_id)
+
+    link = f"https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/{product_id}/{namefile}.nc"
     return link
 
 
@@ -191,7 +197,7 @@ def get_ch4enhancement_link(tile:str) -> str:
     See: https://git.earthdata.nasa.gov/projects/LPDUR/repos/daac_data_download_python/browse
 
     Args:
-        product_path: path to the product or filename of the product.
+        product_path: path to the product or filename of the product with or without extension.
             e.g. 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
 
     Example:
@@ -200,15 +206,14 @@ def get_ch4enhancement_link(tile:str) -> str:
         'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL2BCH4ENH.001/EMIT_L2B_CH4ENH_001_20220810T064957_2222205_033/EMIT_L2B_CH4ENH_001_20220810T064957_2222205_033.tif'
     """
     namefile = os.path.splitext(os.path.basename(tile))[0]
-    namefile = namefile + ".tif"
 
     product_id = os.path.splitext(namefile)[0]
     content_id = product_id.split("_")
     content_id[1] = "L2B"
     content_id[2] = "CH4ENH"
+    content_id[3] = content_id[3].replace("V", "")
     product_id = "_".join(content_id)
-    namefilenew = namefile.replace("_RAD_","_CH4ENH_").replace("_L1B_","_L2B_")
-    link = f"https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL2BCH4ENH.001/{product_id}/{namefilenew}"
+    link = f"https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL2BCH4ENH.001/{product_id}/{product_id}.tif"
     return link
 
 
@@ -218,7 +223,7 @@ def get_l2amask_link(tile:str) -> str:
 
 
     Args:
-        tile (str): path to the product or filename of the L1B product.
+        tile (str): path to the product or filename of the L1B product with or without extension.
             e.g. 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
         
     Returns:
@@ -236,8 +241,11 @@ def get_l2amask_link(tile:str) -> str:
     content_id = product_id.split("_")
     content_id[1] = "L2A"
     content_id[2] = "RFL"
+    content_id[3] = content_id[3].replace("V", "")
     product_id = "_".join(content_id)
-    namefilenew = namefile.replace("_RAD_","_MASK_").replace("_L1B_","_L2A_")
+    
+    content_id[2] = "MASK"
+    namefilenew = "_".join(content_id) + ".nc"
     link = f"https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL2ARFL.001/{product_id}/{namefilenew}"
     return link
 
