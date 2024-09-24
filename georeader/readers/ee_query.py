@@ -209,12 +209,11 @@ def query(area:Union[MultiPolygon,Polygon],
     geodf.rename(keys_query, axis=1, inplace=True)
 
     # Filter tirs only image (title starts with LT08)
-    tile_starts_with_lt08 = geodf.title.str.startswith("LT08")
-    if tile_starts_with_lt08.any():
-        warnings.warn(f"Found {tile_starts_with_lt08.sum()} images of Landsat-8 TIRS only. Removing them.")
-        geodf = geodf[~tile_starts_with_lt08].copy()
-
     if geodf.shape[0] > 0:
+        tile_starts_with_lt08 = geodf["title"].str.startswith("LT08")
+        if tile_starts_with_lt08.any():
+            warnings.warn(f"Found {tile_starts_with_lt08.sum()} images of Landsat-8 TIRS only. Removing them.")
+            geodf = geodf[~tile_starts_with_lt08].copy()
         if (producttype == "Landsat") or (producttype == "both") or (producttype == "L8") or (producttype == "L9"):
             geodf["collection_name"] = geodf["title"].apply(figure_out_collection_landsat)
         else:
