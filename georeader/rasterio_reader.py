@@ -11,6 +11,7 @@ from georeader.window_utils import window_bounds, get_slice_pad
 from shapely.geometry import Polygon
 from georeader.abstract_reader import same_extent, GeoData
 from georeader.read import WEB_MERCATOR_CRS, SIZE_DEFAULT, window_from_tile, read_from_tile
+from numpy.typing import NDArray
 
 # https://developmentseed.org/titiler/advanced/performance_tuning/#aws-configuration
 RIO_ENV_OPTIONS_DEFAULT = dict(
@@ -515,6 +516,10 @@ class RasterioReader:
             return pol
 
         return window_utils.polygon_to_crs(pol, self.crs, crs)
+    
+    def meshgrid(self, dst_crs:Optional[Any]=None) -> Tuple[NDArray, NDArray]:
+        from georeader import griddata
+        return griddata.meshgrid(self.transform, self.width, self.height, source_crs=self.crs, dst_crs=dst_crs)
     
     def __repr__(self)->str:
         return f""" 

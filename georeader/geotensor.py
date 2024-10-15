@@ -124,6 +124,10 @@ class GeoTensor:
     @property
     def attrs(self) -> Dict[str, Any]:
         return vars(self)
+    
+    def meshgrid(self, dst_crs:Optional[Any]=None) -> Tuple[NDArray, NDArray]:
+        from georeader import griddata
+        return griddata.meshgrid(self.transform, self.width, self.height, source_crs=self.crs, dst_crs=dst_crs)
 
     def load(self) -> '__class__':
         return self

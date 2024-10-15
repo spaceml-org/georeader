@@ -19,20 +19,41 @@ except ImportError:
 import geopandas as gpd
 import pandas as pd
 from matplotlib.patches import Patch
+import matplotlib.cm
 
 
-def colorbar_next_to(im:matplotlib.image.AxesImage, ax:plt.Axes):
+def colorbar_next_to(im:matplotlib.cm.ScalarMappable, ax:plt.Axes, 
+                     location:str='right', 
+                     pad:float=0.05, 
+                     orientation:str='vertical'):
     """
-    Add a colorbar next to the plot.
+    Add a colorbar next to the plot. 
+    
+    This function divides the axes and adds a colorbar next to the plot.
 
     Args:
-        im (matplotlib.image.AxesImage): 
-        ax (plt.Axes):
+        im (matplotlib.image.AxesImage): The mappable object (i.e., `.AxesImage`,
+            `.ContourSet`, etc.) described by this colorbar.This is the return value from `imshow`.
+        ax (plt.Axes): Axes to plot the colorbar
+        location (str, optional): Defaults to 'right'. Location of the colorbar. 
+            Options are: 'left', 'right', 'top', 'bottom'
+        pad (float, optional): Defaults to 0.05. Padding between the plot and the colorbar.
+        orientation (str, optional): Defaults to 'vertical'. Orientation of the colorbar. 
+            Options are: 'vertical', 'horizontal'.
+    
+    Example:
+        >>> import matplotlib.pyplot as plt
+        >>> from georeader import plot
+        >>> import numpy as np
+        >>> gt = GeoTensor(values=np.random.rand(100,100), transform=rasterio.Affine(1,0,0,0,-1,0), crs="EPSG:4326")
+        >>> ax = plt.gca()
+        >>> im = ax.imshow(gt.values)
+        >>> plot.colorbar_next_to(im, ax)
     
     """
     divider = make_axes_locatable(ax)
-    cax = divider.append_axes('right', size='5%', pad=0.05)
-    plt.gcf().colorbar(im, cax=cax, orientation='vertical')
+    cax = divider.append_axes(location, size='5%', pad=pad)
+    plt.gcf().colorbar(im, cax=cax, orientation=orientation)
 
 
 def show(data:GeoData, add_colorbar_next_to:bool=False,

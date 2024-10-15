@@ -2,7 +2,7 @@ import georeader
 from shapely.geometry import Polygon
 from georeader.abstract_reader import GeoData
 from scipy.interpolate import CloughTocher2DInterpolator
-from georeader.window_utils import polygon_to_crs, res, transform_to_resolution_dst
+from georeader.window_utils import polygon_to_crs, transform_to_resolution_dst
 from typing import Tuple, Union, Optional, Any
 import rasterio
 import rasterio.transform
@@ -128,7 +128,9 @@ def reproject(data:NDArray, lons: NDArray, lats: NDArray,
               width:int, height:int, transform:rasterio.transform.Affine,
               dst_crs:Any, crs:Optional[Any]="EPSG:4326", fill_value_default=-1) -> GeoTensor:
     """
-    Reprojects data to  given crs, transform and shape
+    Reprojects data to  given crs, transform and shape.
+
+    This function implements a 2D interpolation using scipy.interpolate.CloughTocher2DInterpolator
 
     Args:
         data (Array): input data 2D or 3D in the form (height, width, bands)
@@ -157,13 +159,7 @@ def reproject(data:NDArray, lons: NDArray, lats: NDArray,
         raise ValueError("Data shape not supported")
     
     # Generate the meshgrid of lons and lats to interpolate the data
-    cols, rows = np.meshgrid(np.arange(width), np.arange(height))
-    xs, ys = rasterio.transform.xy(transform, rows, cols)
-    xs = np.array(xs)
-    ys = np.array(ys)
-    lonsdst, latssdst = rasterio.warp.transform(dst_crs, crs, xs.ravel(),ys.ravel())
-    lonsdst = np.array(lonsdst).reshape(height, width)
-    latssdst = np.array(latssdst).reshape(height, width)
+    lonsdst, latssdst = meshgrid(transform, width, height, source_crs=dst_crs, dst_crs=crs)
 
     interpfun = CloughTocher2DInterpolator(list(zip(lons.ravel(), lats.ravel())), 
                                            data_ravel)
@@ -179,6 +175,36 @@ def reproject(data:NDArray, lons: NDArray, lats: NDArray,
 
     return GeoTensor(dataout, transform=transform, 
                      crs=dst_crs, fill_value_default=fill_value_default)
+
+
+def meshgrid(transform:rasterio.transform.Affine, width:int, height:int, 
+             source_crs:Optional[Any]=None, dst_crs:Optional[Any]=None) -> Tuple[NDArray, NDArray]:
+    """
+    Generate the meshgrid of geographic coordinates from the transform.
+    If source_crs and dst_crs are provided, the meshgrid will be transformed to the dst_crs.
+
+    Args:
+        transform (rasterio.transform.Affine): transform
+        width (int): width
+        height (int): height
+        source_crs (Optional[Any], optional): source crs. Defaults to None.
+        dst_crs (Optional[Any], optional): destination crs. Defaults to None.
+
+    Returns:
+        Tuple[NDArray, NDArray]: 2D arrays of xs and ys coordinates
+    """
+    cols, rows = np.meshgrid(np.arange(width), np.arange(height))
+    xs, ys = rasterio.transform.xy(transform, rows, cols)
+    xs= np.array(xs)
+    ys = np.array(ys)
+
+    if dst_crs is not None:
+        assert source_crs is not None, "source_crs must be provided if dst_crs is provided"
+        xs, ys = rasterio.warp.transform(source_crs, dst_crs, xs.ravel(),ys.ravel())
+        xs = np.array(xs).reshape(height, width)
+        ys = np.array(ys).reshape(height, width)
+
+    return xs, ys
 
 
 def georreference(glt:GeoTensor, data:NDArray, valid_glt:Optional[NDArray] = None,
