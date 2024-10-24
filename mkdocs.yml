@@ -1,0 +1,57 @@
+site_name: georeader
+repo_url: https://github.com/spaceml-org/georeader
+site_url: https://spaceml-org.github.io/georeader
+site_description: 🛰️ Process raster data in python
+site_author: Gonzalo Mateo-García
+edit_uri: edit/main/docs/
+repo_name: spaceml-org/georeader
+
+nav:
+  - Home: index.md
+  - Modules: modules.md
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          setup_commands:
+            - import sys
+            - sys.path.append('../')
+  - mknotebooks:
+      execute: false
+      timeout: 100
+      allow_errors: false
+theme:
+  name: material
+  feature:
+    tabs: true
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: white
+      accent: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/spaceml-org/georeader
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/georeader-spaceml
+
+markdown_extensions:
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true

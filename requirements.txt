@@ -1,5 +1,0 @@
-rasterio
-numpy
-shapely
-geopandas
-mercantile

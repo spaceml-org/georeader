@@ -133,7 +133,7 @@ def download_L2A_date_region(date, bounding_box, dir_out, resolution="333M", onl
     for link_down in links:
         link_down = link_down.replace(params, "")
         product_link_name = link_down.split("/")[-2]
-        matches = re.match("PV_(LEFT|RIGHT|CENTER)_L2A-(\d{4})(\d{2})(\d{2})(\d{6})_(\d..?M)_(V\d0\d)",
+        matches = re.match(r"PV_(LEFT|RIGHT|CENTER)_L2A-(\d{4})(\d{2})(\d{2})(\d{6})_(\d..?M)_(V\d0\d)",
                            product_link_name)
         if matches is None:
             logging.warning("link %s does not follow the expected naming pattern. skip download"%product_link_name)
@@ -274,7 +274,7 @@ def exists_product_name(product_name, dir_out):
 
 
 def extract_L2_file_naming_content(product_name):
-    matches = re.match("PROBAV_L2A_(\d{4})(\d{2})(\d{2})_(\d{6})_(\d)_(\d..?M)_(V\d0\d)", product_name)
+    matches = re.match(r"PROBAV_L2A_(\d{4})(\d{2})(\d{2})_(\d{6})_(\d)_(\d..?M)_(V\d0\d)", product_name)
     if matches is None:
         raise ValueError("..... file %s does not follow L2A file naming" % product_name)
 

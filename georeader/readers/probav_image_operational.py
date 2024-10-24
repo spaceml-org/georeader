@@ -57,12 +57,12 @@ class ProbaV:
         self.hdf5_file = hdf5_file
         self.name = os.path.basename(self.hdf5_file)
         if level_name == "LEVEL2A":
-            matches = re.match("PROBAV_L2A_\d{8}_\d{6}_(\d)_(\d..?M)_(V\d0\d)", self.name)
+            matches = re.match(r"PROBAV_L2A_\d{8}_\d{6}_(\d)_(\d..?M)_(V\d0\d)", self.name)
             if matches is not None:
                 self.camera, self.res_name, self.version = matches.groups()
             self.toatoc = "TOA"
         elif level_name == "LEVEL3":
-            matches = re.match("PROBAV_S1_(TO.)_.{6}_\d{8}_(\d..?M)_(V\d0\d)", self.name)
+            matches = re.match(r"PROBAV_S1_(TO.)_.{6}_\d{8}_(\d..?M)_(V\d0\d)", self.name)
             if matches is not None:
                 self.toatoc, self.res_name, self.version = matches.groups()
         else:

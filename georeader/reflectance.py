@@ -14,20 +14,25 @@ import numbers
 def earth_sun_distance_correction_factor(date_of_acquisition:datetime) -> float:
     """
     This function returns the Earth-sun distance correction factor given by the formula:
-        d = 1-0.01673*cos(0.0172*(t-4))
 
-     0.0172 = 360/365.256363 * np.pi/180. (Earth orbit angular velocity)
-     0.01673 is the Earth eccentricity
+    ```
+    d = 1-0.01673*cos(0.0172*(t-4))
 
-     t = datenum(Y,M,D) - datenum(Y,1,1) + 1;
+    Where:
+    0.0172 = 360/365.256363 * np.pi/180.  # (Earth orbit angular velocity)
+    0.01673 is the Earth eccentricity
 
-     tm_yday starts in 1
-     > datetime.datetime.strptime("2022-01-01", "%Y-%m-%d").timetuple().tm_yday -> 1
+    # t is the day of the year starting in 1:
+    t = datenum(Y,M,D) - datenum(Y,1,1) + 1;
 
-    In the Sentinel-2 metadata they provide U which is the square inverse of this factor:
-        U = 1 / d^2
+    # tm_yday starts in 1
+    datetime.datetime.strptime("2022-01-01", "%Y-%m-%d").timetuple().tm_yday -> 1
+
+    ```
+
+    In the Sentinel-2 metadata they provide `U` which is the square inverse of this factor: `U = 1 / d^2`
     
-    https://sentiwiki.copernicus.eu/web/s2-processing#S2Processing-TOAReflectanceComputation
+    [https://sentiwiki.copernicus.eu/web/s2-processing#S2Processing-TOAReflectanceComputation](https://sentiwiki.copernicus.eu/web/s2-processing#S2Processing-TOAReflectanceComputation)
     
     Args:
         date_of_acquisition: date of acquisition. The day of the year will be used 
@@ -88,13 +93,14 @@ def radiance_to_reflectance(data:Union[GeoTensor, ArrayLike],
     """
     Convert the radiance to ToA reflectance using the solar irradiance and the date of acquisition.
 
+    ```
     toaBandX = (radianceBandX / 100 * pi * d^2) / (cos(solarzenithangle/180*pi) * solarIrradianceBandX)
     toaBandX = (radianceBandX / 100 / solarIrradianceBandX) * observation_date_correction_factor(center_coords, date_of_acquisition)
+    ```
 
-    ESA reference of ToA calculation:
-    https://sentiwiki.copernicus.eu/web/s2-processing#S2Processing-TOAReflectanceComputation
+    [ESA reference of ToA calculation](https://sentiwiki.copernicus.eu/web/s2-processing#S2Processing-TOAReflectanceComputation)
 
-    where:"
+    where:
         d = earth_sun_distance_correction_factor(date_of_acquisition)
         solarzenithangle = is obtained from the date of aquisition and location
 
@@ -102,9 +108,11 @@ def radiance_to_reflectance(data:Union[GeoTensor, ArrayLike],
         data:  (C, H, W) tensor with units: µW /(nm cm² sr)
                 microwatts per centimeter_squared per nanometer per steradian
         solar_irradiance: (C,) vector units: W/m²/nm
-        date_of_acquisition: date of acquisition to compute the solar zenith angles
-        center_coords: location being considered (x,y) (long, lat if EPSG:4326)
-        crs_coords: if None it will assume center_coords are in EPSG:4326
+        date_of_acquisition: date of acquisition to compute the solar zenith angles and the Earth-Sun distance correction factor.
+        center_coords: location being considered to compute the solar zenith angles and the Earth-Sun distance correction factor.
+            (x,y) (long, lat if EPSG:4326). If None, it will use the center of the image.
+        observation_date_corr_factor: if None, it will be computed using the center_coords and date_of_acquisition.        
+        crs_coords: if None it will assume center_coords are in `EPSG:4326`.
         units: if as_reflectance is True, the units of the hyperspectral data must be provided. Defaults to None.
             accepted values: "mW/m2/sr/nm", "W/m2/sr/nm", "uW/cm^2/SR/nm"
 
