@@ -5,7 +5,7 @@ from georeader.geotensor import GeoTensor
 from georeader import reflectance
 from georeader import read
 from rasterio.windows import Window
-from typing import Optional, Union, Any, List
+from typing import Optional, Union, Any, List, Tuple
 from numbers import Number
 from numpy.typing import NDArray
 from datetime import datetime, timezone
@@ -414,24 +414,31 @@ class EnMAP:
         
         return ltoa_img
     
-    def load_rgb(self, as_reflectance:bool=True, apply_rpcs:bool=True,
-                 dst_crs:str="EPSG:4326") -> GeoTensor:
+    def load_rgb(self, as_reflectance:bool=True, 
+                 apply_rpcs:bool=True,
+                 dst_crs:str="EPSG:4326",
+                 resolution_dst_crs:Optional[Union[float, Tuple[float, float]]]=None) -> GeoTensor:
         """
         Load RGB image from VNIR bands. Converts radiance to TOA reflectance if as_reflectance is True
         otherwise it will return the radiance values in W/m^2/SR/um == mW/m2/sr/nm (`self.units`)
 
         Args:
             as_reflectance (bool, optional): Convert radiance to TOA reflectance. Defaults to True.
-
+            apply_rpcs (bool, optional): Apply RPCs to the image. Defaults to True.
+            dst_crs (str, optional): Destination CRS. Defaults to "EPSG:4326".
+            resolution_dst_crs (Optional[Union[float, Tuple[float, float]]], optional): 
+                Resolution of the destination CRS. Defaults to None.
         Returns:
-            GeoTensor: 
+            GeoTensor: with the RGB image
         """
         rgb = self.load_wavelengths(WAVELENGTHS_RGB, as_reflectance=as_reflectance)
         if apply_rpcs:
             return read.read_rpcs(rgb.values, rpcs=self.rpcs_vnir, dst_crs=dst_crs,
+                                  resolution_dst_crs=resolution_dst_crs,
                                   fill_value_default=rgb.fill_value_default)
         elif dst_crs is not None:
             return read.read_to_crs(rgb, 
+                                    resolution_dst_crs=resolution_dst_crs,
                                     dst_crs=dst_crs)
 
         return rgb

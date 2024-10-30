@@ -728,6 +728,7 @@ def read_from_tile(data:GeoData, x:int, y:int, z:int, dst_crs:Optional[Any]=WEB_
 def read_rpcs(input_npy:NDArray, rpcs:rasterio.rpc.RPC, 
               fill_value_default:int=0,
               dst_crs:Optional[Any]=None,
+              resolution_dst_crs:Optional[Union[float, Tuple[float, float]]]=None,
               resampling: rasterio.warp.Resampling = rasterio.warp.Resampling.cubic_spline,
               return_only_data:bool=False) -> GeoTensor:
     """
@@ -769,12 +770,16 @@ def read_rpcs(input_npy:NDArray, rpcs:rasterio.rpc.RPC,
 
     src_crs = rasterio.crs.CRS.from_epsg(4326)
 
+    if resolution_dst_crs is not None:
+        if isinstance(resolution_dst_crs, float):
+            resolution_dst_crs = (resolution_dst_crs, resolution_dst_crs)
+
     dst_transform, dst_width, dst_height = rasterio.warp.calculate_default_transform(
             src_crs=None, dst_crs=dst_crs, 
             width=input_npy.shape[-1], 
             height=input_npy.shape[-2], 
-            rpcs=rpcs, dst_width=None, dst_height=None,
-            resolution=None)
+            resolution=resolution_dst_crs,
+            rpcs=rpcs, dst_width=None, dst_height=None)
 
     destination = np.full(input_npy.shape[:-2] + (dst_height, dst_width),
                           fill_value=fill_value_default,
