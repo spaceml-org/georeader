@@ -1,4 +1,4 @@
-__version__ = "1.2.6"
+__version__ = "1.2.7"
 
 import math
 from typing import Tuple, Any, Union
@@ -68,5 +68,18 @@ def get_utm_from_mgrs(mgrs_tile:str) -> Any:
     crs = CRS.from_dict({"proj":"utm", 
                          "zone": int(mgrs_tile[:2]), 
                          "south": mgrs_tile[2] < "N"})
+    return crs
+
+def rasterio_crs(crs:Union[str, CRS, int]) -> CRS:
+    if isinstance(crs, str):
+        if crs.upper().startswith("EPSG:"):
+            crs = CRS.from_string(crs)
+        else:
+            crs = CRS.from_wkt(crs)
+    elif isinstance(crs, int):
+        crs = CRS.from_epsg(crs)
+    elif not isinstance(crs, CRS):
+        raise ValueError(f"crs must be str or rasterio.crs.CRS, but it is {type(crs)}")
+    
     return crs
 

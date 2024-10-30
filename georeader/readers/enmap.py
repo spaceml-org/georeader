@@ -2,14 +2,18 @@ import numpy as np
 import xml.etree.ElementTree as ET
 from georeader.rasterio_reader import RasterioReader
 from georeader.geotensor import GeoTensor
+from georeader import reflectance
+from georeader import read
 from rasterio.windows import Window
 from typing import Optional, Union, Any, List
 from numbers import Number
 from numpy.typing import NDArray
-from georeader import reflectance
 from datetime import datetime, timezone
 import os
 import fsspec
+import rasterio.rpc
+from collections import OrderedDict
+
 
 SC_COEFF = 1.e+3
 
@@ -33,6 +37,73 @@ PRODUCT_FOLDERS = {
     'METADATA': "metadata"
 }
 
+# Finds the RPCs in EnMAP's metadata file
+def _find_metadata_rpcs(tree,
+                        lbl = 'swir',
+                        wvl = 2400):
+    ''' Reads the RPC coefficients for a wavelength
+    '''
+    # Open the metadata file
+    xml = tree.getroot()
+    # Initialize the rpc variable
+    rpc_coeffs = OrderedDict()
+    # Number of wavelengths
+    startband = 0 if lbl == 'vnir' else int(xml.find("product/image/vnir/channels").text)
+    nwvl = int(xml.find("product/image/%s/channels" % lbl).text)
+    subset = slice(startband, startband + nwvl)
+    # Read RPC coefficients
+    for bID in xml.findall("product/navigation/RPC/bandID")[subset]:
+        # Collect the band ID
+        bN = 'band_%d' % np.int64(bID.attrib['number'])
+        # Keys to look for in the metadata
+        keys2combine = ('row_num', 'row_den', 'col_num', 'col_den')
+        # Temporary variable having the coefficients
+        tmp = OrderedDict([(ele.tag.lower(), float(ele.text)) for ele in bID.findall('./')])
+        # Reformat the coefficients
+        rpc_coeffs[bN] = {k: v for k, v in tmp.items() if not k.startswith(keys2combine)}
+        for n in keys2combine:
+            rpc_coeffs[bN]['%s_coeffs' % n.lower()] = \
+            np.array([v for k, v in tmp.items() if k.startswith(n)])
+    # If only one band is requested
+    if wvl is not None:
+        # Collect the central wavelengths
+        bi = "specific/bandCharacterisation/bandID/"
+        wvl_center = np.array([float(ele.text) for ele in xml.findall(bi + "wavelengthCenterOfBand")[subset]])
+        # Find the closest band name
+        band_index = np.argmin(np.abs(wvl_center - wvl))
+        band_name = [band_name_i for band_name_i in rpc_coeffs.keys()][band_index]
+        # Select the RPCs
+        rpc_out = rpc_coeffs[band_name]
+    # Otherwise, return all
+    else:
+        rpc_out = rpc_coeffs
+    # Return
+    return rpc_out
+
+# Build an RPC Rasterio object
+def _rasterio_build_rpcs(rpcs) -> rasterio.rpc.RPC:
+    ''' Creates an RPC Rasterio object 
+    '''
+    # Build an rpc object
+    rpcs_rio = rasterio.rpc.RPC(rpcs['height_off'],
+                           rpcs['height_scale'],
+                           rpcs['lat_off'],
+                           rpcs['lat_scale'],
+                           list(rpcs['row_den_coeffs']),
+                           list(rpcs['row_num_coeffs']),
+                           rpcs['row_off'],
+                           rpcs['row_scale'],
+                           rpcs['long_off'],
+                           rpcs['long_scale'],
+                           list(rpcs['col_den_coeffs']),
+                           list(rpcs['col_num_coeffs']),
+                           rpcs['col_off'],
+                           rpcs['col_scale'],
+                           err_bias=None,
+                           err_rand=None)
+    # Return the rasterio RPC object
+    return rpcs_rio
+
 def read_ang(tree, lab_ang):
     
     for fact in tree.iter(tag = lab_ang):
@@ -50,8 +121,10 @@ def read_ang(tree, lab_ang):
 def read_xml(file_xml):
     
     tree = ET.parse(file_xml) #read in the XML
+
+    rpcs_swir = _rasterio_build_rpcs(_find_metadata_rpcs(tree, lbl = 'swir', wvl = 2400))
+    rpcs_vnir = _rasterio_build_rpcs(_find_metadata_rpcs(tree, lbl = 'vnir', wvl = 350))
  
-    
     wl_center = []
     wl_fwhm = []
     gain_arr = []
@@ -120,7 +193,9 @@ def read_xml(file_xml):
         except:
             pass
 
-    return wl_center_product, wl_fwhm_product, hsf, sza, saa, vaa, vza, gain_arr_product, offs_arr_product, startTime, stopTime
+    return wl_center_product, wl_fwhm_product, hsf, sza, saa, vaa, vza, gain_arr_product,\
+           offs_arr_product, startTime, stopTime,\
+              rpcs_vnir, rpcs_swir
 
 class EnMAP:
     def __init__(self, xml_file:str,by_folder:bool=False,
@@ -166,7 +241,8 @@ class EnMAP:
         
         with self.fs.open(self.xml_file) as fh:
             self.wl_center, self.wl_fwhm, self.hsf, self.sza, self.saa,\
-                self.vaa, self.vza, self.gain_arr, self.offs_arr, startTime, endTime = read_xml(fh)
+             self.vaa, self.vza, self.gain_arr, self.offs_arr, startTime, endTime,\
+             self.rpcs_vnir, self.rpcs_swir = read_xml(fh)
         
         self.swir_range = (self.wl_center['swir'][0] - self.wl_fwhm['swir'][0], 
                            self.wl_center['swir'][-1] + self.wl_fwhm['swir'][-1])
@@ -337,10 +413,9 @@ class EnMAP:
                                                            observation_date_corr_factor=self.observation_date_correction_factor)
         
         return ltoa_img
-        
-
     
-    def load_rgb(self, as_reflectance:bool=True) -> GeoTensor:
+    def load_rgb(self, as_reflectance:bool=True, apply_rpcs:bool=True,
+                 dst_crs:str="EPSG:4326") -> GeoTensor:
         """
         Load RGB image from VNIR bands. Converts radiance to TOA reflectance if as_reflectance is True
         otherwise it will return the radiance values in W/m^2/SR/um == mW/m2/sr/nm (`self.units`)
@@ -351,7 +426,15 @@ class EnMAP:
         Returns:
             GeoTensor: 
         """
-        return self.load_wavelengths(WAVELENGTHS_RGB, as_reflectance=as_reflectance)
+        rgb = self.load_wavelengths(WAVELENGTHS_RGB, as_reflectance=as_reflectance)
+        if apply_rpcs:
+            return read.read_rpcs(rgb.values, rpcs=self.rpcs_vnir, dst_crs=dst_crs,
+                                  fill_value_default=rgb.fill_value_default)
+        elif dst_crs is not None:
+            return read.read_to_crs(rgb, 
+                                    dst_crs=dst_crs)
+
+        return rgb
 
     def load(self) -> GeoTensor:
         swir = self.load_product('SPECTRAL_IMAGE_SWIR')

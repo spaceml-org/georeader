@@ -643,9 +643,9 @@ class GeoTensor:
                              self.fill_value_default)
 
 
-def concatenate(geotensors:List[GeoTensor]) -> GeoTensor:
+def stack(geotensors:List[GeoTensor]) -> GeoTensor:
     """
-    Concatenates a list of geotensors, assert that all of them has same shape, transform and crs.
+    Stacks a list of geotensors, assert that all of them has same shape, transform and crs.
 
     Args:
         geotensors: list of geotensors to concat. All with same shape, transform and crs.
@@ -657,7 +657,7 @@ def concatenate(geotensors:List[GeoTensor]) -> GeoTensor:
         >>> gt1 = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
         >>> gt2 = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
         >>> gt3 = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
-        >>> gt = concatenate([gt1, gt2, gt3])
+        >>> gt = stack([gt1, gt2, gt3])
         >>> assert gt.shape == (3, 3, 100, 100)
     """
     assert len(geotensors) > 0, "Empty list provided can't concat"
@@ -677,6 +677,41 @@ def concatenate(geotensors:List[GeoTensor]) -> GeoTensor:
         assert geo.shape == first_geotensor.shape, f"Different shape in concat"
         assert geo.fill_value_default == first_geotensor.fill_value_default, "Different fill_value_default in concat"
         array_out[i + 1] = geo.values
+
+    return GeoTensor(array_out, transform=first_geotensor.transform, crs=first_geotensor.crs,
+                     fill_value_default=first_geotensor.fill_value_default)
+
+
+def concatenate(geotensors:List[GeoTensor], axis:int=0) -> GeoTensor:
+    """
+    Concatenates a list of geotensors along a given axis, assert that all of them has same shape, transform and crs.
+
+    Args:
+        geotensors: list of geotensors to concat. All with same shape, transform and crs.
+        axis: axis to concatenate. Must be less than the number of dimensions of the geotensors minus 2.
+            default is 0.
+
+    Returns:
+        geotensor with extra dim at the front: (len(geotensors),) + shape
+    
+    Examples:
+        >>> gt1 = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
+        >>> gt2 = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
+        >>> gt3 = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
+        >>> gt = concatenate([gt1, gt2, gt3], axis=0)
+        >>> assert gt.shape == (9, 100, 100)
+    """
+    assert len(geotensors) > 0, "Empty list provided can't concat"
+
+    if len(geotensors) == 1:
+        return geotensors[0].copy()
+
+    first_geotensor = geotensors[0]
+
+    # Assert the axis is NOT an spatial axis
+    assert axis < len(first_geotensor.shape) - 2, f"Can't concatenate along spatial axis"
+
+    array_out = np.concatenate([gt.values for gt in geotensors], axis=axis)
 
     return GeoTensor(array_out, transform=first_geotensor.transform, crs=first_geotensor.crs,
                      fill_value_default=first_geotensor.fill_value_default)
