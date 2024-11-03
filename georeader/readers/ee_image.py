@@ -3,7 +3,6 @@ from georeader.abstract_reader import GeoData
 from georeader.rasterio_reader import RasterioReader
 from shapely.geometry import Polygon, MultiPolygon, mapping, box
 from typing import Union, Dict, Optional, Tuple, List, Any
-import ee
 import rasterio.windows
 from rasterio import Affine
 import numpy as np
@@ -15,6 +14,11 @@ from georeader import mosaic
 from concurrent.futures import ThreadPoolExecutor
 import geopandas as gpd
 from tqdm import tqdm
+
+try:
+    import ee
+except ImportError:
+    raise ImportError("Please install the package 'earthengine-api' to use this module: pip install earthengine-api")
 
 FakeGeoData=namedtuple("FakeGeoData",["crs", "transform"])
 

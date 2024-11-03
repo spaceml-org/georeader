@@ -9,6 +9,17 @@ repo_name: spaceml-org/georeader
 nav:
   - Home: index.md
   - Modules: modules.md
+  - Tutorials:
+    - Read overlapping rasters:
+        - Overlapping S2 and Proba-V: read_overlapping_probav_and_sentinel2.ipynb
+        - Overlapping S2 and AVIRIS: reading_overlapping_sentinel2_aviris.ipynb
+    - Sentinel-2:
+      - From the public bucket: read_S2_SAFE_from_bucket.ipynb
+      - Metadata: Sentinel-2/explore_metadata_s2.ipynb
+      - Mosaic: Sentinel-2/query_mosaic_s2_images.ipynb
+    - EMIT: emit_explore.ipynb
+    - PRISMA: simultaneous_prisma_emit.ipynb
+    - EnMAP: enmap_with_cloudsen12.ipynb
 plugins:
   - search
   - mkdocstrings:
@@ -23,6 +34,11 @@ plugins:
       allow_errors: false
 theme:
   name: material
+  highlightjs: true # Enable syntax highlighting
+  highlightjs_languages:
+    - python
+  logo: images/logo_georeader.png
+  favicon: images/logo_georeader.png
   feature:
     tabs: true
   palette:
@@ -40,8 +56,6 @@ theme:
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
-  icon:
-    repo: fontawesome/brands/github
 
 extra:
   social:
@@ -51,6 +65,16 @@ extra:
       link: https://pypi.org/project/georeader-spaceml
 
 markdown_extensions:
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.extra
+  - pymdownx.details
+  - pymdownx.tabbed
+  - pymdownx.emoji
+  - pymdownx.tasklist
+  - pymdownx.tilde
+  - codehilite
   - toc:
       permalink: true
   - pymdownx.arithmatex:

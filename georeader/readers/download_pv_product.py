@@ -1,7 +1,4 @@
 import os
-import requests
-from lxml import html
-from requests.auth import HTTPBasicAuth
 import re
 import shutil
 import logging
@@ -10,6 +7,13 @@ from typing import Tuple, List, Optional
 import numpy as np
 import json
 from georeader.readers.download_utils import download_product as download_product_base
+
+try:
+    import requests
+    from lxml import html
+    from requests.auth import HTTPBasicAuth
+except ImportError:
+    raise ImportError("Please install requests and lxml with 'pip install requests lxml'")
 
 
 # Here you have the free data main

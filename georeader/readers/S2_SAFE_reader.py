@@ -79,11 +79,15 @@ def islocalpath(path:str) -> bool:
 
 def get_filesystem(path: str, requester_pays: Optional[bool] = None):
     """Get the filesystem from a path """
-    if path.startswith(FULL_PATH_PUBLIC_BUCKET_SENTINEL_2):
+    try:
+        import fsspec
         import gcsfs
+    except ImportError:
+        raise ImportError("Please install fsspec with 'pip install fsspec gcsfs'")
+    
+    if path.startswith(FULL_PATH_PUBLIC_BUCKET_SENTINEL_2):
         return gcsfs.GCSFileSystem(token='anon', access="read_only", default_location="EUROPE-WEST1")
     
-    import fsspec
     if requester_pays is None:
         requester_pays = DEFAULT_REQUESTER_PAYS
     

@@ -1,7 +1,11 @@
 import os
 import shutil
 from typing import Optional, Any
-import requests
+
+try:
+    import requests
+except ImportError:
+    raise ImportError("Please install requests with 'pip install requests'")
 
 def download_product(link_down:str, filename:Optional[str]=None, auth:Any=None, 
                      display_progress_bar:bool=True, verify:bool=True, 

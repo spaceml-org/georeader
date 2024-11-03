@@ -8,12 +8,12 @@ Author:  Gonzalo Mateo-García
 """
 
 import numpy as np
-import h5py
+
 from datetime import datetime
 import os
 import re
 from datetime import timezone
-from h5py import h5z
+
 from rasterio import Affine
 import rasterio
 import rasterio.windows
@@ -23,6 +23,11 @@ from numbers import Number
 from shapely.geometry import Polygon
 import rasterio.crs
 
+try:
+    import h5py
+    from h5py import h5z
+except ImportError:
+    raise ImportError("Please install h5py with 'pip install h5py'")
 
 FILTERS_HDF5 = { 'gzip': h5z.FILTER_DEFLATE,
                  'szip': h5z.FILTER_SZIP,
