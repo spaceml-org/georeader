@@ -14,6 +14,7 @@ nav:
         - Overlapping S2 and Proba-V: read_overlapping_probav_and_sentinel2.ipynb
         - Overlapping S2 and AVIRIS: reading_overlapping_sentinel2_aviris.ipynb
     - Sentinel-2:
+      - From Google Earth Engine: Sentinel-2/run_in_gee_image.ipynb
       - From the public bucket: read_S2_SAFE_from_bucket.ipynb
       - Metadata: Sentinel-2/explore_metadata_s2.ipynb
       - Mosaic: Sentinel-2/query_mosaic_s2_images.ipynb
