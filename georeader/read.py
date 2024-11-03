@@ -17,6 +17,9 @@ from shapely.geometry import Polygon, MultiPolygon
 import mercantile
 from shapely.geometry import box
 import rasterio.transform
+import rasterio.rpc
+import rasterio.crs
+from numpy.typing import NDArray
 
 SIZE_DEFAULT = 256
 WEB_MERCATOR_CRS = "EPSG:3857"
@@ -585,6 +588,9 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
     dict_shape_window_out = {"x": window_out.width, "y": window_out.height}
     shape_out = tuple([named_shape[s] if s not in ["x", "y"] else dict_shape_window_out[s] for s in named_shape])
     dst_nodata = dst_nodata or data_in.fill_value_default
+    if isbool_dtypedst:
+        dst_nodata = bool(dst_nodata)
+    
     destination = np.full(shape_out, fill_value=dst_nodata, dtype=dtype_dst)
 
     polygon_dst_crs = window_utils.window_polygon(window_out, dst_transform)
@@ -627,8 +633,10 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
         np_array_iter = np_array_in[i_sel_tuple]
         if isbool_dtypedst:
             dst_iter_write = destination[i_sel_tuple].astype(np.float32)
+            dst_nodata_iter = float(dst_nodata)
         else:
             dst_iter_write = destination[i_sel_tuple]
+            dst_nodata_iter = dst_nodata
 
         rasterio.warp.reproject(
             np_array_iter,
@@ -638,7 +646,7 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
             dst_transform=dst_transform,
             dst_crs=dst_crs,
             src_nodata=geotensor_in.fill_value_default,
-            dst_nodata=dst_nodata,
+            dst_nodata=dst_nodata_iter,
             resampling=resampling)
         
         if isbool_dtypedst:
@@ -715,6 +723,100 @@ def read_from_tile(data:GeoData, x:int, y:int, z:int, dst_crs:Optional[Any]=WEB_
 
     return read_reproject(data, dst_crs=dst_crs, dst_transform=dst_transform, 
                           window_out=window_data)
+
+
+def read_rpcs(input_npy:NDArray, rpcs:rasterio.rpc.RPC, 
+              fill_value_default:int=0,
+              dst_crs:Optional[Any]=None,
+              resolution_dst_crs:Optional[Union[float, Tuple[float, float]]]=None,
+              resampling: rasterio.warp.Resampling = rasterio.warp.Resampling.cubic_spline,
+              return_only_data:bool=False) -> GeoTensor:
+    """
+    This function georreferences an array using the RPCs. 
+        The RPCs are used to compute the transform from the input array to the destination crs.
+
+        This function assumes that the RPCs are in EPSG:4326.
+
+    Args:
+        input_npy (NDArray): Array to georeference. It must have 2, 3 or 4 dimensions.
+        rpcs (rasterio.rpc.RPC): RPCs to compute the transform.
+        fill_value_default (int, optional): how to encode the nodata value. Defaults to 0.
+        dst_crs (Optional[Any], optional): Destination crs. Defaults to None.
+            If None, the dst_crs is the same as in the RPC polynomial (EPSG:4326).
+        resampling (rasterio.warp.Resampling, optional): Resampling method. 
+            Defaults to rasterio.warp.Resampling.cubic_spline.
+        return_only_data (bool, optional): If True it returns only the data. Defaults to False.
+
+    Returns:
+        GeoTensor: GeoTensor with the georeferenced array based on the RPCs.
+    """
+    
+    isbool_dtypedst = input_npy.dtype == 'bool'
+    if isbool_dtypedst:
+        fill_value_default = bool(fill_value_default)
+
+    assert input_npy.ndim >= 2 and input_npy.ndim <= 4, "Input array must have 2, 3 or 4 dimensions"
+
+    named_shape = OrderedDict(reversed(list(zip(["y", "x", "band", "time"], 
+                                                reversed(input_npy.shape)))))
+
+    index_iter = [[(ns, i) for i in range(s)] for ns, s in named_shape.items() if ns not in ["x", "y"]]
+    # e.g. if named_shape = {'time': 4, 'band': 2, 'x':10, 'y': 10} index_iter ->
+    # [[('time', 0), ('time', 1), ('time', 2), ('time', 3)],
+    #  [('band', 0), ('band', 1)]]
+
+    if dst_crs is None:
+        dst_crs = rasterio.crs.CRS.from_epsg(4326)
+
+    src_crs = rasterio.crs.CRS.from_epsg(4326)
+
+    if resolution_dst_crs is not None:
+        if isinstance(resolution_dst_crs, float):
+            resolution_dst_crs = (resolution_dst_crs, resolution_dst_crs)
+
+    dst_transform, dst_width, dst_height = rasterio.warp.calculate_default_transform(
+            src_crs=None, dst_crs=dst_crs, 
+            width=input_npy.shape[-1], 
+            height=input_npy.shape[-2], 
+            resolution=resolution_dst_crs,
+            rpcs=rpcs, dst_width=None, dst_height=None)
+
+    destination = np.full(input_npy.shape[:-2] + (dst_height, dst_width),
+                          fill_value=fill_value_default,
+                          dtype=input_npy.dtype)
+
+    for current_select_tuple in itertools.product(*index_iter):
+        # current_select_tuple = (('time', 0), ('band', 0))
+        i_sel_tuple = tuple(t[1] for t in current_select_tuple)
+
+        np_array_iter = input_npy[i_sel_tuple]
+        if isbool_dtypedst:
+            dst_iter_write = destination[i_sel_tuple].astype(np.float32)
+            fill_value_default_iter = float(fill_value_default)
+        else:
+            dst_iter_write = destination[i_sel_tuple]
+            fill_value_default_iter = fill_value_default
+
+        rasterio.warp.reproject(
+            np_array_iter,
+            dst_iter_write,
+            src_transform=None,
+            rpcs=rpcs,
+            src_crs=src_crs,
+            dst_transform=dst_transform,
+            dst_crs=dst_crs,
+            src_nodata=fill_value_default_iter,
+            dst_nodata=fill_value_default_iter,
+            resampling=resampling)
+        
+        if isbool_dtypedst:
+            destination[i_sel_tuple] = (dst_iter_write > .5)
+
+    if return_only_data:
+        return destination
+
+    return GeoTensor(destination, transform=dst_transform, crs=dst_crs,
+                     fill_value_default=fill_value_default)
     
     
 
