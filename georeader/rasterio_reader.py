@@ -23,9 +23,9 @@ RIO_ENV_OPTIONS_DEFAULT = dict(
 )
 
 class RasterioReader:
-    f"""
+    """
     Class to read a set of rasters files (``paths``). the `read` method will return a 4D np.ndarray with
-    shape (len(paths), C, H, W).
+    shape (len(paths), C, H, W). If the path is a single file it will return a 3D np.ndarray with shape (C, H, W).
 
     It checks that all rasters have same CRS, transform and  shape. the `read` method will open the file every time it
     is called to work in parallel processing scenario.
@@ -43,7 +43,7 @@ class RasterioReader:
     overview_level: if not None, it will read from the corresponding pyramid level. This argument 0 based as in rasterio
      (None-> default resolution and 0 is the first overview).
     check: check all paths are OK
-    rio_env_options: GDAL options for reading. Defaults to: {RIO_ENV_OPTIONS_DEFAULT}
+    rio_env_options: GDAL options for reading. Defaults to: `RIO_ENV_OPTIONS_DEFAULT`
 
     Attributes
     -------------------
@@ -163,7 +163,7 @@ class RasterioReader:
             relative: True means the indexes arg will be treated ad relative to the current self.indexes. If false
                      it sets self.indexes = indexes (and update the count attribute)
         Examples:
-            >>> r = RasterioDataset("path/to/raster.tif", indexes=[2,3,4]) # Read all bands except the first one.
+            >>> r = RasterioReader("path/to/raster.tif", indexes=[2,3,4]) # Read all bands except the first one.
             >>> r.set_indexes([2,3], relative=True) # will read bands 2 and 3 of the original raster
         """
         if relative:
@@ -190,7 +190,7 @@ class RasterioReader:
             names: List of band names to read
         
         Examples:
-            >>> r = RasterioDataset("path/to/raster.tif") # Read all bands except the first one.
+            >>> r = RasterioReader("path/to/raster.tif") # Read all bands except the first one.
             >>> # Assume r.descriptions = ["B1", "B2", "B3"]
             >>> r.set_indexes_by_name(["B2", "B3"])
 
@@ -240,7 +240,7 @@ class RasterioReader:
         
         Examples:
             >>> # Read the first 1000x1000 pixels of the raster
-            >>> r = Raster("path/to/raster.tif")
+            >>> r = RasterioReader("path/to/raster.tif")
             >>> r.set_window(rasterio.windows.Window(col_off=0, row_off=0, width=1000, height=1000))
             >>> r.load() #  returns GeoTensor with shape (1, 1, 1000, 1000)
 
@@ -292,7 +292,7 @@ class RasterioReader:
             List of lists with the descriptions of the bands of each tiff file
         
         Examples:
-            >>> r = Raster("path/to/raster.tif") # Raster with band names B1, B2, B3
+            >>> r = RasterioReader("path/to/raster.tif") # Raster with band names B1, B2, B3
             >>> r.descriptions # returns ["B1", "B2", "B3"]
         """
         descriptions_all = []
@@ -347,7 +347,7 @@ class RasterioReader:
             Copy of the current reader
         
         Examples:
-            >>> r = Raster(["path/to/raster1.tif", "path/to/raster2.tif"])
+            >>> r = RasterioReader(["path/to/raster1.tif", "path/to/raster2.tif"])
             >>> r.isel({"time": 0, "band": [0]}) # returns a reader with the first band of the first raster
             >>> r.isel({"time": slice(0, 1), "band": [0]}) # returns a reader with the first band of the first raster and second raster
             >>> r.isel({"x": slice(4000, 5000), "band": [0, 1]}) # returns a reader slicing the x axis from 4000 to 5000 and the first two bands

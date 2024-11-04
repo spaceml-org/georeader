@@ -1,0 +1,1 @@
+::: georeader.rasterio_reader

@@ -144,7 +144,7 @@ def res(transform:rasterio.Affine) -> Tuple[float, float]:
     z0_1 = np.array(transform * (0, 1))
     z1_0 = np.array(transform * (1, 0))
 
-    return np.sqrt(np.sum((z0_0 - z1_0) ** 2)), np.sqrt(np.sum((z0_0 - z0_1) ** 2))
+    return float(np.sqrt(np.sum((z0_0 - z1_0) ** 2))), float(np.sqrt(np.sum((z0_0 - z0_1) ** 2)))
 
 
 def get_slice_pad(window_data:rasterio.windows.Window,

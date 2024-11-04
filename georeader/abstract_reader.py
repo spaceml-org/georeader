@@ -1,6 +1,5 @@
 import numpy as np
 from georeader.geotensor import GeoTensor
-from georeader.rasterio_reader import RasterioReader
 from georeader import window_utils
 from typing import Tuple, Any, Union, Optional
 from shapely.geometry import Polygon
@@ -59,7 +58,7 @@ class AbstractGeoData:
         # return np.zeros(self.shape, dtype=self.dtype)
         raise self.load(boundless=True).values
 
-GeoData = Union[GeoTensor, RasterioReader, AbstractGeoData]
+GeoData = Union[GeoTensor, AbstractGeoData]
 
 def same_extent(geo1:GeoData, geo2:GeoData, precision:float=1e-3) -> bool:
     return geo1.transform.almost_equals(geo2.transform, precision=precision) and window_utils.compare_crs(geo1.crs, geo2.crs) and (geo1.shape[-2:] == geo2.shape[-2:])

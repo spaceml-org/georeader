@@ -12,7 +12,7 @@ packages = [
 include = ["georeader/SolarIrradiance_Thuillier.csv"]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<4.0"
+python = ">=3.10,<4.0"
 rasterio = ">=1"
 numpy = ">=1"
 shapely = ">=2"
@@ -35,9 +35,16 @@ jupyter = "^1.1.1"
 ipykernel = "^6.29.5"
 pymdown-extensions = "^10.12"
 
-[tool.poetry.group.visualizations.dependencies]
-matplotlib = "^3.4.3"
-folium = "^0.12.1"
+[tool.poetry.group.tutorial.dependencies]
+fsspec = "^2024.10.0"
+gcsfs = "^2024.10.0"
+requests = "^2.32.3"
+lxml = "^5.3.0"
+h5py = "^3.12.1"
+mlstac = "^0.1.8"
+ipykernel = "^6.29.5"
+pyarrow = "^18.0.0"
+fastparquet = "^2024.5.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

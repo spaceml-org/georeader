@@ -1,4 +1,3 @@
-## `read` module
 ::: georeader.read
     options:
       members:
@@ -10,6 +9,3 @@
         - read_reproject
         - read_reproject_like
         - resize
-
-## `reflectance` module
-::: georeader.reflectance

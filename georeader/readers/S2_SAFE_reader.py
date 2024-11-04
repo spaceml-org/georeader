@@ -536,8 +536,9 @@ class S2Image:
         reader_ref = self._get_reader()
         geotensor_ref = reader_ref.load(boundless=boundless)
 
-        array_out = np.full((len(self.bands),) + geotensor_ref.shape[-2:],fill_value=geotensor_ref.fill_value_default,
-                            dtype=geotensor_ref.dtype)
+        array_out = np.full((len(self.bands),) + geotensor_ref.shape[-2:],
+                            fill_value=geotensor_ref.fill_value_default,
+                            dtype=np.int32)
 
         # Deal with NODATA values
         invalids = (geotensor_ref.values == 0) | (geotensor_ref.values == (2 ** 16) - 1)
@@ -560,11 +561,17 @@ class S2Image:
 
 
             # Important: Adds radio correction! otherwise images after 2022-01-25 shifted (PROCESSING_BASELINE '04.00' or above)
-            array_out[idx] = geotensor_iter.values[0] + radio_add[b]
+            array_out[idx] = geotensor_iter.values[0].astype(np.int32) + radio_add[b]
 
         array_out[:, invalids[0]] = self.fill_value_default
 
-        return GeoTensor(values=array_out, transform=geotensor_ref.transform,crs=geotensor_ref.crs,
+        if np.any(array_out < 0):
+            raise ValueError("Negative values found in the image")
+        
+        array_out = array_out.astype(np.uint16)
+
+        return GeoTensor(values=array_out, 
+                         transform=geotensor_ref.transform,crs=geotensor_ref.crs,
                          fill_value_default=self.fill_value_default)
 
     @property
