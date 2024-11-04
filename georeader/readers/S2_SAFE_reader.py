@@ -79,11 +79,15 @@ def islocalpath(path:str) -> bool:
 
 def get_filesystem(path: str, requester_pays: Optional[bool] = None):
     """Get the filesystem from a path """
-    if path.startswith(FULL_PATH_PUBLIC_BUCKET_SENTINEL_2):
+    try:
+        import fsspec
         import gcsfs
+    except ImportError:
+        raise ImportError("Please install fsspec with 'pip install fsspec gcsfs'")
+    
+    if path.startswith(FULL_PATH_PUBLIC_BUCKET_SENTINEL_2):
         return gcsfs.GCSFileSystem(token='anon', access="read_only", default_location="EUROPE-WEST1")
     
-    import fsspec
     if requester_pays is None:
         requester_pays = DEFAULT_REQUESTER_PAYS
     
@@ -532,8 +536,9 @@ class S2Image:
         reader_ref = self._get_reader()
         geotensor_ref = reader_ref.load(boundless=boundless)
 
-        array_out = np.full((len(self.bands),) + geotensor_ref.shape[-2:],fill_value=geotensor_ref.fill_value_default,
-                            dtype=geotensor_ref.dtype)
+        array_out = np.full((len(self.bands),) + geotensor_ref.shape[-2:],
+                            fill_value=geotensor_ref.fill_value_default,
+                            dtype=np.int32)
 
         # Deal with NODATA values
         invalids = (geotensor_ref.values == 0) | (geotensor_ref.values == (2 ** 16) - 1)
@@ -556,11 +561,17 @@ class S2Image:
 
 
             # Important: Adds radio correction! otherwise images after 2022-01-25 shifted (PROCESSING_BASELINE '04.00' or above)
-            array_out[idx] = geotensor_iter.values[0] + radio_add[b]
+            array_out[idx] = geotensor_iter.values[0].astype(np.int32) + radio_add[b]
 
         array_out[:, invalids[0]] = self.fill_value_default
 
-        return GeoTensor(values=array_out, transform=geotensor_ref.transform,crs=geotensor_ref.crs,
+        if np.any(array_out < 0):
+            raise ValueError("Negative values found in the image")
+        
+        array_out = array_out.astype(np.uint16)
+
+        return GeoTensor(values=array_out, 
+                         transform=geotensor_ref.transform,crs=geotensor_ref.crs,
                          fill_value_default=self.fill_value_default)
 
     @property
@@ -1233,8 +1244,8 @@ def s2_public_bucket_path(s2file:str, check_exists:bool=False, mode:str="gcp") -
     return s2folder
 
 
-NEW_FORMAT = "(S2\w{1})_(MSIL\w{2})_(\d{4}\d{2}\d{2}T\d{2}\d{2}\d{2})_(\w{5})_(\w{4})_T(\w{5})_(\w{15})"
-OLD_FORMAT = "(S2\w{1})_(\w{4})_(\w{3}_\w{6})_(\w{4})_(\d{8}T\d{6})_(\w{4})_V(\d{4}\d{2}\d{2}T\d{6})_(\d{4}\d{2}\d{2}T\d{6})"
+NEW_FORMAT = r"(S2\w{1})_(MSIL\w{2})_(\d{4}\d{2}\d{2}T\d{2}\d{2}\d{2})_(\w{5})_(\w{4})_T(\w{5})_(\w{15})"
+OLD_FORMAT = r"(S2\w{1})_(\w{4})_(\w{3}_\w{6})_(\w{4})_(\d{8}T\d{6})_(\w{4})_V(\d{4}\d{2}\d{2}T\d{6})_(\d{4}\d{2}\d{2}T\d{6})"
 
 
 def s2_name_split(s2file:str) -> Optional[Tuple[str, str, str, str, str, str, str]]:

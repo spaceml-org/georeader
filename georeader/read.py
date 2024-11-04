@@ -183,8 +183,8 @@ def read_from_window(data_in: GeoData,
                      trigger_load: bool = False,
                      boundless: bool = True) -> Union[GeoData, np.ndarray, None]:
     """
-    Reads a window from data_in padding with 0 if needed (output GeoData will have `window.height`, `window.width` shape
-    if boundless is `True`).
+    Reads a window from data_in padding with `data_in.fill_value_default` if needed 
+    (output GeoData will have `window.height`, `window.width` shape if boundless is `True`).
 
     Args:
         data_in: GeoData with "x" and "y" coordinates
@@ -268,7 +268,7 @@ def read_from_center_coords(data_in: GeoData, center_coords:Tuple[float, float],
 
 
 def read_from_bounds(data_in: GeoData, bounds: Tuple[float, float, float, float],
-                     crs_bounds: Optional[str] = None, pad_add=(0, 0),
+                     crs_bounds: Optional[str] = None, pad_add:Tuple[int, int]=(0, 0),
                      return_only_data: bool = False, trigger_load: bool = False,
                      boundless: bool = True) -> Union[GeoData, np.ndarray]:
     """
@@ -278,8 +278,8 @@ def read_from_bounds(data_in: GeoData, bounds: Tuple[float, float, float, float]
         data_in: GeoData with geographic info (crs and geotransform).
         bounds:  bounding box to read.
         crs_bounds: if not None will transform the bounds from that crs to the `data.crs` to read the chip.
-        pad_add: pad in pixels to add to the `window` that is read.This is useful when this function is called for
-         interpolation/CNN prediction.
+        pad_add: Tuple[int, int]. Pad in pixels to add to the `window` that is read.This is useful when this function is called for
+            interpolation/CNN prediction.
         return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
             returns an GeoData georreferenced object.
         trigger_load: defaults to `False`. Trigger loading the data to memory.
@@ -298,7 +298,7 @@ def read_from_bounds(data_in: GeoData, bounds: Tuple[float, float, float, float]
                             boundless=boundless)
 
 def read_from_polygon(data_in: GeoData, polygon: Union[Polygon, MultiPolygon],
-                      crs_polygon: Optional[str] = None, pad_add=(0, 0),
+                      crs_polygon: Optional[str] = None, pad_add:Tuple[int, int]=(0, 0),
                       return_only_data: bool = False, trigger_load: bool = False,
                       boundless: bool = True, window_surrounding:bool=False) -> Union[GeoData, np.ndarray]:
     """
@@ -309,7 +309,7 @@ def read_from_polygon(data_in: GeoData, polygon: Union[Polygon, MultiPolygon],
         polygon: Polygon or MultiPolygon that specifies the region to read.
         crs_polygon: if not None will transform the polygon from that crs to the data.crs to read the chip.
         pad_add: pad in pixels to add to the `window` that is read.This is useful when this function is called for
-         interpolation/CNN prediction.
+            interpolation/CNN prediction.
         return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
             returns an GeoData georreferenced object.
         trigger_load: defaults to `False`. Trigger loading the data to memory.
@@ -334,7 +334,7 @@ def read_from_polygon(data_in: GeoData, polygon: Union[Polygon, MultiPolygon],
 def read_reproject_like(data_in: GeoData, data_like: GeoData,
                         resolution_dst:Optional[Union[float, Tuple[float, float]]]=None,
                         resampling: rasterio.warp.Resampling = rasterio.warp.Resampling.cubic_spline,
-                        dtype_dst=None, return_only_data: bool = False,
+                        dtype_dst:Any=None, return_only_data: bool = False,
                         dst_nodata: Optional[int] = None) -> Union[GeoTensor, np.ndarray]:
     """
     Reads from `data_in` and reprojects to have the same extent and resolution than `data_like`.
@@ -514,7 +514,7 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
                    dst_transform:Optional[rasterio.Affine]=None,
                    window_out:Optional[rasterio.windows.Window]=None,
                    resampling: rasterio.warp.Resampling = rasterio.warp.Resampling.cubic_spline,
-                   dtype_dst=None, return_only_data: bool = False, dst_nodata: Optional[int] = None) -> Union[
+                   dtype_dst:Any=None, return_only_data: bool = False, dst_nodata: Optional[int] = None) -> Union[
     GeoTensor, np.ndarray]:
     """
     This function slices the data by the bounds and reprojects it to the dst_crs and resolution_dst_crs
@@ -524,9 +524,9 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
         bounds: Optional. bounds in CRS specified by `dst_crs`. If not provided `window_out` must be given.
         dst_crs: CRS to reproject.
         resolution_dst_crs: resolution in the CRS specified by `dst_crs`. If not provided will use the the resolution
-            intrinsic of `dst_transform`.
+            intrinsic of dst_transform.
         dst_transform: Optional dest transform. If not provided the dst_transform is a rectilinear transform computed
-        with the bounds and resolution_dst_crs.
+            with the bounds and resolution_dst_crs.
         window_out: Window out to read w.r.t `dst_transform`. If not provided it is computed from the bounds.
             Window out if provided has the output width and height of the reprojected data.
         resampling: specifies how data is reprojected from `rasterio.warp.Resampling`.

@@ -8,12 +8,12 @@ Author:  Gonzalo Mateo-García
 """
 
 import numpy as np
-import h5py
+
 from datetime import datetime
 import os
 import re
 from datetime import timezone
-from h5py import h5z
+
 from rasterio import Affine
 import rasterio
 import rasterio.windows
@@ -23,6 +23,11 @@ from numbers import Number
 from shapely.geometry import Polygon
 import rasterio.crs
 
+try:
+    import h5py
+    from h5py import h5z
+except ImportError:
+    raise ImportError("Please install h5py with 'pip install h5py'")
 
 FILTERS_HDF5 = { 'gzip': h5z.FILTER_DEFLATE,
                  'szip': h5z.FILTER_SZIP,
@@ -57,12 +62,12 @@ class ProbaV:
         self.hdf5_file = hdf5_file
         self.name = os.path.basename(self.hdf5_file)
         if level_name == "LEVEL2A":
-            matches = re.match("PROBAV_L2A_\d{8}_\d{6}_(\d)_(\d..?M)_(V\d0\d)", self.name)
+            matches = re.match(r"PROBAV_L2A_\d{8}_\d{6}_(\d)_(\d..?M)_(V\d0\d)", self.name)
             if matches is not None:
                 self.camera, self.res_name, self.version = matches.groups()
             self.toatoc = "TOA"
         elif level_name == "LEVEL3":
-            matches = re.match("PROBAV_S1_(TO.)_.{6}_\d{8}_(\d..?M)_(V\d0\d)", self.name)
+            matches = re.match(r"PROBAV_S1_(TO.)_.{6}_\d{8}_(\d..?M)_(V\d0\d)", self.name)
             if matches is not None:
                 self.toatoc, self.res_name, self.version = matches.groups()
         else:

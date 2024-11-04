@@ -5,9 +5,13 @@ from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from georeader.readers import query_utils
 from typing import Union, List, Tuple, Dict, Optional
-import ee
 import geopandas as gpd
 import pandas as pd
+
+try:
+    import ee
+except ImportError:
+    raise ImportError("Please install the package 'earthengine-api' to use this module: pip install earthengine-api")
 
 def _rename_add_properties(image:ee.Image, properties_dict:Dict[str, str]) -> ee.Image:
     dict_set = {v: image.get(k) for k, v in properties_dict.items()}

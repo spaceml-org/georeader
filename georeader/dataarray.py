@@ -1,4 +1,3 @@
-import xarray as xr
 import rasterio
 import rasterio.windows
 import rasterio.transform
@@ -7,6 +6,11 @@ from typing import Tuple, Any, Optional, Dict, Union
 from numpy.typing import NDArray
 import numpy as np
 from collections import OrderedDict
+
+try:
+    import xarray as xr
+except ImportError:
+    raise ImportError("Please install xarray with 'pip install xarray'")
 
 
 def coords_to_transform(coords: xr.Coordinates, x_axis_name:str="x", y_axis_name:str="y") -> rasterio.Affine:

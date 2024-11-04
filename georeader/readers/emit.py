@@ -19,7 +19,6 @@ from georeader import window_utils
 from shapely.geometry import Polygon
 from georeader.geotensor import GeoTensor
 from georeader import reflectance
-import netCDF4
 from shapely.ops import unary_union
 from georeader import read
 import rasterio.warp
@@ -27,6 +26,11 @@ from numpy.typing import NDArray
 from datetime import datetime, timezone
 from georeader.griddata import georreference
 from georeader import get_utm_epsg
+
+try:
+    import netCDF4
+except ImportError:
+    raise ImportError("netCDF4 is required to read EMIT images. Please install it with: pip install netCDF4")
 
 AUTH_METHOD = "auth" # "auth" or "token"
 TOKEN = None

@@ -20,9 +20,12 @@ from shapely.geometry import Polygon
 import numpy as np
 import datetime as dt
 from glob import glob
-from pyhdf.SD import SD, SDC
 import warnings
 
+try:
+    from pyhdf.SD import SD, SDC
+except ImportError:
+    raise ImportError("Please install pyhdf with 'pip install pyhdf'")
 
 FILES = ['1BL', '1BO', 'AG', 'B0', 'B2', 'B3', 'MIR',
          'OG', 'SAA', 'SM', 'SZA', 'VAA', 'VZA', 'WVG']
