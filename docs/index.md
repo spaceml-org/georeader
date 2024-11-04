@@ -73,25 +73,28 @@ from georeader.save import save_cog
 save_cog(data_memory, "s2_crop.tif", descriptions=s2obj.bands)
 ```
 
-## Examples
+## Tutorials
 
-Sentinel-2:
-* [Reading Sentinel-2 images from the public Google bucket](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_S2_SAFE_from_bucket.ipynb)
-* [Explore metadata of Sentinel-2 object](https://github.com/spaceml-org/georeader/blob/main/notebooks/Sentinel-2/explore_metadata_s2.ipynb)
-* [Query Sentinel-2 images over a location and time span, mosaic and plot them](https://github.com/spaceml-org/georeader/blob/main/notebooks/Sentinel-2/query_mosaic_s2_images.ipynb)
+### Sentinel-2
 
-Other:
-* [Tutorial to read overlapping tiles from a GeoTIFF and a Sentinel-2 image](https://github.com/spaceml-org/georeader/blob/main/notebooks/reading_overlapping_sentinel2_aviris.ipynb)
-* [Example of reading a Proba-V image overlapping with Sentinel-2 forcing same resolution](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_overlapping_probav_and_sentinel2.ipynb)
-* [Work with EMIT images](https://github.com/spaceml-org/georeader/blob/main/notebooks/emit_explore.ipynb)
-* [Read overlapping images of PRISMA and EMIT](https://github.com/spaceml-org/georeader/blob/main/notebooks/simultaneous_prisma_emit.ipynb)
-* [Read high resolution tile layers](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_from_tileserver.ipynb)
+- [Reading Sentinel-2 images from the public Google bucket](https://github.com/spaceml-org/georeader/blob/main/docs/read_S2_SAFE_from_bucket.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/read_S2_SAFE_from_bucket.ipynb)
+- [Explore metadata of Sentinel-2 object](https://github.com/spaceml-org/georeader/blob/main/docs/Sentinel-2/explore_metadata_s2.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/Sentinel-2/explore_metadata_s2.ipynb)
+- [Query Sentinel-2 images over a location and time span, mosaic and plot them](https://github.com/spaceml-org/georeader/blob/main/docs/Sentinel-2/query_mosaic_s2_images.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/Sentinel-2/query_mosaic_s2_images.ipynb)
 
-Used in other projects:
-* [georeader with ml4floods to automatically download and produce flood extent maps: the Kherson Dam Break example](https://spaceml-org.github.io/ml4floods/content/ml4ops/HOWTO_postprocess_inference.html)
-* [georeader with STARCOP to simulate Sentinel-2 from AVIRIS images](https://github.com/spaceml-org/STARCOP/blob/main/notebooks/simulate_aviris_2_sentinel2.ipynb)
-* [georeader with STARCOP to run plume detection in EMIT images](https://github.com/spaceml-org/STARCOP/blob/main/notebooks/inference_on_raw_EMIT_nc_file.ipynb)
-* [georeader with CloudSEN12 to run cloud detection in Sentinel-2 images](https://github.com/IPL-UV/cloudsen12_models/blob/main/notebooks/run_in_gee_image.ipynb)
+### Read rasters from different satellites
+
+ * [Tutorial to read overlapping tiles from a GeoTIFF and a Sentinel-2 image](https://github.com/spaceml-org/georeader/blob/main/docs/reading_overlapping_sentinel2_aviris.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/reading_overlapping_sentinel2_aviris.ipynb)
+ * [Example of reading a Proba-V image overlapping with Sentinel-2 forcing same resolution](https://github.com/spaceml-org/georeader/blob/main/docs/read_overlapping_probav_and_sentinel2.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/read_overlapping_probav_and_sentinel2.ipynb)
+ * [Work with EMIT images](https://github.com/spaceml-org/georeader/blob/main/docs/emit_explore.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/emit_explore.ipynb)
+ * [Read overlapping images of PRISMA and EMIT](https://github.com/spaceml-org/georeader/blob/main/docs/simultaneous_prisma_emit.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/simultaneous_prisma_emit.ipynb)
+ * [Read EnMAP images and run CloudSEN12 cloud detection model](https://github.com/spaceml-org/georeader/blob/main/docs/enmap_with_cloudsen12.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/enmap_with_cloudsen12.ipynb)
+
+### Used in other projects
+
+ * [georeader with ml4floods to automatically download and produce flood extent maps: the Kherson Dam Break example](https://spaceml-org.github.io/ml4floods/content/ml4ops/HOWTO_postprocess_inference.html)
+ * [georeader with STARCOP to simulate Sentinel-2 from AVIRIS images](https://github.com/spaceml-org/STARCOP/blob/main/notebooks/simulate_aviris_2_sentinel2.ipynb)
+ * [georeader with STARCOP to run plume detection in EMIT images](https://github.com/spaceml-org/STARCOP/blob/main/notebooks/inference_on_raw_EMIT_nc_file.ipynb)
+ * [georeader with CloudSEN12 to run cloud detection in Sentinel-2 images](https://github.com/IPL-UV/cloudsen12_models/blob/main/notebooks/run_in_gee_image.ipynb)
 
 
 ## Citation

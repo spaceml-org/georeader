@@ -34,6 +34,7 @@ pygments = "^2.18.0"
 jupyter = "^1.1.1"
 ipykernel = "^6.29.5"
 pymdown-extensions = "^10.12"
+ghp-import = "^2.1.0"
 
 [tool.poetry.group.tutorial.dependencies]
 fsspec = "^2024.10.0"

@@ -46,6 +46,12 @@ docs-test: ## Test if documentation can be built without warnings or errors
 docs: ## Build and serve the documentation
 	@poetry run mkdocs serve
 
+.PHONY: docs-publish
+docs-publish: ## Build and publish the documentation to GitHub Pages
+    @poetry run mkdocs build
+    @poetry run ghp-import -n -p -f site
+
+
 .PHONY: help
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
