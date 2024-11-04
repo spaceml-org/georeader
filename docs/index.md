@@ -2,10 +2,11 @@
 
 # georeader
 
-**georeader** is a package to process raster data from different satellite missions. **georeader** makes easy to [read specific areas of your image](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_S2_SAFE_from_bucket.ipynb), to [reproject images from different satellites to a common grid](https://github.com/spaceml-org/georeader/blob/main/notebooks/reading_overlapping_sentinel2_aviris.ipynb) and to go from vector to raster formats ([`vectorize`](https://github.com/spaceml-org/georeader/blob/main/georeader/vectorize.py) and [`rasterize`](https://github.com/spaceml-org/georeader/blob/main/georeader/rasterize.py)). **georeader** is mainly used to process satellite data for scientific usage, to create ML-ready datasets and to implement [end-to-end operational inference pipelines](https://spaceml-org.github.io/ml4floods/content/ml4ops/HOWTO_postprocess_inference.html). 
+**georeader** is a package to process raster data from different satellite missions. **georeader** makes easy to [read specific areas of your image](https://github.com/spaceml-org/georeader/blob/main/notebooks/read_S2_SAFE_from_bucket.ipynb), to [reproject images from different satellites to a common grid](https://github.com/spaceml-org/georeader/blob/main/notebooks/reading_overlapping_sentinel2_aviris.ipynb) and to go from vector to raster formats ([`vectorize`](https://spaceml-org.github.io/georeader/modules/vectorize_module/) and [`rasterize`](https://spaceml-org.github.io/georeader/modules/rasterize_module/)). **georeader** is mainly used to process satellite data for scientific usage, to create ML-ready datasets and to implement [end-to-end operational inference pipelines](https://spaceml-org.github.io/ml4floods/content/ml4ops/HOWTO_postprocess_inference.html). 
 
 ## Install
-The core package has [very few dependencies](https://github.com/spaceml-org/georeader/blob/main/requirements.txt); it is build on top of the geospatial libraries `rasterio`, `shapely` and `geopandas`.
+
+The core package dependencies are `numpy`, `rasterio`, `shapely` and `geopandas`.
 
 ```bash
 pip install georeader-spaceml
@@ -80,7 +81,7 @@ save_cog(data_memory, "s2_crop.tif", descriptions=s2obj.bands)
 - [Reading Sentinel-2 images from the public Google bucket](https://github.com/spaceml-org/georeader/blob/main/docs/read_S2_SAFE_from_bucket.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/read_S2_SAFE_from_bucket.ipynb)
 - [Explore metadata of Sentinel-2 object](https://github.com/spaceml-org/georeader/blob/main/docs/Sentinel-2/explore_metadata_s2.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/Sentinel-2/explore_metadata_s2.ipynb)
 - [Query Sentinel-2 images over a location and time span, mosaic and plot them](https://github.com/spaceml-org/georeader/blob/main/docs/Sentinel-2/query_mosaic_s2_images.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/Sentinel-2/query_mosaic_s2_images.ipynb)
-- [Sentinel-2 images from GEE and CloudSEN12 cloud detection](https://github.com/spaceml-org/georeader/blob/main/docs/Sentinel-2/run_in_gee_image.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/Sentinel-2/query_mosaic_s2_images.ipynb)
+- [Sentinel-2 images from GEE and CloudSEN12 cloud detection](https://github.com/spaceml-org/georeader/blob/main/docs/Sentinel-2/run_in_gee_image.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/Sentinel-2/run_in_gee_image.ipynb)
 
 ### Read rasters from different satellites
 
