@@ -48,9 +48,8 @@ docs: ## Build and serve the documentation
 
 .PHONY: docs-publish
 docs-publish: ## Build and publish the documentation to GitHub Pages
-    @poetry run mkdocs build
-    @poetry run ghp-import -n -p -f site
-
+	@poetry run mkdocs build
+	@poetry run ghp-import -n -p -f site
 
 .PHONY: help
 help:
@@ -60,10 +59,10 @@ help:
 
 
 ## Old commands
-upload-pip-old:
-	python -m twine upload dist/*
+# upload-pip-old:
+# 	python -m twine upload dist/*
 
-build-package-old:
-	rm -rf build/
-	rm -rf dist/
-	python setup.py sdist bdist_wheel
+# build-package-old:
+# 	rm -rf build/
+# 	rm -rf dist/
+# 	python setup.py sdist bdist_wheel

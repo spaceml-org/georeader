@@ -80,14 +80,15 @@ save_cog(data_memory, "s2_crop.tif", descriptions=s2obj.bands)
 - [Reading Sentinel-2 images from the public Google bucket](https://github.com/spaceml-org/georeader/blob/main/docs/read_S2_SAFE_from_bucket.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/read_S2_SAFE_from_bucket.ipynb)
 - [Explore metadata of Sentinel-2 object](https://github.com/spaceml-org/georeader/blob/main/docs/Sentinel-2/explore_metadata_s2.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/Sentinel-2/explore_metadata_s2.ipynb)
 - [Query Sentinel-2 images over a location and time span, mosaic and plot them](https://github.com/spaceml-org/georeader/blob/main/docs/Sentinel-2/query_mosaic_s2_images.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/Sentinel-2/query_mosaic_s2_images.ipynb)
+- [Sentinel-2 images from GEE and CloudSEN12 cloud detection](https://github.com/spaceml-org/georeader/blob/main/docs/Sentinel-2/run_in_gee_image.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/Sentinel-2/query_mosaic_s2_images.ipynb)
 
 ### Read rasters from different satellites
 
  * [Tutorial to read overlapping tiles from a GeoTIFF and a Sentinel-2 image](https://github.com/spaceml-org/georeader/blob/main/docs/reading_overlapping_sentinel2_aviris.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/reading_overlapping_sentinel2_aviris.ipynb)
- * [Example of reading a Proba-V image overlapping with Sentinel-2 forcing same resolution](https://github.com/spaceml-org/georeader/blob/main/docs/read_overlapping_probav_and_sentinel2.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/read_overlapping_probav_and_sentinel2.ipynb)
+ * [Example of reading a Proba-V image overlapping with Sentinel-2 forcing same resolution](https://github.com/spaceml-org/georeader/blob/main/docs/read_overlapping_probav_and_sentinel2.ipynb)
  * [Work with EMIT images](https://github.com/spaceml-org/georeader/blob/main/docs/emit_explore.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/emit_explore.ipynb)
- * [Read overlapping images of PRISMA and EMIT](https://github.com/spaceml-org/georeader/blob/main/docs/simultaneous_prisma_emit.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/simultaneous_prisma_emit.ipynb)
- * [Read EnMAP images and run CloudSEN12 cloud detection model](https://github.com/spaceml-org/georeader/blob/main/docs/enmap_with_cloudsen12.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/enmap_with_cloudsen12.ipynb)
+ * [Read overlapping images of PRISMA and EMIT](https://github.com/spaceml-org/georeader/blob/main/docs/simultaneous_prisma_emit.ipynb) 
+ * [Read EnMAP images and run CloudSEN12 cloud detection](https://github.com/spaceml-org/georeader/blob/main/docs/enmap_with_cloudsen12.ipynb) 
 
 ### Used in other projects
 
