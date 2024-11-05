@@ -27,7 +27,7 @@ tox = "^4.11.1"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = "^1.4.2"
-mkdocs-material = "^9.2.7"
+mkdocs-material = {extras = ["imaging"], version = "^9.5.43"}
 mkdocstrings = {extras = ["python"], version = "^0.26.1"}
 mknotebooks = "^0.8"
 pygments = "^2.18.0"

@@ -30,6 +30,7 @@ nav:
     - EnMAP: enmap_with_cloudsen12.ipynb
 plugins:
   - search
+  - social
   - mkdocstrings:
       handlers:
         python:
@@ -72,6 +73,15 @@ extra:
       link: https://github.com/spaceml-org/georeader
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/georeader-spaceml
+  meta:
+    - name: "og:title"
+      content: "georeader"
+    - name: "og:description"
+      content: "🛰️ Process raster data in python"
+    - name: "og:image"
+      content: "https://spaceml-org.github.io/georeader/images/logo_georeader.png"
+    - name: "og:url"
+      content: "https://spaceml-org.github.io/georeader"
 
 markdown_extensions:
   - pymdownx.superfences
