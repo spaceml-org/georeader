@@ -91,7 +91,7 @@ save_cog(data_memory, "s2_crop.tif", descriptions=s2obj.bands)
  * [Example of reading a Proba-V image overlapping with Sentinel-2 forcing same resolution](https://github.com/spaceml-org/georeader/blob/main/docs/read_overlapping_probav_and_sentinel2.ipynb)
  * [Work with EMIT images](https://github.com/spaceml-org/georeader/blob/main/docs/emit_explore.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/emit_explore.ipynb)
  * [Read overlapping images of PRISMA and EMIT](https://github.com/spaceml-org/georeader/blob/main/docs/simultaneous_prisma_emit.ipynb) 
- * [Read EnMAP images and run CloudSEN12 cloud detection](https://github.com/spaceml-org/georeader/blob/main/docs/enmap_with_cloudsen12.ipynb) 
+ * [Read EnMAP images, integrate them to Sentinel-2 bands, convert radiance to TOA reflectance and run CloudSEN12 cloud detection model](https://github.com/spaceml-org/georeader/blob/main/docs/enmap_with_cloudsen12.ipynb) 
 
 ### Used in other projects
 
