@@ -17,48 +17,81 @@ from numpy.typing import NDArray
 RIO_ENV_OPTIONS_DEFAULT = dict(
     GDAL_DISABLE_READDIR_ON_OPEN='EMPTY_DIR',
     GDAL_HTTP_MERGE_CONSECUTIVE_RANGES="YES",
-    GDAL_CACHEMAX=2000, # GDAL raster block cache size. If its value is small (less than 100000), 
+    GDAL_CACHEMAX=2_000_000_000, # GDAL raster block cache size. If its value is small (less than 100000), 
     # it is assumed to be measured in megabytes, otherwise in bytes. https://trac.osgeo.org/gdal/wiki/ConfigOptions#GDAL_CACHEMAX
     GDAL_HTTP_MULTIPLEX="YES"
 )
 
+# CPL_VSIL_CURL_NON_CACHED configuration option can be set to values like 
+# /vsicurl/http://example.com/foo.tif:/vsicurl/http://example.com/some_directory, so that at file handle closing, 
+# all cached content related to the mentioned file(s) is no longer cached.
+# https://github.com/rasterio/rasterio/issues/1877
+# VSICurlClearCache()
+# https://github.com/rasterio/rasterio/blob/main/rasterio/_path.py
+
+def _vsi_path(path:str)->str:
+    """
+    Function to convert a path to a VSI path. We use this function to try re-reading the image 
+    disabling the VSI cache. This fixes the error when the remote file is modified from another
+    program.
+
+    Args:
+        - path: path to convert to VSI path
+    
+    Returns:
+        VSI path
+    """
+    if not "://" in path:
+        return path
+    
+    protocol, remainder_path = path.split("://")
+    
+    if path.startswith("http"):
+        return f"/vsicurl/{path}"
+    elif protocol in ["s3", "gs", "az", "oss"]:
+        return f"/vsi{protocol}/{remainder_path}"
+    else:
+        warnings.warn(f"Protocol {protocol} not recognized. Returning the original path")
+        return path
+
+
 class RasterioReader:
     """
-    Class to read a set of rasters files (``paths``). the `read` method will return a 4D np.ndarray with
-    shape (len(paths), C, H, W). If the path is a single file it will return a 3D np.ndarray with shape (C, H, W).
+    Class to read a raster or a set of rasters files (``paths``). If the path is a single file it will return a 3D np.ndarray 
+    with shape (C, H, W). If `paths` is a list, the `read` method will return a 4D np.ndarray with shape (len(paths), C, H, W)
 
     It checks that all rasters have same CRS, transform and  shape. the `read` method will open the file every time it
     is called to work in parallel processing scenario.
 
     Parameters
     -------------------
-    paths: single path or list of paths of the rasters to read
-    allow_different_shape: if True will allow different shapes to be read (still checks that all rasters have same crs,
+    - paths: single path or list of paths of the rasters to read
+    - allow_different_shape: if True will allow different shapes to be read (still checks that all rasters have same crs,
         transform and number of bands)
-    window_focus: window to read from. If provided all windows in read call will be relative to this window.
-    fill_value_default: value to fill when boundless read. It defaults to nodata if it is not None otherwise it will be
-    set to zero.
-    stack: if `True` returns 4D tensors otherwise it returns 3D tensors concatenated over the first dim
-    indexes: if not None it will read from each raster only the specified bands. This argument is 1-based as in rasterio
-    overview_level: if not None, it will read from the corresponding pyramid level. This argument 0 based as in rasterio
-     (None-> default resolution and 0 is the first overview).
-    check: check all paths are OK
-    rio_env_options: GDAL options for reading. Defaults to: `RIO_ENV_OPTIONS_DEFAULT`
+    - window_focus: window to read from. If provided all windows in read call will be relative to this window.
+    - fill_value_default: value to fill when boundless read. It defaults to nodata if it is not None otherwise it will be
+        set to zero.
+    - stack: if `True` returns 4D tensors otherwise it returns 3D tensors concatenated over the first dim
+    - indexes: if not None it will read from each raster only the specified bands. This argument is 1-based as in rasterio
+    - overview_level: if not None, it will read from the corresponding pyramid level. This argument 0 based as in rasterio
+        (None-> default resolution and 0 is the first overview).
+    - check: check all paths are OK
+    - rio_env_options: GDAL options for reading. Defaults to: `RIO_ENV_OPTIONS_DEFAULT`
 
     Attributes
     -------------------
-    crs : Coordinate reference system
-    transform: rasterio.Affine transform of the rasters. If window_focus is provided this transform will be
+    - crs : Coordinate reference system
+    - transform: rasterio.Affine transform of the rasters. If window_focus is provided this transform will be
         relative to the window.
-    dtype: type of the input.
-    count: number of bands of the rasters.
-    nodata: rasterio nodata of the first raster in paths
-    res: of the rasters
-    width: width of the rasters. If window_focus is not None this will be the width of the window
-    height: height of the rasters. If window_focus is not None this will be the height of the window
-    bounds: bounds of the rasters. If window_focus is provided these bounds will be relative to the window.
-    dims: name of the dims (to make it compatible with xr.DataArray functions)
-    attrs: Dict to store extra attributes.
+    - dtype: type of the input.
+    - count: number of bands of the rasters.
+    - nodata: rasterio nodata of the first raster in paths
+    - res: of the rasters
+    - width: width of the rasters. If window_focus is not None this will be the width of the window
+    - height: height of the rasters. If window_focus is not None this will be the height of the window
+    - bounds: bounds of the rasters. If window_focus is provided these bounds will be relative to the window.
+    - dims: name of the dims (to make it compatible with xr.DataArray functions)
+    - attrs: Dict to store extra attributes.
 
     """
     def __init__(self, paths:Union[List[str], str], allow_different_shape:bool=False,
@@ -564,6 +597,11 @@ class RasterioReader:
 
         kwargs["window"] = window
 
+        if "read_with_CPL_VSIL_CURL_NON_CACHED" in kwargs:
+            read_with_CPL_VSIL_CURL_NON_CACHED = kwargs.pop("read_with_CPL_VSIL_CURL_NON_CACHED")
+        else:
+            read_with_CPL_VSIL_CURL_NON_CACHED = False
+
         if "boundless" not in kwargs:
             kwargs["boundless"] = True
 
@@ -626,7 +664,15 @@ class RasterioReader:
                     pad = None
 
             for i, p in enumerate(self.paths):
-                with rasterio.Env(**self.rio_env_options):
+                options = self.rio_env_options.copy()
+                if read_with_CPL_VSIL_CURL_NON_CACHED:
+                    options["CPL_VSIL_CURL_NON_CACHED"] = _vsi_path(p)
+                elif "read_with_CPL_VSIL_CURL_NON_CACHED" in options:
+                    if options["read_with_CPL_VSIL_CURL_NON_CACHED"]:
+                        options["CPL_VSIL_CURL_NON_CACHED"] = _vsi_path(p)
+                    del options["read_with_CPL_VSIL_CURL_NON_CACHED"]
+
+                with rasterio.Env(**options):
                     with rasterio.open(p, "r", overview_level=self.overview_level) as src:
                         # rasterio.read API: https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.read
                         read_data = src.read(**kwargs)
