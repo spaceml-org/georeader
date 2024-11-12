@@ -60,39 +60,63 @@ class RasterioReader:
     Class to read a raster or a set of rasters files (``paths``). If the path is a single file it will return a 3D np.ndarray 
     with shape (C, H, W). If `paths` is a list, the `read` method will return a 4D np.ndarray with shape (len(paths), C, H, W)
 
-    It checks that all rasters have same CRS, transform and  shape. the `read` method will open the file every time it
+    It checks that all rasters have same CRS, transform and shape. The `read` method will open the file every time it
     is called to work in parallel processing scenario.
 
     Parameters
     -------------------
-    - paths: single path or list of paths of the rasters to read
-    - allow_different_shape: if True will allow different shapes to be read (still checks that all rasters have same crs,
-        transform and number of bands)
-    - window_focus: window to read from. If provided all windows in read call will be relative to this window.
-    - fill_value_default: value to fill when boundless read. It defaults to nodata if it is not None otherwise it will be
+
+    - paths : `Union[List[str], str]`
+        Single path or list of paths of the rasters to read.
+    - allow_different_shape : `bool`
+        If True, will allow different shapes to be read (still checks that all rasters have same CRS,
+        transform and number of bands).
+    - window_focus : `Optional[rasterio.windows.Window]`
+        Window to read from. If provided, all windows in read call will be relative to this window.
+    - fill_value_default : `Optional[Union[int, float]]`
+        Value to fill when boundless read. It defaults to nodata if it is not None, otherwise it will be
         set to zero.
-    - stack: if `True` returns 4D tensors otherwise it returns 3D tensors concatenated over the first dim
-    - indexes: if not None it will read from each raster only the specified bands. This argument is 1-based as in rasterio
-    - overview_level: if not None, it will read from the corresponding pyramid level. This argument 0 based as in rasterio
-        (None-> default resolution and 0 is the first overview).
-    - check: check all paths are OK
-    - rio_env_options: GDAL options for reading. Defaults to: `RIO_ENV_OPTIONS_DEFAULT`
+    - stack : `bool`
+        If `True`, returns 4D tensors; otherwise, it returns 3D tensors concatenated over the first dim. If 
+        paths is string this argument is ignored and will be set to False (3D tensor).
+    - indexes : `Optional[List[int]]`
+        If not None, it will read from each raster only the specified bands. This argument is 1-based as in rasterio.
+    - overview_level : `Optional[int]`
+        If not None, it will read from the corresponding pyramid level. This argument is 0-based as in rasterio
+        (None -> default resolution and 0 is the first overview).
+    - check : `bool`
+        Check all paths are OK.
+    - rio_env_options : `Optional[Dict[str, str]]`
+        GDAL options for reading. Defaults to: `RIO_ENV_OPTIONS_DEFAULT`. If you read rasters that might change
+        from a remote source, you might want to set `read_with_CPL_VSIL_CURL_NON_CACHED` to True.
 
     Attributes
     -------------------
-    - crs : Coordinate reference system
-    - transform: rasterio.Affine transform of the rasters. If window_focus is provided this transform will be
-        relative to the window.
-    - dtype: type of the input.
-    - count: number of bands of the rasters.
-    - nodata: rasterio nodata of the first raster in paths
-    - res: of the rasters
-    - width: width of the rasters. If window_focus is not None this will be the width of the window
-    - height: height of the rasters. If window_focus is not None this will be the height of the window
-    - bounds: bounds of the rasters. If window_focus is provided these bounds will be relative to the window.
-    - dims: name of the dims (to make it compatible with xr.DataArray functions)
-    - attrs: Dict to store extra attributes.
 
+    - crs : `rasterio.crs.CRS`
+        Coordinate reference system.
+    - transform : `rasterio.Affine`
+        Transform of the rasters. If `window_focus` is provided, this transform will be relative to the window.
+    - dtype : `str`
+        Type of the input.
+    - count : `int`
+        Number of bands of the rasters.
+    - nodata : `Optional[Union[int, float]]`
+        Nodata value of the first raster in paths.
+    - fill_value_default : `Union[int, float]`
+        Value to fill when boundless read. Defaults to nodata.
+    - res : `Tuple[float, float]`
+        Resolution of the rasters.
+    - width : `int`
+        Width of the rasters. If `window_focus` is not None, this will be the width of the window.
+    - height : `int`
+        Height of the rasters. If `window_focus` is not None, this will be the height of the window.
+    - bounds : `Tuple[float, float, float, float]`
+        Bounds of the rasters. If `window_focus` is provided, these bounds will be relative to the window.
+    - dims : `List[str]`
+        Name of the dims (to make it compatible with xr.DataArray functions).
+    - attrs : `Dict[str, Any]`
+        Dictionary to store extra attributes.
     """
     def __init__(self, paths:Union[List[str], str], allow_different_shape:bool=False,
                  window_focus:Optional[rasterio.windows.Window]=None,
@@ -344,17 +368,17 @@ class RasterioReader:
     def read_from_window(self, window:rasterio.windows.Window, boundless:bool=True) -> '__class__':
         """
         Returns a new reader with window focus the window `window` relative to `self.window_focus`
+        
         Args:
             window: rasterio.window.Window to read
             boundless: if boundless is False if the window do not overlap the total raster  it will be
                 intersected.
 
+        Raises:
+            rasterio.windows.WindowError: if bounless is False and window does not intersects self.window_focus
+
         Returns:
             New reader object
-
-        Raises:
-            rasterio.windows.WindowError if bounless is False and window does not intersects self.window_focus
-
         """
         rst_reader = RasterioReader(list(self.paths),
                                     allow_different_shape=self.allow_different_shape,
@@ -374,7 +398,7 @@ class RasterioReader:
         Args:
             sel: Dict of slices to slice the current reader
             boundless: If `True` slices in "x" and "y" are boundless (i.e. negative means negative indexes rather than
-               values from the other side of the array as in numpy).
+                values from the other side of the array as in numpy).
 
         Returns:
             Copy of the current reader
@@ -761,7 +785,7 @@ def read_out_shape(reader:Union[RasterioReader, rasterio.DatasetReader],
         window: window to read
         out_shape: shape of the output to be readed. Conceptually, the function resizes the output to this shape
         fill_value_default: if the object is rasterio.DatasetReader and nodata is None it will use this value for the
-        corresponding GeoTensor
+            corresponding GeoTensor
 
     Returns:
         GeoTensor with geo metadata

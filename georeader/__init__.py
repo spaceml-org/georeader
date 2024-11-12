@@ -1,5 +1,3 @@
-__version__ = "1.2.8"
-
 import math
 from typing import Tuple, Any, Union
 from shapely.geometry.base import BaseGeometry

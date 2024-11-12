@@ -11,7 +11,7 @@ import time
 
 
 GeoData = Union[AbstractGeoData, GeoTensor]
-REMOTE_FILE_EXTENSIONS = ["gs://", "s3://", "az://", "http://", "https://", "abfs://"]
+REMOTE_FILE_EXTENSIONS = ["gs://", "s3://", "az://", "http://", "https://", "abfs://", "oss://"]
 
 BLOCKSIZE_DEFAULT = 256
 PROFILE_TILED_GEOTIFF_DEFAULT = {
@@ -33,8 +33,9 @@ def save_tiled_geotiff(data_save:GeoData, path_tiff_save:str,
 
     Args:
         data_save: GeoData (C, H, W) format with geoinformation (crs and transform).
-        descriptions: name of the bands
         path_tiff_save: path to save the GeoTIFF
+        profile_arg: profile dict to save the data. crs and transform will be updated from data_save.
+        descriptions: name of the bands
         profile: profile dict to save the data. crs and transform will be updated from data_save.
         tags: Dict to save as tags of the image
         dir_tmpfiles: dir to create tempfiles if needed

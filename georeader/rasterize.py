@@ -137,7 +137,7 @@ def rasterize_from_geopandas(dataframe:gpd.GeoDataFrame,
         window_out: Window out in `crs_geom_bounds`. If not provided it is computed from the bounds.
         column: column to take the values for rasterisation.
         crs_out: defaults to dataframe.crs. This function will transform the geometries from dataframe.crs to this crs
-        before rasterisation. `bounds` are in this crs.
+            before rasterisation. `bounds` are in this crs.
         fill: fill option for rasterio.features.rasterize
         all_touched: all_touched option for rasterio.features.rasterize
         return_only_data: if `True` returns only the np.ndarray without georref info.

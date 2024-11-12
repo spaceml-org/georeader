@@ -29,6 +29,41 @@ ORDERS = {
 
 
 class GeoTensor:
+    """
+        This class is a wrapper around a numpy or torch tensor with geospatial information.
+        It can store 2D, 3D or 4D tensors. The last two dimensions are the spatial dimensions.
+
+        Args:
+            values (Tensor): numpy or torch tensor (2D, 3D or 4D).
+            transform (rasterio.Affine): affine geospatial transform
+            crs (Any): coordinate reference system
+            fill_value_default (Optional[Union[int, float]], optional): Value to fill when 
+                reading out of bounds. Could be None. Defaults to 0.
+        
+        Attributes:
+            values (Tensor): numpy or torch tensor
+            transform (rasterio.Affine): affine geospatial transform
+            crs (Any): coordinate reference system
+            fill_value_default (Optional[Union[int, float]], optional): Value to fill when 
+                reading out of bounds. Could be None. Defaults to 0.
+            shape (Tuple): shape of the tensor
+            res (Tuple[float, float]): resolution of the tensor
+            dtype: data type of the tensor
+            height (int): height of the tensor
+            width (int): width of the tensor
+            count (int): number of bands in the tensor
+            bounds (Tuple[float, float, float, float]): bounds of the tensor
+            dims (Tuple[str]): names of the dimensions
+            attrs (Dict[str, Any]): dictionary with the attributes of the GeoTensor
+        
+        Examples:
+            >>> import numpy as np
+            >>> transform = rasterio.Affine(1, 0, 0, 0, -1, 0)
+            >>> crs = "EPSG:4326"
+            >>> gt = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
+
+    """
+
     def __init__(self, values:Tensor,
                  transform:rasterio.Affine, crs:Any,
                  fill_value_default:Optional[Union[int, float]]=0):
@@ -40,7 +75,7 @@ class GeoTensor:
             transform (rasterio.Affine): affine geospatial transform
             crs (Any): coordinate reference system
             fill_value_default (Optional[Union[int, float]], optional): Value to fill when 
-            reading out of bounds. Could be None. Defaults to 0.
+                reading out of bounds. Could be None. Defaults to 0.
 
         Raises:
             ValueError: when the shape of the tensor is not 2d, 3d or 4d.
@@ -54,7 +89,7 @@ class GeoTensor:
             raise ValueError(f"Expected 2d-4d array found {shape}")
 
     @property
-    def dims(self) -> Tuple:
+    def dims(self) -> Tuple[str]:
         # TODO allow different ordering of dimensions?
         shape = self.shape
         if len(shape) == 2:
@@ -615,11 +650,11 @@ class GeoTensor:
             boundless: read from window in boundless mode (i.e. if the window is larger or negative it will pad
                 the GeoTensor with `self.fill_value_default`)
 
+        Raises:
+            rasterio.windows.WindowError: if `window` does not intersect the data
+        
         Returns:
             GeoTensor object with the spatial dimensions sliced
-
-        Raises:
-            rasterio.windows.WindowError if `window` does not intersect the data
 
         """
 
