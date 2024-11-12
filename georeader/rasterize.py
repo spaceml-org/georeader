@@ -96,6 +96,7 @@ def rasterize_geopandas_like(dataframe:gpd.GeoDataFrame,data_like: GeoData, colu
                              return_only_data:bool=False)-> Union[GeoTensor, np.ndarray]:
     """
     Rasterise the geodataframe to the same extent and resolution as defined `data_like` GeoData object
+    
     Args:
         dataframe: geodataframe with columns geometry and `column`. The 'geometry' column is expected to have shapely geometries
         data_like: geoData to use transform, bounds and crs for rasterisation
