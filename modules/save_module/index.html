@@ -1121,8 +1121,7 @@ save_cog(data, "example.tif", descriptions=["band1", "band2", "band3", "band4"])
 
             <details class="quote">
               <summary>Source code in <code>georeader/save.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">115</span>
-<span class="normal">116</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">116</span>
 <span class="normal">117</span>
 <span class="normal">118</span>
 <span class="normal">119</span>
@@ -1167,7 +1166,8 @@ save_cog(data, "example.tif", descriptions=["band1", "band2", "band3", "band4"])
 <span class="normal">158</span>
 <span class="normal">159</span>
 <span class="normal">160</span>
-<span class="normal">161</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">save_cog</span><span class="p">(</span><span class="n">data_save</span><span class="p">:</span><span class="n">GeoData</span><span class="p">,</span> <span class="n">path_tiff_save</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span>
+<span class="normal">161</span>
+<span class="normal">162</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">save_cog</span><span class="p">(</span><span class="n">data_save</span><span class="p">:</span><span class="n">GeoData</span><span class="p">,</span> <span class="n">path_tiff_save</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span>
              <span class="n">profile</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
              <span class="n">descriptions</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> 
              <span class="n">tags</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -1263,22 +1263,6 @@ save_cog(data, "example.tif", descriptions=["band1", "band2", "band3", "band4"])
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>descriptions</code>
-            </td>
-            <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.List">List</span>[str]]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>name of the bands</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
                 <code>path_tiff_save</code>
             </td>
             <td>
@@ -1291,6 +1275,38 @@ save_cog(data, "example.tif", descriptions=["band1", "band2", "band3", "band4"])
             </td>
             <td>
                 <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>profile_arg</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Dict">Dict</span>[str, <span title="typing.Any">Any</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>profile dict to save the data. crs and transform will be updated from data_save.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>descriptions</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.List">List</span>[str]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>name of the bands</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -1465,7 +1481,8 @@ save_cog(data, "example.tif", descriptions=["band1", "band2", "band3", "band4"])
 <span class="normal">109</span>
 <span class="normal">110</span>
 <span class="normal">111</span>
-<span class="normal">112</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">save_tiled_geotiff</span><span class="p">(</span><span class="n">data_save</span><span class="p">:</span><span class="n">GeoData</span><span class="p">,</span> <span class="n">path_tiff_save</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span>
+<span class="normal">112</span>
+<span class="normal">113</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">save_tiled_geotiff</span><span class="p">(</span><span class="n">data_save</span><span class="p">:</span><span class="n">GeoData</span><span class="p">,</span> <span class="n">path_tiff_save</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span>
                        <span class="n">profile_arg</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                        <span class="n">descriptions</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                        <span class="n">tags</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -1477,8 +1494,9 @@ save_cog(data, "example.tif", descriptions=["band1", "band2", "band3", "band4"])
 
 <span class="sd">    Args:</span>
 <span class="sd">        data_save: GeoData (C, H, W) format with geoinformation (crs and transform).</span>
-<span class="sd">        descriptions: name of the bands</span>
 <span class="sd">        path_tiff_save: path to save the GeoTIFF</span>
+<span class="sd">        profile_arg: profile dict to save the data. crs and transform will be updated from data_save.</span>
+<span class="sd">        descriptions: name of the bands</span>
 <span class="sd">        profile: profile dict to save the data. crs and transform will be updated from data_save.</span>
 <span class="sd">        tags: Dict to save as tags of the image</span>
 <span class="sd">        dir_tmpfiles: dir to create tempfiles if needed</span>

@@ -1462,7 +1462,8 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>defaults to dataframe.crs. This function will transform the geometries from dataframe.crs to this crs</p>
+                <p>defaults to dataframe.crs. This function will transform the geometries from dataframe.crs to this crs
+before rasterisation. <code>bounds</code> are in this crs.</p>
               </div>
             </td>
             <td>
@@ -1617,7 +1618,7 @@
 <span class="sd">        window_out: Window out in `crs_geom_bounds`. If not provided it is computed from the bounds.</span>
 <span class="sd">        column: column to take the values for rasterisation.</span>
 <span class="sd">        crs_out: defaults to dataframe.crs. This function will transform the geometries from dataframe.crs to this crs</span>
-<span class="sd">        before rasterisation. `bounds` are in this crs.</span>
+<span class="sd">            before rasterisation. `bounds` are in this crs.</span>
 <span class="sd">        fill: fill option for rasterio.features.rasterize</span>
 <span class="sd">        all_touched: all_touched option for rasterio.features.rasterize</span>
 <span class="sd">        return_only_data: if `True` returns only the np.ndarray without georref info.</span>
