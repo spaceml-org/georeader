@@ -971,12 +971,10 @@
 
 <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;AZURE_STORAGE_CONNECTION_STRING&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;????&quot;</span>
 <span class="n">fs</span> <span class="o">=</span> <span class="n">fsspec</span><span class="o">.</span><span class="n">filesystem</span><span class="p">(</span><span class="s2">&quot;az&quot;</span><span class="p">)</span>
-<span class="n">fs</span>
-</code></pre></div>
-<div class="highlight"><pre><span></span><code>&lt;adlfs.spec.AzureBlobFileSystem at 0x7fdf4429a020&gt;
 </code></pre></div>
 <p>This example will read a 3-band rgb COG and modify it by a one band COG with a different shape. We will see that when the COG is modified we can't read the file again if we don't set the <code>read_with_CPL_VSIL_CURL_NON_CACHED</code> option. We will see either a read error (if we haven't loaded the data) or we will see the old cached data (if we have load the data).</p>
-<div class="highlight"><pre><span></span><code><span class="c1"># rasterio_reader.RIO_ENV_OPTIONS_DEFAULT[&quot;CPL_CURL_VERBOSE&quot;] = &quot;YES&quot;</span>
+<div class="highlight"><pre><span></span><code><span class="c1"># Set up the files</span>
+<span class="c1"># rasterio_reader.RIO_ENV_OPTIONS_DEFAULT[&quot;CPL_CURL_VERBOSE&quot;] = &quot;YES&quot;</span>
 <span class="n">rgb_file</span> <span class="o">=</span> <span class="s2">&quot;az://mycontainer/rgb.tif&quot;</span>
 <span class="n">one_band_file</span> <span class="o">=</span> <span class="s2">&quot;az://mycontainer/one_band.tif&quot;</span>
 <span class="k">assert</span> <span class="n">fs</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">rgb_file</span><span class="p">)</span>
@@ -1168,7 +1166,7 @@ RasterioIOError: Read failed. See previous exception for details.
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><span class="n">fs</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
 </code></pre></div>
-<p>If we don't load the data we don't have the error and the file is correctly readed:</p>
+<p>If we don't load the data we don't have the error and the file is correctly readed too:</p>
 <div class="highlight"><pre><span></span><code><span class="n">filepath</span> <span class="o">=</span> <span class="s2">&quot;az://mycontainer/removeme3.tif&quot;</span>
 <span class="k">if</span> <span class="n">fs</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">filepath</span><span class="p">):</span>
     <span class="n">fs</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
