@@ -413,7 +413,7 @@
         
   
   <span class="md-ellipsis">
-    Geotensor
+    GeoTensor
   </span>
   
 
@@ -959,6 +959,41 @@
   
   
   
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Hyperspectral sensors
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            Hyperspectral sensors
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../../emit_explore/" class="md-nav__link">
         
@@ -1011,6 +1046,78 @@
   
 
       </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Advanced
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            Advanced
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced/error_read_write_in_remote_path/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VSIL cache problem
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -1346,8 +1453,7 @@ is called to work in parallel processing scenario.</p>
 
               <details class="quote">
                 <summary>Source code in <code>georeader/rasterio_reader.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 58</span>
-<span class="normal"> 59</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 59</span>
 <span class="normal"> 60</span>
 <span class="normal"> 61</span>
 <span class="normal"> 62</span>
@@ -2046,7 +2152,9 @@ is called to work in parallel processing scenario.</p>
 <span class="normal">755</span>
 <span class="normal">756</span>
 <span class="normal">757</span>
-<span class="normal">758</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span> <span class="nc">RasterioReader</span><span class="p">:</span>
+<span class="normal">758</span>
+<span class="normal">759</span>
+<span class="normal">760</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span> <span class="nc">RasterioReader</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Class to read a raster or a set of rasters files (``paths``). If the path is a single file it will return a 3D np.ndarray </span>
 <span class="sd">    with shape (C, H, W). If `paths` is a list, the `read` method will return a 4D np.ndarray with shape (len(paths), C, H, W)</span>
@@ -2133,26 +2241,25 @@ is called to work in parallel processing scenario.</p>
         <span class="c1"># TODO keep just a global nodata of size (T,C,) and fill with these values?</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">fill_value_default</span> <span class="o">=</span> <span class="n">fill_value_default</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">overview_level</span> <span class="o">=</span> <span class="n">overview_level</span>
-        <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">Env</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">rio_env_options</span><span class="p">):</span>
-            <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">overview_level</span><span class="o">=</span><span class="n">overview_level</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">real_transform</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">transform</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">crs</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">crs</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">profile</span><span class="p">[</span><span class="s2">&quot;dtype&quot;</span><span class="p">]</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">real_count</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">count</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">real_indexes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">real_count</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">real_shape</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">),</span> <span class="n">src</span><span class="o">.</span><span class="n">count</span><span class="p">,)</span> <span class="o">+</span> <span class="n">src</span><span class="o">.</span><span class="n">shape</span>
-                <span class="k">else</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">real_shape</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">real_count</span><span class="p">,</span> <span class="p">)</span> <span class="o">+</span> <span class="n">src</span><span class="o">.</span><span class="n">shape</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rio_open</span><span class="p">(</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">overview_level</span><span class="o">=</span><span class="n">overview_level</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">real_transform</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">transform</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">crs</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">crs</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">profile</span><span class="p">[</span><span class="s2">&quot;dtype&quot;</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">real_count</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">count</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">real_indexes</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">real_count</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">real_shape</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">),</span> <span class="n">src</span><span class="o">.</span><span class="n">count</span><span class="p">,)</span> <span class="o">+</span> <span class="n">src</span><span class="o">.</span><span class="n">shape</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">real_shape</span> <span class="o">=</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">)</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">real_count</span><span class="p">,</span> <span class="p">)</span> <span class="o">+</span> <span class="n">src</span><span class="o">.</span><span class="n">shape</span>
 
-                <span class="bp">self</span><span class="o">.</span><span class="n">real_width</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">width</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">real_height</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">height</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">real_width</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">width</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">real_height</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">height</span>
 
-                <span class="bp">self</span><span class="o">.</span><span class="n">nodata</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">nodata</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fill_value_default</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">fill_value_default</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodata</span> <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nodata</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span> <span class="k">else</span> <span class="mi">0</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">nodata</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">nodata</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fill_value_default</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">fill_value_default</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodata</span> <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">nodata</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span> <span class="k">else</span> <span class="mi">0</span>
 
-                <span class="bp">self</span><span class="o">.</span><span class="n">res</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">res</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">res</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">res</span>
 
         <span class="c1"># if (abs(self.real_transform.b) &gt; 1e-6) or (abs(self.real_transform.d) &gt; 1e-6):</span>
         <span class="c1">#     warnings.warn(f&quot;transform of {self.paths[0]} is not rectilinear {self.real_transform}. &quot;</span>
@@ -2180,23 +2287,24 @@ is called to work in parallel processing scenario.</p>
         <span class="c1">#  (checking width and height will not be needed since we&#39;re reading with boundless option but I don&#39;t see the point to ignore it)</span>
         <span class="k">if</span> <span class="n">check</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">:</span>
-                <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">Env</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">rio_env_options</span><span class="p">):</span>
-                    <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">overview_level</span><span class="o">=</span><span class="n">overview_level</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
-                        <span class="k">if</span> <span class="ow">not</span> <span class="n">src</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">almost_equals</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">real_transform</span><span class="p">,</span> <span class="mf">1e-6</span><span class="p">):</span>
-                            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Different transform in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">real_transform</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">transform</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-                        <span class="k">if</span> <span class="ow">not</span> <span class="nb">str</span><span class="p">(</span><span class="n">src</span><span class="o">.</span><span class="n">crs</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
-                            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Different CRS in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">crs</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">real_count</span> <span class="o">!=</span> <span class="n">src</span><span class="o">.</span><span class="n">count</span><span class="p">:</span>
-                            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Different number of bands in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">real_count</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">count</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-                        <span class="k">if</span> <span class="n">src</span><span class="o">.</span><span class="n">nodata</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodata</span><span class="p">:</span>
-                            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
-                                <span class="sa">f</span><span class="s2">&quot;Different nodata in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">nodata</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">nodata</span><span class="si">}</span><span class="s2">. This might lead to unexpected behaviour&quot;</span><span class="p">)</span>
+                <span class="c1"># with rasterio.Env(**self.rio_env_options):</span>
+                <span class="c1">#     with rasterio.open(p, &quot;r&quot;, overview_level=overview_level) as src:</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rio_open</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">overview_level</span><span class="o">=</span><span class="n">overview_level</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">src</span><span class="o">.</span><span class="n">transform</span><span class="o">.</span><span class="n">almost_equals</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">real_transform</span><span class="p">,</span> <span class="mf">1e-6</span><span class="p">):</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Different transform in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">real_transform</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">transform</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="nb">str</span><span class="p">(</span><span class="n">src</span><span class="o">.</span><span class="n">crs</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">():</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Different CRS in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">crs</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">real_count</span> <span class="o">!=</span> <span class="n">src</span><span class="o">.</span><span class="n">count</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Different number of bands in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">real_count</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">count</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">src</span><span class="o">.</span><span class="n">nodata</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">nodata</span><span class="p">:</span>
+                        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                            <span class="sa">f</span><span class="s2">&quot;Different nodata in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">nodata</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">nodata</span><span class="si">}</span><span class="s2">. This might lead to unexpected behaviour&quot;</span><span class="p">)</span>
 
-                        <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">real_width</span> <span class="o">!=</span> <span class="n">src</span><span class="o">.</span><span class="n">width</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">real_height</span> <span class="o">!=</span> <span class="n">src</span><span class="o">.</span><span class="n">height</span><span class="p">):</span>
-                            <span class="k">if</span> <span class="n">allow_different_shape</span><span class="p">:</span>
-                                <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Different shape in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2">: (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">real_height</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">real_width</span><span class="si">}</span><span class="s2">) (</span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">height</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">width</span><span class="si">}</span><span class="s2">) Might lead to unexpected behaviour&quot;</span><span class="p">)</span>
-                            <span class="k">else</span><span class="p">:</span>
-                                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Different shape in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2">: (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">real_height</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">real_width</span><span class="si">}</span><span class="s2">) (</span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">height</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">width</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">real_width</span> <span class="o">!=</span> <span class="n">src</span><span class="o">.</span><span class="n">width</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">real_height</span> <span class="o">!=</span> <span class="n">src</span><span class="o">.</span><span class="n">height</span><span class="p">):</span>
+                        <span class="k">if</span> <span class="n">allow_different_shape</span><span class="p">:</span>
+                            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Different shape in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2">: (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">real_height</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">real_width</span><span class="si">}</span><span class="s2">) (</span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">height</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">width</span><span class="si">}</span><span class="s2">) Might lead to unexpected behaviour&quot;</span><span class="p">)</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Different shape in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2">: (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">real_height</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">real_width</span><span class="si">}</span><span class="s2">) (</span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">height</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">width</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">check</span> <span class="o">=</span> <span class="n">check</span>
         <span class="k">if</span> <span class="n">indexes</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -2320,24 +2428,34 @@ is called to work in parallel processing scenario.</p>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">tags</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">):</span>
-            <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">Env</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">rio_env_options</span><span class="p">):</span>
-                <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">overview_level</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">overview_level</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
-                    <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">src</span><span class="o">.</span><span class="n">tags</span><span class="p">())</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rio_open</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+                <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">src</span><span class="o">.</span><span class="n">tags</span><span class="p">())</span>
 
         <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">tags</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 
         <span class="k">return</span> <span class="n">tags</span>
 
+    <span class="nd">@contextmanager</span>
+    <span class="k">def</span> <span class="nf">_rio_open</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span><span class="nb">str</span><span class="o">=</span><span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">overview_level</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">DatasetReader</span><span class="p">:</span>
+        <span class="n">options</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">rio_env_options</span>
+        <span class="k">if</span> <span class="s2">&quot;read_with_CPL_VSIL_CURL_NON_CACHED&quot;</span> <span class="ow">in</span> <span class="n">options</span><span class="p">:</span>
+            <span class="n">options</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">options</span><span class="p">[</span><span class="s2">&quot;read_with_CPL_VSIL_CURL_NON_CACHED&quot;</span><span class="p">]:</span>
+                <span class="n">options</span><span class="p">[</span><span class="s2">&quot;CPL_VSIL_CURL_NON_CACHED&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_vsi_path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+                <span class="k">del</span> <span class="n">options</span><span class="p">[</span><span class="s2">&quot;read_with_CPL_VSIL_CURL_NON_CACHED&quot;</span><span class="p">]</span>
+        <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">Env</span><span class="p">(</span><span class="o">**</span><span class="n">options</span><span class="p">):</span>
+                <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="n">mode</span><span class="p">,</span> <span class="n">overview_level</span><span class="o">=</span><span class="n">overview_level</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+                    <span class="k">yield</span> <span class="n">src</span>        
+
     <span class="nd">@property</span>
     <span class="k">def</span> <span class="nf">descriptions</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]],</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Returns a list with the descriptions for each tiff file. (This is usually the name of the bands of the raster)</span>
 
-<span class="sd">        If stack it returns just the List with the descriptions</span>
 
 <span class="sd">        Returns:</span>
-<span class="sd">            List of lists with the descriptions of the bands of each tiff file</span>
+<span class="sd">            If `stack` it returns the flattened list of descriptions for each tiff file. If not `stack` it returns a list of lists.</span>
 
 <span class="sd">        Examples:</span>
 <span class="sd">            &gt;&gt;&gt; r = RasterioReader(&quot;path/to/raster.tif&quot;) # Raster with band names B1, B2, B3</span>
@@ -2345,9 +2463,10 @@ is called to work in parallel processing scenario.</p>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">descriptions_all</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">):</span>
-            <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">Env</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">rio_env_options</span><span class="p">):</span>
-                <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
-                    <span class="n">desc</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">descriptions</span>
+            <span class="c1"># with rasterio.Env(**self.rio_env_options):</span>
+            <span class="c1">#     with rasterio.open(p, &quot;r&quot;) as src:</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rio_open</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+                <span class="n">desc</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">descriptions</span>
 
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="p">:</span>
                 <span class="n">descriptions_all</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="n">desc</span><span class="p">[</span><span class="n">i</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">indexes</span><span class="p">])</span>
@@ -2484,9 +2603,10 @@ is called to work in parallel processing scenario.</p>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Returns a list of the available overview levels for the current raster.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">Env</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">rio_env_options</span><span class="p">):</span>
-            <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="n">time_index</span><span class="p">])</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
-                <span class="k">return</span> <span class="n">src</span><span class="o">.</span><span class="n">overviews</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+        <span class="c1"># with rasterio.Env(**self.rio_env_options):</span>
+        <span class="c1">#     with rasterio.open(self.paths[time_index]) as src:</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rio_open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="n">time_index</span><span class="p">])</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">src</span><span class="o">.</span><span class="n">overviews</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">reader_overview</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">overview_level</span><span class="p">:</span><span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">&#39;__class__&#39;</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">overview_level</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
@@ -2511,9 +2631,10 @@ is called to work in parallel processing scenario.</p>
 <span class="sd">            list of (block_idx, window)</span>
 
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">Env</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">rio_env_options</span><span class="p">):</span>
-            <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="n">time_idx</span><span class="p">])</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
-                <span class="n">windows_return</span> <span class="o">=</span> <span class="p">[(</span><span class="n">block_idx</span><span class="p">,</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">windows</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="n">window</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">window_focus</span><span class="p">))</span> <span class="k">for</span> <span class="n">block_idx</span><span class="p">,</span> <span class="n">window</span> <span class="ow">in</span> <span class="n">src</span><span class="o">.</span><span class="n">block_windows</span><span class="p">(</span><span class="n">bidx</span><span class="p">)</span> <span class="k">if</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">windows</span><span class="o">.</span><span class="n">intersect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">window_focus</span><span class="p">,</span> <span class="n">window</span><span class="p">)]</span>
+        <span class="c1"># with rasterio.Env(**self.rio_env_options):</span>
+        <span class="c1">#     with rasterio.open(self.paths[time_idx]) as src:</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rio_open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="n">time_idx</span><span class="p">])</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+            <span class="n">windows_return</span> <span class="o">=</span> <span class="p">[(</span><span class="n">block_idx</span><span class="p">,</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">windows</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="n">window</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">window_focus</span><span class="p">))</span> <span class="k">for</span> <span class="n">block_idx</span><span class="p">,</span> <span class="n">window</span> <span class="ow">in</span> <span class="n">src</span><span class="o">.</span><span class="n">block_windows</span><span class="p">(</span><span class="n">bidx</span><span class="p">)</span> <span class="k">if</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">windows</span><span class="o">.</span><span class="n">intersect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">window_focus</span><span class="p">,</span> <span class="n">window</span><span class="p">)]</span>
 
         <span class="k">return</span> <span class="n">windows_return</span>
 
@@ -2612,11 +2733,6 @@ is called to work in parallel processing scenario.</p>
 
         <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;window&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">window</span>
 
-        <span class="k">if</span> <span class="s2">&quot;read_with_CPL_VSIL_CURL_NON_CACHED&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
-            <span class="n">read_with_CPL_VSIL_CURL_NON_CACHED</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;read_with_CPL_VSIL_CURL_NON_CACHED&quot;</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">read_with_CPL_VSIL_CURL_NON_CACHED</span> <span class="o">=</span> <span class="kc">False</span>
-
         <span class="k">if</span> <span class="s2">&quot;boundless&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
             <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;boundless&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
 
@@ -2679,30 +2795,23 @@ is called to work in parallel processing scenario.</p>
                     <span class="n">pad</span> <span class="o">=</span> <span class="kc">None</span>
 
             <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">):</span>
-                <span class="n">options</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">rio_env_options</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-                <span class="k">if</span> <span class="n">read_with_CPL_VSIL_CURL_NON_CACHED</span><span class="p">:</span>
-                    <span class="n">options</span><span class="p">[</span><span class="s2">&quot;CPL_VSIL_CURL_NON_CACHED&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_vsi_path</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
-                <span class="k">elif</span> <span class="s2">&quot;read_with_CPL_VSIL_CURL_NON_CACHED&quot;</span> <span class="ow">in</span> <span class="n">options</span><span class="p">:</span>
-                    <span class="k">if</span> <span class="n">options</span><span class="p">[</span><span class="s2">&quot;read_with_CPL_VSIL_CURL_NON_CACHED&quot;</span><span class="p">]:</span>
-                        <span class="n">options</span><span class="p">[</span><span class="s2">&quot;CPL_VSIL_CURL_NON_CACHED&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_vsi_path</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
-                    <span class="k">del</span> <span class="n">options</span><span class="p">[</span><span class="s2">&quot;read_with_CPL_VSIL_CURL_NON_CACHED&quot;</span><span class="p">]</span>
+                <span class="c1"># with rasterio.Env(**options):</span>
+                <span class="c1">#     with rasterio.open(p, &quot;r&quot;, overview_level=self.overview_level) as src:</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rio_open</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">overview_level</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">overview_level</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+                    <span class="c1"># rasterio.read API: https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.read</span>
+                    <span class="n">read_data</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
-                <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">Env</span><span class="p">(</span><span class="o">**</span><span class="n">options</span><span class="p">):</span>
-                    <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">overview_level</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">overview_level</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
-                        <span class="c1"># rasterio.read API: https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.read</span>
-                        <span class="n">read_data</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-
-                        <span class="c1"># Add pad when reading</span>
-                        <span class="k">if</span> <span class="n">pad</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">need_pad</span><span class="p">:</span>
-                            <span class="n">slice_y</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="n">pad</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="n">pad</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">pad</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span><span class="mi">0</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
-                            <span class="n">slice_x</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="n">pad</span><span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="n">pad</span><span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">pad</span><span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span><span class="mi">0</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
-                            <span class="n">obj_out</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="n">slice_y</span><span class="p">,</span> <span class="n">slice_x</span><span class="p">]</span> <span class="o">=</span> <span class="n">read_data</span>
-                        <span class="k">else</span><span class="p">:</span>
-                            <span class="n">obj_out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">read_data</span>
-                            <span class="c1"># pad_list_np = _get_pad_list(pad)</span>
-                        <span class="c1">#</span>
-                        <span class="c1"># read_data = np.pad(read_data, tuple(pad_list_np), mode=&quot;constant&quot;,</span>
-                        <span class="c1">#                    constant_values=self.fill_value_default)</span>
+                    <span class="c1"># Add pad when reading</span>
+                    <span class="k">if</span> <span class="n">pad</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">need_pad</span><span class="p">:</span>
+                        <span class="n">slice_y</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="n">pad</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="n">pad</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">pad</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span><span class="mi">0</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+                        <span class="n">slice_x</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="n">pad</span><span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="n">pad</span><span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">pad</span><span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span><span class="mi">0</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+                        <span class="n">obj_out</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="n">slice_y</span><span class="p">,</span> <span class="n">slice_x</span><span class="p">]</span> <span class="o">=</span> <span class="n">read_data</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">obj_out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">read_data</span>
+                        <span class="c1"># pad_list_np = _get_pad_list(pad)</span>
+                    <span class="c1">#</span>
+                    <span class="c1"># read_data = np.pad(read_data, tuple(pad_list_np), mode=&quot;constant&quot;,</span>
+                    <span class="c1">#                    constant_values=self.fill_value_default)</span>
 
 
 
@@ -2777,7 +2886,6 @@ is called to work in parallel processing scenario.</p>
     <div class="doc doc-contents ">
 
         <p>Returns a list with the descriptions for each tiff file. (This is usually the name of the bands of the raster)</p>
-<p>If stack it returns just the List with the descriptions</p>
 
 
     <p><span class="doc-section-title">Returns:</span></p>
@@ -2795,7 +2903,7 @@ is called to work in parallel processing scenario.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>List of lists with the descriptions of the bands of each tiff file</p>
+                <p>If <code>stack</code> it returns the flattened list of descriptions for each tiff file. If not <code>stack</code> it returns a list of lists.</p>
               </div>
             </td>
           </tr>
@@ -2943,24 +3051,25 @@ is called to work in parallel processing scenario.</p>
 
             <details class="quote">
               <summary>Source code in <code>georeader/rasterio_reader.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">510</span>
-<span class="normal">511</span>
-<span class="normal">512</span>
-<span class="normal">513</span>
-<span class="normal">514</span>
-<span class="normal">515</span>
-<span class="normal">516</span>
-<span class="normal">517</span>
-<span class="normal">518</span>
-<span class="normal">519</span>
-<span class="normal">520</span>
-<span class="normal">521</span>
-<span class="normal">522</span>
-<span class="normal">523</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">523</span>
 <span class="normal">524</span>
 <span class="normal">525</span>
 <span class="normal">526</span>
-<span class="normal">527</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">block_windows</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bidx</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">time_idx</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">windows</span><span class="o">.</span><span class="n">Window</span><span class="p">]]:</span>
+<span class="normal">527</span>
+<span class="normal">528</span>
+<span class="normal">529</span>
+<span class="normal">530</span>
+<span class="normal">531</span>
+<span class="normal">532</span>
+<span class="normal">533</span>
+<span class="normal">534</span>
+<span class="normal">535</span>
+<span class="normal">536</span>
+<span class="normal">537</span>
+<span class="normal">538</span>
+<span class="normal">539</span>
+<span class="normal">540</span>
+<span class="normal">541</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">block_windows</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bidx</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">time_idx</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">windows</span><span class="o">.</span><span class="n">Window</span><span class="p">]]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    return the block windows within the object</span>
 <span class="sd">    (see https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.block_windows)</span>
@@ -2973,9 +3082,10 @@ is called to work in parallel processing scenario.</p>
 <span class="sd">        list of (block_idx, window)</span>
 
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">Env</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">rio_env_options</span><span class="p">):</span>
-        <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="n">time_idx</span><span class="p">])</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
-            <span class="n">windows_return</span> <span class="o">=</span> <span class="p">[(</span><span class="n">block_idx</span><span class="p">,</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">windows</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="n">window</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">window_focus</span><span class="p">))</span> <span class="k">for</span> <span class="n">block_idx</span><span class="p">,</span> <span class="n">window</span> <span class="ow">in</span> <span class="n">src</span><span class="o">.</span><span class="n">block_windows</span><span class="p">(</span><span class="n">bidx</span><span class="p">)</span> <span class="k">if</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">windows</span><span class="o">.</span><span class="n">intersect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">window_focus</span><span class="p">,</span> <span class="n">window</span><span class="p">)]</span>
+    <span class="c1"># with rasterio.Env(**self.rio_env_options):</span>
+    <span class="c1">#     with rasterio.open(self.paths[time_idx]) as src:</span>
+    <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rio_open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="n">time_idx</span><span class="p">])</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+        <span class="n">windows_return</span> <span class="o">=</span> <span class="p">[(</span><span class="n">block_idx</span><span class="p">,</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">windows</span><span class="o">.</span><span class="n">intersection</span><span class="p">(</span><span class="n">window</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">window_focus</span><span class="p">))</span> <span class="k">for</span> <span class="n">block_idx</span><span class="p">,</span> <span class="n">window</span> <span class="ow">in</span> <span class="n">src</span><span class="o">.</span><span class="n">block_windows</span><span class="p">(</span><span class="n">bidx</span><span class="p">)</span> <span class="k">if</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">windows</span><span class="o">.</span><span class="n">intersect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">window_focus</span><span class="p">,</span> <span class="n">window</span><span class="p">)]</span>
 
     <span class="k">return</span> <span class="n">windows_return</span>
 </code></pre></div></td></tr></table></div>
@@ -3079,19 +3189,7 @@ values from the other side of the array as in numpy).</p>
 
             <details class="quote">
               <summary>Source code in <code>georeader/rasterio_reader.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">393</span>
-<span class="normal">394</span>
-<span class="normal">395</span>
-<span class="normal">396</span>
-<span class="normal">397</span>
-<span class="normal">398</span>
-<span class="normal">399</span>
-<span class="normal">400</span>
-<span class="normal">401</span>
-<span class="normal">402</span>
-<span class="normal">403</span>
-<span class="normal">404</span>
-<span class="normal">405</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">405</span>
 <span class="normal">406</span>
 <span class="normal">407</span>
 <span class="normal">408</span>
@@ -3169,7 +3267,19 @@ values from the other side of the array as in numpy).</p>
 <span class="normal">480</span>
 <span class="normal">481</span>
 <span class="normal">482</span>
-<span class="normal">483</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">isel</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sel</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">slice</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">int</span><span class="p">]],</span> <span class="n">boundless</span><span class="p">:</span><span class="nb">bool</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">&#39;__class__&#39;</span><span class="p">:</span>
+<span class="normal">483</span>
+<span class="normal">484</span>
+<span class="normal">485</span>
+<span class="normal">486</span>
+<span class="normal">487</span>
+<span class="normal">488</span>
+<span class="normal">489</span>
+<span class="normal">490</span>
+<span class="normal">491</span>
+<span class="normal">492</span>
+<span class="normal">493</span>
+<span class="normal">494</span>
+<span class="normal">495</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">isel</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sel</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">slice</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">int</span><span class="p">]],</span> <span class="n">boundless</span><span class="p">:</span><span class="nb">bool</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">&#39;__class__&#39;</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Creates a copy of the current RasterioReader slicing the data with a given selection dict. This function</span>
 <span class="sd">    mimics ``xr.DataArray.isel()`` method.</span>
@@ -3304,21 +3414,7 @@ values from the other side of the array as in numpy).</p>
 
             <details class="quote">
               <summary>Source code in <code>georeader/rasterio_reader.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">532</span>
-<span class="normal">533</span>
-<span class="normal">534</span>
-<span class="normal">535</span>
-<span class="normal">536</span>
-<span class="normal">537</span>
-<span class="normal">538</span>
-<span class="normal">539</span>
-<span class="normal">540</span>
-<span class="normal">541</span>
-<span class="normal">542</span>
-<span class="normal">543</span>
-<span class="normal">544</span>
-<span class="normal">545</span>
-<span class="normal">546</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">546</span>
 <span class="normal">547</span>
 <span class="normal">548</span>
 <span class="normal">549</span>
@@ -3329,7 +3425,21 @@ values from the other side of the array as in numpy).</p>
 <span class="normal">554</span>
 <span class="normal">555</span>
 <span class="normal">556</span>
-<span class="normal">557</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">boundless</span><span class="p">:</span><span class="nb">bool</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">geotensor</span><span class="o">.</span><span class="n">GeoTensor</span><span class="p">:</span>
+<span class="normal">557</span>
+<span class="normal">558</span>
+<span class="normal">559</span>
+<span class="normal">560</span>
+<span class="normal">561</span>
+<span class="normal">562</span>
+<span class="normal">563</span>
+<span class="normal">564</span>
+<span class="normal">565</span>
+<span class="normal">566</span>
+<span class="normal">567</span>
+<span class="normal">568</span>
+<span class="normal">569</span>
+<span class="normal">570</span>
+<span class="normal">571</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">boundless</span><span class="p">:</span><span class="nb">bool</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">geotensor</span><span class="o">.</span><span class="n">GeoTensor</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Load all raster in memory in an GeoTensor object</span>
 
@@ -3376,19 +3486,21 @@ values from the other side of the array as in numpy).</p>
 
             <details class="quote">
               <summary>Source code in <code>georeader/rasterio_reader.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">492</span>
-<span class="normal">493</span>
-<span class="normal">494</span>
-<span class="normal">495</span>
-<span class="normal">496</span>
-<span class="normal">497</span>
-<span class="normal">498</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">overviews</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">time_index</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">504</span>
+<span class="normal">505</span>
+<span class="normal">506</span>
+<span class="normal">507</span>
+<span class="normal">508</span>
+<span class="normal">509</span>
+<span class="normal">510</span>
+<span class="normal">511</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">overviews</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">time_index</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Returns a list of the available overview levels for the current raster.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">Env</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">rio_env_options</span><span class="p">):</span>
-        <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="n">time_index</span><span class="p">])</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
-            <span class="k">return</span> <span class="n">src</span><span class="o">.</span><span class="n">overviews</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+    <span class="c1"># with rasterio.Env(**self.rio_env_options):</span>
+    <span class="c1">#     with rasterio.open(self.paths[time_index]) as src:</span>
+    <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rio_open</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">[</span><span class="n">time_index</span><span class="p">])</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">src</span><span class="o">.</span><span class="n">overviews</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -3448,21 +3560,7 @@ fill_value=self.fill_value_default by default.</p>
 
             <details class="quote">
               <summary>Source code in <code>georeader/rasterio_reader.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">593</span>
-<span class="normal">594</span>
-<span class="normal">595</span>
-<span class="normal">596</span>
-<span class="normal">597</span>
-<span class="normal">598</span>
-<span class="normal">599</span>
-<span class="normal">600</span>
-<span class="normal">601</span>
-<span class="normal">602</span>
-<span class="normal">603</span>
-<span class="normal">604</span>
-<span class="normal">605</span>
-<span class="normal">606</span>
-<span class="normal">607</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">607</span>
 <span class="normal">608</span>
 <span class="normal">609</span>
 <span class="normal">610</span>
@@ -3583,7 +3681,9 @@ fill_value=self.fill_value_default by default.</p>
 <span class="normal">725</span>
 <span class="normal">726</span>
 <span class="normal">727</span>
-<span class="normal">728</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">read</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="normal">728</span>
+<span class="normal">729</span>
+<span class="normal">730</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">read</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Read data from the list of rasters. It reads with boundless=True by default and</span>
 <span class="sd">    fill_value=self.fill_value_default by default.</span>
@@ -3613,11 +3713,6 @@ fill_value=self.fill_value_default by default.</p>
         <span class="n">window</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">window_focus</span>
 
     <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;window&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">window</span>
-
-    <span class="k">if</span> <span class="s2">&quot;read_with_CPL_VSIL_CURL_NON_CACHED&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
-        <span class="n">read_with_CPL_VSIL_CURL_NON_CACHED</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;read_with_CPL_VSIL_CURL_NON_CACHED&quot;</span><span class="p">)</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">read_with_CPL_VSIL_CURL_NON_CACHED</span> <span class="o">=</span> <span class="kc">False</span>
 
     <span class="k">if</span> <span class="s2">&quot;boundless&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
         <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;boundless&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
@@ -3681,30 +3776,23 @@ fill_value=self.fill_value_default by default.</p>
                 <span class="n">pad</span> <span class="o">=</span> <span class="kc">None</span>
 
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">):</span>
-            <span class="n">options</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">rio_env_options</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-            <span class="k">if</span> <span class="n">read_with_CPL_VSIL_CURL_NON_CACHED</span><span class="p">:</span>
-                <span class="n">options</span><span class="p">[</span><span class="s2">&quot;CPL_VSIL_CURL_NON_CACHED&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_vsi_path</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
-            <span class="k">elif</span> <span class="s2">&quot;read_with_CPL_VSIL_CURL_NON_CACHED&quot;</span> <span class="ow">in</span> <span class="n">options</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">options</span><span class="p">[</span><span class="s2">&quot;read_with_CPL_VSIL_CURL_NON_CACHED&quot;</span><span class="p">]:</span>
-                    <span class="n">options</span><span class="p">[</span><span class="s2">&quot;CPL_VSIL_CURL_NON_CACHED&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_vsi_path</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
-                <span class="k">del</span> <span class="n">options</span><span class="p">[</span><span class="s2">&quot;read_with_CPL_VSIL_CURL_NON_CACHED&quot;</span><span class="p">]</span>
+            <span class="c1"># with rasterio.Env(**options):</span>
+            <span class="c1">#     with rasterio.open(p, &quot;r&quot;, overview_level=self.overview_level) as src:</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rio_open</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">overview_level</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">overview_level</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+                <span class="c1"># rasterio.read API: https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.read</span>
+                <span class="n">read_data</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
-            <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">Env</span><span class="p">(</span><span class="o">**</span><span class="n">options</span><span class="p">):</span>
-                <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">overview_level</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">overview_level</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
-                    <span class="c1"># rasterio.read API: https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.read</span>
-                    <span class="n">read_data</span> <span class="o">=</span> <span class="n">src</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
-
-                    <span class="c1"># Add pad when reading</span>
-                    <span class="k">if</span> <span class="n">pad</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">need_pad</span><span class="p">:</span>
-                        <span class="n">slice_y</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="n">pad</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="n">pad</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">pad</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span><span class="mi">0</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
-                        <span class="n">slice_x</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="n">pad</span><span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="n">pad</span><span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">pad</span><span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span><span class="mi">0</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
-                        <span class="n">obj_out</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="n">slice_y</span><span class="p">,</span> <span class="n">slice_x</span><span class="p">]</span> <span class="o">=</span> <span class="n">read_data</span>
-                    <span class="k">else</span><span class="p">:</span>
-                        <span class="n">obj_out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">read_data</span>
-                        <span class="c1"># pad_list_np = _get_pad_list(pad)</span>
-                    <span class="c1">#</span>
-                    <span class="c1"># read_data = np.pad(read_data, tuple(pad_list_np), mode=&quot;constant&quot;,</span>
-                    <span class="c1">#                    constant_values=self.fill_value_default)</span>
+                <span class="c1"># Add pad when reading</span>
+                <span class="k">if</span> <span class="n">pad</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">need_pad</span><span class="p">:</span>
+                    <span class="n">slice_y</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="n">pad</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="n">pad</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">pad</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span><span class="mi">0</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+                    <span class="n">slice_x</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="n">pad</span><span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="n">pad</span><span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">pad</span><span class="p">[</span><span class="s2">&quot;x&quot;</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span><span class="mi">0</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+                    <span class="n">obj_out</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="p">:,</span> <span class="n">slice_y</span><span class="p">,</span> <span class="n">slice_x</span><span class="p">]</span> <span class="o">=</span> <span class="n">read_data</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">obj_out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">read_data</span>
+                    <span class="c1"># pad_list_np = _get_pad_list(pad)</span>
+                <span class="c1">#</span>
+                <span class="c1"># read_data = np.pad(read_data, tuple(pad_list_np), mode=&quot;constant&quot;,</span>
+                <span class="c1">#                    constant_values=self.fill_value_default)</span>
 
 
 
@@ -3859,9 +3947,7 @@ fill_value=self.fill_value_default by default.</p>
 
             <details class="quote">
               <summary>Source code in <code>georeader/rasterio_reader.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">730</span>
-<span class="normal">731</span>
-<span class="normal">732</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">732</span>
 <span class="normal">733</span>
 <span class="normal">734</span>
 <span class="normal">735</span>
@@ -3887,7 +3973,9 @@ fill_value=self.fill_value_default by default.</p>
 <span class="normal">755</span>
 <span class="normal">756</span>
 <span class="normal">757</span>
-<span class="normal">758</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">read_from_tile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span><span class="nb">int</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span><span class="nb">int</span><span class="p">,</span> <span class="n">z</span><span class="p">:</span><span class="nb">int</span><span class="p">,</span> 
+<span class="normal">758</span>
+<span class="normal">759</span>
+<span class="normal">760</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">read_from_tile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span><span class="nb">int</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span><span class="nb">int</span><span class="p">,</span> <span class="n">z</span><span class="p">:</span><span class="nb">int</span><span class="p">,</span> 
                    <span class="n">out_shape</span><span class="p">:</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span><span class="nb">int</span><span class="p">]</span><span class="o">=</span><span class="p">(</span><span class="n">SIZE_DEFAULT</span><span class="p">,</span> <span class="n">SIZE_DEFAULT</span><span class="p">),</span>
                    <span class="n">dst_crs</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span><span class="o">=</span><span class="n">WEB_MERCATOR_CRS</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">geotensor</span><span class="o">.</span><span class="n">GeoTensor</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
@@ -4031,19 +4119,7 @@ intersected.</p>
 
             <details class="quote">
               <summary>Source code in <code>georeader/rasterio_reader.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">368</span>
-<span class="normal">369</span>
-<span class="normal">370</span>
-<span class="normal">371</span>
-<span class="normal">372</span>
-<span class="normal">373</span>
-<span class="normal">374</span>
-<span class="normal">375</span>
-<span class="normal">376</span>
-<span class="normal">377</span>
-<span class="normal">378</span>
-<span class="normal">379</span>
-<span class="normal">380</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">380</span>
 <span class="normal">381</span>
 <span class="normal">382</span>
 <span class="normal">383</span>
@@ -4054,7 +4130,19 @@ intersected.</p>
 <span class="normal">388</span>
 <span class="normal">389</span>
 <span class="normal">390</span>
-<span class="normal">391</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">read_from_window</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">window</span><span class="p">:</span><span class="n">rasterio</span><span class="o">.</span><span class="n">windows</span><span class="o">.</span><span class="n">Window</span><span class="p">,</span> <span class="n">boundless</span><span class="p">:</span><span class="nb">bool</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">&#39;__class__&#39;</span><span class="p">:</span>
+<span class="normal">391</span>
+<span class="normal">392</span>
+<span class="normal">393</span>
+<span class="normal">394</span>
+<span class="normal">395</span>
+<span class="normal">396</span>
+<span class="normal">397</span>
+<span class="normal">398</span>
+<span class="normal">399</span>
+<span class="normal">400</span>
+<span class="normal">401</span>
+<span class="normal">402</span>
+<span class="normal">403</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">read_from_window</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">window</span><span class="p">:</span><span class="n">rasterio</span><span class="o">.</span><span class="n">windows</span><span class="o">.</span><span class="n">Window</span><span class="p">,</span> <span class="n">boundless</span><span class="p">:</span><span class="nb">bool</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">&#39;__class__&#39;</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Returns a new reader with window focus the window `window` relative to `self.window_focus`</span>
 
@@ -4169,8 +4257,7 @@ intersected.</p>
 
             <details class="quote">
               <summary>Source code in <code>georeader/rasterio_reader.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">272</span>
-<span class="normal">273</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">273</span>
 <span class="normal">274</span>
 <span class="normal">275</span>
 <span class="normal">276</span>
@@ -4181,7 +4268,8 @@ intersected.</p>
 <span class="normal">281</span>
 <span class="normal">282</span>
 <span class="normal">283</span>
-<span class="normal">284</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">same_extent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span><span class="n">Union</span><span class="p">[</span><span class="n">GeoData</span><span class="p">,</span><span class="s1">&#39;RasterioReader&#39;</span><span class="p">],</span> <span class="n">precision</span><span class="p">:</span><span class="nb">float</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="normal">284</span>
+<span class="normal">285</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">same_extent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span><span class="n">Union</span><span class="p">[</span><span class="n">GeoData</span><span class="p">,</span><span class="s1">&#39;RasterioReader&#39;</span><span class="p">],</span> <span class="n">precision</span><span class="p">:</span><span class="nb">float</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Check if two GeoData objects have the same extent</span>
 
@@ -4223,8 +4311,7 @@ Examples:
 
             <details class="quote">
               <summary>Source code in <code>georeader/rasterio_reader.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">214</span>
-<span class="normal">215</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">215</span>
 <span class="normal">216</span>
 <span class="normal">217</span>
 <span class="normal">218</span>
@@ -4249,7 +4336,8 @@ Examples:
 <span class="normal">237</span>
 <span class="normal">238</span>
 <span class="normal">239</span>
-<span class="normal">240</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">set_indexes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">indexes</span><span class="p">:</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">relative</span><span class="p">:</span><span class="nb">bool</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="normal">240</span>
+<span class="normal">241</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">set_indexes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">indexes</span><span class="p">:</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">relative</span><span class="p">:</span><span class="nb">bool</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Set the channels to read. This is useful for processing only some channels of the raster. The indexes</span>
 <span class="sd">    passed will be relative to self.indexes</span>
@@ -4335,8 +4423,7 @@ Examples:
 
             <details class="quote">
               <summary>Source code in <code>georeader/rasterio_reader.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">242</span>
-<span class="normal">243</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">243</span>
 <span class="normal">244</span>
 <span class="normal">245</span>
 <span class="normal">246</span>
@@ -4357,7 +4444,8 @@ Examples:
 <span class="normal">261</span>
 <span class="normal">262</span>
 <span class="normal">263</span>
-<span class="normal">264</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">set_indexes_by_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">names</span><span class="p">:</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="normal">264</span>
+<span class="normal">265</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">set_indexes_by_name</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">names</span><span class="p">:</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Function to set the indexes by the name of the band which is stored in the descriptions attribute</span>
 
@@ -4474,8 +4562,7 @@ intersected.</p>
 
             <details class="quote">
               <summary>Source code in <code>georeader/rasterio_reader.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">286</span>
-<span class="normal">287</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">287</span>
 <span class="normal">288</span>
 <span class="normal">289</span>
 <span class="normal">290</span>
@@ -4510,7 +4597,8 @@ intersected.</p>
 <span class="normal">319</span>
 <span class="normal">320</span>
 <span class="normal">321</span>
-<span class="normal">322</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">set_window</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">window_focus</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">rasterio</span><span class="o">.</span><span class="n">windows</span><span class="o">.</span><span class="n">Window</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="normal">322</span>
+<span class="normal">323</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">set_window</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">window_focus</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">rasterio</span><span class="o">.</span><span class="n">windows</span><span class="o">.</span><span class="n">Window</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
                <span class="n">relative</span><span class="p">:</span><span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">boundless</span><span class="p">:</span><span class="nb">bool</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">-&gt;</span><span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Set window to read. This is useful for processing only some part of the raster. The windows passed as</span>
@@ -4569,8 +4657,7 @@ If stack and len(self.paths) == 1 it returns just the dictionary of the tags</p>
 
             <details class="quote">
               <summary>Source code in <code>georeader/rasterio_reader.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">324</span>
-<span class="normal">325</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">325</span>
 <span class="normal">326</span>
 <span class="normal">327</span>
 <span class="normal">328</span>
@@ -4592,9 +4679,8 @@ If stack and len(self.paths) == 1 it returns just the dictionary of the tags</p>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">tags</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">paths</span><span class="p">):</span>
-        <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">Env</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">rio_env_options</span><span class="p">):</span>
-            <span class="k">with</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">overview_level</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">overview_level</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
-                <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">src</span><span class="o">.</span><span class="n">tags</span><span class="p">())</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rio_open</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="k">as</span> <span class="n">src</span><span class="p">:</span>
+            <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">src</span><span class="o">.</span><span class="n">tags</span><span class="p">())</span>
 
     <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">stack</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">tags</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
@@ -4766,9 +4852,7 @@ corresponding GeoTensor</p>
 
             <details class="quote">
               <summary>Source code in <code>georeader/rasterio_reader.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">771</span>
-<span class="normal">772</span>
-<span class="normal">773</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">773</span>
 <span class="normal">774</span>
 <span class="normal">775</span>
 <span class="normal">776</span>
@@ -4814,7 +4898,9 @@ corresponding GeoTensor</p>
 <span class="normal">816</span>
 <span class="normal">817</span>
 <span class="normal">818</span>
-<span class="normal">819</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">read_out_shape</span><span class="p">(</span><span class="n">reader</span><span class="p">:</span><span class="n">Union</span><span class="p">[</span><span class="n">RasterioReader</span><span class="p">,</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">DatasetReader</span><span class="p">],</span>
+<span class="normal">819</span>
+<span class="normal">820</span>
+<span class="normal">821</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">read_out_shape</span><span class="p">(</span><span class="n">reader</span><span class="p">:</span><span class="n">Union</span><span class="p">[</span><span class="n">RasterioReader</span><span class="p">,</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">DatasetReader</span><span class="p">],</span>
                    <span class="n">size_read</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                    <span class="n">indexes</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">int</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                    <span class="n">window</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">rasterio</span><span class="o">.</span><span class="n">windows</span><span class="o">.</span><span class="n">Window</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>

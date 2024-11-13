@@ -12,26 +12,26 @@
         <meta name="author" content="Gonzalo Mateo-García">
       
       
-        <link rel="canonical" href="https://spaceml-org.github.io/georeader/">
+        <link rel="canonical" href="https://spaceml-org.github.io/georeader/advanced/error_read_write_in_remote_path/">
+      
+      
+        <link rel="prev" href="../../enmap_with_cloudsen12/">
       
       
       
-        <link rel="next" href="modules/read_module/">
-      
-      
-      <link rel="icon" href="images/logo_georeader.png">
+      <link rel="icon" href="../../images/logo_georeader.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.43">
     
     
       
-        <title>georeader</title>
+        <title>VSIL cache problem - georeader</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.0253249f.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.0253249f.min.css">
       
         
-        <link rel="stylesheet" href="assets/stylesheets/palette.06af60db.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
       
       
 
@@ -50,15 +50,15 @@
       
     
     
-      <link rel="stylesheet" href="assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="css/ansi-colours.css">
+      <link rel="stylesheet" href="../../css/ansi-colours.css">
     
-      <link rel="stylesheet" href="css/jupyter-cells.css">
+      <link rel="stylesheet" href="../../css/jupyter-cells.css">
     
-      <link rel="stylesheet" href="css/pandas-dataframe.css">
+      <link rel="stylesheet" href="../../css/pandas-dataframe.css">
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -67,11 +67,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="georeader" >
+        <meta  property="og:title"  content="VSIL cache problem - georeader" >
       
         <meta  property="og:description"  content="🛰️ Process raster data in python" >
       
-        <meta  property="og:image"  content="https://spaceml-org.github.io/georeader/assets/images/social/index.png" >
+        <meta  property="og:image"  content="https://spaceml-org.github.io/georeader/assets/images/social/advanced/error_read_write_in_remote_path.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -79,15 +79,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://spaceml-org.github.io/georeader/" >
+        <meta  property="og:url"  content="https://spaceml-org.github.io/georeader/advanced/error_read_write_in_remote_path/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="georeader" >
+        <meta  name="twitter:title"  content="VSIL cache problem - georeader" >
       
         <meta  name="twitter:description"  content="🛰️ Process raster data in python" >
       
-        <meta  name="twitter:image"  content="https://spaceml-org.github.io/georeader/assets/images/social/index.png" >
+        <meta  name="twitter:image"  content="https://spaceml-org.github.io/georeader/assets/images/social/advanced/error_read_write_in_remote_path.png" >
       
     
     
@@ -110,7 +110,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#georeader" class="md-skip">
+        <a href="#reading-from-remote-location-gdal-vsil-caching-issue" class="md-skip">
           Skip to content
         </a>
       
@@ -126,9 +126,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="georeader" class="md-header__button md-logo" aria-label="georeader" data-md-component="logo">
+    <a href="../.." title="georeader" class="md-header__button md-logo" aria-label="georeader" data-md-component="logo">
       
-  <img src="images/logo_georeader.png" alt="logo">
+  <img src="../../images/logo_georeader.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -145,7 +145,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              VSIL cache problem
             
           </span>
         </div>
@@ -258,9 +258,9 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="georeader" class="md-nav__button md-logo" aria-label="georeader" data-md-component="logo">
+    <a href="../.." title="georeader" class="md-nav__button md-logo" aria-label="georeader" data-md-component="logo">
       
-  <img src="images/logo_georeader.png" alt="logo">
+  <img src="../../images/logo_georeader.png" alt="logo">
 
     </a>
     georeader
@@ -284,30 +284,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    Home
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="." class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -316,104 +296,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#install" class="md-nav__link">
-    <span class="md-ellipsis">
-      Install
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#getting-started" class="md-nav__link">
-    <span class="md-ellipsis">
-      Getting started
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#tutorials" class="md-nav__link">
-    <span class="md-ellipsis">
-      Tutorials
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Tutorials">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#sentinel-2" class="md-nav__link">
-    <span class="md-ellipsis">
-      Sentinel-2
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#read-rasters-from-different-satellites" class="md-nav__link">
-    <span class="md-ellipsis">
-      Read rasters from different satellites
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#used-in-other-projects" class="md-nav__link">
-    <span class="md-ellipsis">
-      Used in other projects
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#citation" class="md-nav__link">
-    <span class="md-ellipsis">
-      Citation
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#acknowledgments" class="md-nav__link">
-    <span class="md-ellipsis">
-      Acknowledgments
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -460,7 +342,7 @@
   
   
     <li class="md-nav__item">
-      <a href="modules/read_module/" class="md-nav__link">
+      <a href="../../modules/read_module/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -481,7 +363,7 @@
   
   
     <li class="md-nav__item">
-      <a href="modules/save_module/" class="md-nav__link">
+      <a href="../../modules/save_module/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -502,7 +384,7 @@
   
   
     <li class="md-nav__item">
-      <a href="modules/reflectance_module/" class="md-nav__link">
+      <a href="../../modules/reflectance_module/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -523,7 +405,7 @@
   
   
     <li class="md-nav__item">
-      <a href="modules/geotensor_module/" class="md-nav__link">
+      <a href="../../modules/geotensor_module/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -544,7 +426,7 @@
   
   
     <li class="md-nav__item">
-      <a href="modules/rasterio_reader/" class="md-nav__link">
+      <a href="../../modules/rasterio_reader/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -565,7 +447,7 @@
   
   
     <li class="md-nav__item">
-      <a href="modules/rasterize_module/" class="md-nav__link">
+      <a href="../../modules/rasterize_module/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -586,7 +468,7 @@
   
   
     <li class="md-nav__item">
-      <a href="modules/vectorize_module/" class="md-nav__link">
+      <a href="../../modules/vectorize_module/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -611,17 +493,19 @@
       
   
   
+    
   
   
+  
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
@@ -635,7 +519,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             Tutorials
@@ -684,7 +568,7 @@
   
   
     <li class="md-nav__item">
-      <a href="read_overlapping_probav_and_sentinel2/" class="md-nav__link">
+      <a href="../../read_overlapping_probav_and_sentinel2/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -705,7 +589,7 @@
   
   
     <li class="md-nav__item">
-      <a href="reading_overlapping_sentinel2_aviris/" class="md-nav__link">
+      <a href="../../reading_overlapping_sentinel2_aviris/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -769,7 +653,7 @@
   
   
     <li class="md-nav__item">
-      <a href="Sentinel-2/run_in_gee_image/" class="md-nav__link">
+      <a href="../../Sentinel-2/run_in_gee_image/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -790,7 +674,7 @@
   
   
     <li class="md-nav__item">
-      <a href="read_S2_SAFE_from_bucket/" class="md-nav__link">
+      <a href="../../read_S2_SAFE_from_bucket/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -811,7 +695,7 @@
   
   
     <li class="md-nav__item">
-      <a href="Sentinel-2/explore_metadata_s2/" class="md-nav__link">
+      <a href="../../Sentinel-2/explore_metadata_s2/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -832,7 +716,7 @@
   
   
     <li class="md-nav__item">
-      <a href="Sentinel-2/query_mosaic_s2_images/" class="md-nav__link">
+      <a href="../../Sentinel-2/query_mosaic_s2_images/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -896,7 +780,7 @@
   
   
     <li class="md-nav__item">
-      <a href="emit_explore/" class="md-nav__link">
+      <a href="../../emit_explore/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -917,7 +801,7 @@
   
   
     <li class="md-nav__item">
-      <a href="simultaneous_prisma_emit/" class="md-nav__link">
+      <a href="../../simultaneous_prisma_emit/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -938,7 +822,7 @@
   
   
     <li class="md-nav__item">
-      <a href="enmap_with_cloudsen12/" class="md-nav__link">
+      <a href="../../enmap_with_cloudsen12/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -964,17 +848,19 @@
                 
   
   
+    
   
   
+  
     
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" checked>
         
           
           <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
@@ -988,7 +874,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3_4">
             <span class="md-nav__icon md-icon"></span>
             Advanced
@@ -999,10 +885,19 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="advanced/error_read_write_in_remote_path/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -1011,6 +906,7 @@
   
 
       </a>
+      
     </li>
   
 
@@ -1051,92 +947,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#install" class="md-nav__link">
-    <span class="md-ellipsis">
-      Install
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#getting-started" class="md-nav__link">
-    <span class="md-ellipsis">
-      Getting started
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#tutorials" class="md-nav__link">
-    <span class="md-ellipsis">
-      Tutorials
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Tutorials">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#sentinel-2" class="md-nav__link">
-    <span class="md-ellipsis">
-      Sentinel-2
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#read-rasters-from-different-satellites" class="md-nav__link">
-    <span class="md-ellipsis">
-      Read rasters from different satellites
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#used-in-other-projects" class="md-nav__link">
-    <span class="md-ellipsis">
-      Used in other projects
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#citation" class="md-nav__link">
-    <span class="md-ellipsis">
-      Citation
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#acknowledgments" class="md-nav__link">
-    <span class="md-ellipsis">
-      Acknowledgments
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -1153,122 +963,253 @@
   
 
 
-<p><a href="https://doi.org/10.1038/s41598-023-47595-7"><img alt="Article DOI:10.1038/s41598-023-47595-7" src="https://img.shields.io/badge/Article%20DOI-10.1038%2Fs41598.023.47595.7-blue" /></a>  <a href="https://github.com/spaceml-org/georeader/releases"><img alt="GitHub release (latest SemVer including pre-releases)" src="https://img.shields.io/github/v/release/spaceml-org/georeader?sort=semver" /></a> <a href="https://pypi.org/project/georeader-spaceml/"><img alt="PyPI" src="https://img.shields.io/pypi/v/georeader-spaceml" /></a> <a href="https://pypi.org/project/georeader-spaceml/"><img alt="PyPI - Python Version" src="https://img.shields.io/pypi/pyversions/georeader-spaceml" /></a> <a href="https://github.com/spaceml-org/georeader/blob/main/LICENSE"><img alt="PyPI - License" src="https://img.shields.io/pypi/l/georeader-spaceml" /></a></p>
-<h1 id="georeader"><img src="https://raw.githubusercontent.com/spaceml-org/georeader/main/docs/images/logo_georeader.png" alt="Logo" width='7%'> georeader<a class="headerlink" href="#georeader" title="Permanent link">&para;</a></h1>
-<p><strong>georeader</strong> is a package to process raster data from different satellite missions. <strong>georeader</strong> makes easy to <a href="https://github.com/spaceml-org/georeader/blob/main/docs/read_S2_SAFE_from_bucket.ipynb">read specific areas of your image</a>, to <a href="https://github.com/spaceml-org/georeader/blob/main/docs/reading_overlapping_sentinel2_aviris.ipynb">reproject images from different satellites to a common grid</a>  (<a href="https://spaceml-org.github.io/georeader/modules/read_module/"><code>georeader.read</code></a>), to go from vector to raster formats (<a href="https://spaceml-org.github.io/georeader/modules/vectorize_module/"><code>georeader.vectorize</code></a> and <a href="https://spaceml-org.github.io/georeader/modules/rasterize_module/"><code>georeader.rasterize</code></a>) or to do <a href="https://spaceml-org.github.io/georeader/enmap_with_cloudsen12/">radiance to reflectance conversions</a> (<a href="https://spaceml-org.github.io/georeader/modules/reflectance_module/"><code>georeader.reflectance</code></a>). </p>
-<p><strong>georeader</strong> is mainly used to process satellite data for scientific usage, to create ML-ready datasets and to implement <em>end-to-end</em> operational inference pipelines (<a href="https://spaceml-org.github.io/ml4floods/content/ml4ops/HOWTO_postprocess_inference.html">e.g. the Kherson Dam Break floodmap</a>). </p>
-<h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
-<p>The core package dependencies are <code>numpy</code>, <code>rasterio</code>, <code>shapely</code> and <code>geopandas</code>.</p>
-<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>georeader-spaceml
+<h1 id="reading-from-remote-location-gdal-vsil-caching-issue">Reading from remote location: GDAL VSIL caching issue<a class="headerlink" href="#reading-from-remote-location-gdal-vsil-caching-issue" title="Permanent link">&para;</a></h1>
+<p>Reading a raster from a remote location (e.g. Google, Amazon or Azure bucket) fails if the file is read and modified by other (non-GDAL) process. This happens even if the file is closed after reading and then modified. This is because <a href="https://gdal.org/en/latest/user/configoptions.html#networking-options">GDAL has a global cache when reading data from remote locations</a>. This notebook shows this problem and a fix implemented in <code>RasterioReader</code> to skip the caching (called <code>read_with_CPL_VSIL_CURL_NON_CACHED</code>). A direct fix in GDAL would be to call <a href="https://gdal.org/en/latest/doxygen/cpl__vsi_8h.html#a6b22260317edc475793c4165957742b6"><code>VSICurlClearCache</code></a> or <a href="https://gdal.org/en/latest/doxygen/cpl__vsi_8h.html#a6bc83d16f0f279f601059a218ad2c55c"><code>VSICurlPartialClearCache</code></a> C functions; however these are not mapped in <code>rasterio</code>. </p>
+<p>The solution implemented with <code>rasterio</code> consists of setting the <a href="https://gdal.org/en/latest/user/configoptions.html#networking-options"><code>CPL_VSIL_CURL_NON_CACHED</code> GDAL option</a> before opening the file with <code>rasterio</code>; <a href="https://github.com/spaceml-org/georeader/blob/main/georeader/rasterio_reader.py#L342">see the fix in <code>georeader.rasterio_reader.RasterioReader._rio_open</code> function</a>.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">fsspec</span>
+
+<span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;AZURE_STORAGE_CONNECTION_STRING&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;????&quot;</span>
+<span class="n">fs</span> <span class="o">=</span> <span class="n">fsspec</span><span class="o">.</span><span class="n">filesystem</span><span class="p">(</span><span class="s2">&quot;az&quot;</span><span class="p">)</span>
+<span class="n">fs</span>
 </code></pre></div>
-<h2 id="getting-started">Getting started<a class="headerlink" href="#getting-started" title="Permanent link">&para;</a></h2>
-<blockquote>
-<p>Read from a Sentinel-2 image a fixed size subimage on an specific <code>lon,lat</code> location (directly from the <a href="https://cloud.google.com/storage/docs/public-datasets/sentinel-2?hl=es-419">S2 public Google Cloud bucket</a>):</p>
-</blockquote>
-<p><div class="highlight"><pre><span></span><code><span class="c1"># This snippet requires:</span>
-<span class="c1"># pip install fsspec gcsfs google-cloud-storage</span>
-<span class="kn">import</span> <span class="nn">os</span>
-<span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;GS_NO_SIGN_REQUEST&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;YES&quot;</span>
-
-<span class="kn">from</span> <span class="nn">georeader.readers</span> <span class="kn">import</span> <span class="n">S2_SAFE_reader</span>
-<span class="kn">from</span> <span class="nn">georeader</span> <span class="kn">import</span> <span class="n">read</span>
-
-<span class="n">cords_read</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="mf">104.394</span><span class="p">,</span> <span class="mf">32.026</span><span class="p">)</span> <span class="c1"># long, lat</span>
-<span class="n">crs_cords</span> <span class="o">=</span> <span class="s2">&quot;EPSG:4326&quot;</span>
-<span class="n">s2_safe_path</span> <span class="o">=</span> <span class="n">S2_SAFE_reader</span><span class="o">.</span><span class="n">s2_public_bucket_path</span><span class="p">(</span><span class="s2">&quot;S2B_MSIL1C_20191008T173219_N0208_R055_T13SER_20191008T204555.SAFE&quot;</span><span class="p">)</span>
-<span class="n">s2obj</span> <span class="o">=</span> <span class="n">S2_SAFE_reader</span><span class="o">.</span><span class="n">s2loader</span><span class="p">(</span><span class="n">s2_safe_path</span><span class="p">,</span> 
-                                <span class="n">out_res</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">bands</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;B04&quot;</span><span class="p">,</span><span class="s2">&quot;B03&quot;</span><span class="p">,</span><span class="s2">&quot;B02&quot;</span><span class="p">])</span>
-
-<span class="c1"># copy to local avoids http errors specially when not using a Google Cloud project.</span>
-<span class="c1"># This will only copy the bands set up above B04, B03 and B02</span>
-<span class="n">s2obj</span> <span class="o">=</span> <span class="n">s2obj</span><span class="o">.</span><span class="n">cache_product_to_local_dir</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">)</span>
-
-<span class="c1"># See also read.read_from_bounds, read.read_from_polygon for different ways of croping an image</span>
-<span class="n">data</span> <span class="o">=</span> <span class="n">read</span><span class="o">.</span><span class="n">read_from_center_coords</span><span class="p">(</span><span class="n">s2obj</span><span class="p">,</span><span class="n">cords_read</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">2040</span><span class="p">,</span> <span class="mi">4040</span><span class="p">),</span>
-                                    <span class="n">crs_center_coords</span><span class="o">=</span><span class="n">crs_cords</span><span class="p">)</span>
-
-<span class="n">data_memory</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">load</span><span class="p">()</span> <span class="c1"># this loads the data to memory</span>
-
-<span class="n">data_memory</span> <span class="c1"># GeoTensor object</span>
+<div class="highlight"><pre><span></span><code>&lt;adlfs.spec.AzureBlobFileSystem at 0x7fdf4429a020&gt;
 </code></pre></div>
-<div class="highlight"><pre><span></span><code>&gt;&gt;  Transform: | 10.00, 0.00, 537020.00|
-| 0.00,-10.00, 3553680.00|
+<p>This example will read a 3-band rgb COG and modify it by a one band COG with a different shape. We will see that when the COG is modified we can't read the file again if we don't set the <code>read_with_CPL_VSIL_CURL_NON_CACHED</code> option. We will see either a read error (if we haven't loaded the data) or we will see the old cached data (if we have load the data).</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># rasterio_reader.RIO_ENV_OPTIONS_DEFAULT[&quot;CPL_CURL_VERBOSE&quot;] = &quot;YES&quot;</span>
+<span class="n">rgb_file</span> <span class="o">=</span> <span class="s2">&quot;az://mycontainer/rgb.tif&quot;</span>
+<span class="n">one_band_file</span> <span class="o">=</span> <span class="s2">&quot;az://mycontainer/one_band.tif&quot;</span>
+<span class="k">assert</span> <span class="n">fs</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">rgb_file</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">fs</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">one_band_file</span><span class="p">)</span>
+
+<span class="n">filepath</span> <span class="o">=</span> <span class="s2">&quot;az://mycontainer/removeme.tif&quot;</span>
+<span class="k">if</span> <span class="n">fs</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">filepath</span><span class="p">):</span>
+    <span class="n">fs</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span> <span class="nn">georeader.rasterio_reader</span> <span class="kn">import</span> <span class="n">RasterioReader</span>
+
+<span class="n">fs</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">rgb_file</span><span class="p">,</span> <span class="n">filepath</span><span class="p">)</span>
+<span class="n">rst</span> <span class="o">=</span> <span class="n">RasterioReader</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+<span class="n">rst</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>         Paths: [&#39;az://mycontainer/removeme.tif&#39;]
+         Transform: | 30.00, 0.00, 740744.72|
+| 0.00,-30.00, 4287081.96|
 | 0.00, 0.00, 1.00|
-         Shape: (3, 2040, 4040)
-         Resolution: (10.0, 10.0)
-         Bounds: (537020.0, 3533280.0, 577420.0, 3553680.0)
-         CRS: EPSG:32613
-         fill_value_default: 0
-</code></pre></div></p>
-<p>In the <code>.values</code> attribute we have the plain numpy array that we can plot with <code>show</code>:</p>
-<p><div class="highlight"><pre><span></span><code><span class="kn">from</span> <span class="nn">rasterio.plot</span> <span class="kn">import</span> <span class="n">show</span>
-<span class="n">show</span><span class="p">(</span><span class="n">data_memory</span><span class="o">.</span><span class="n">values</span><span class="o">/</span><span class="mi">3500</span><span class="p">,</span> <span class="n">transform</span><span class="o">=</span><span class="n">data_memory</span><span class="o">.</span><span class="n">transform</span><span class="p">)</span>
+         Shape: (3, 1176, 1168)
+         Resolution: (30.0, 30.0)
+         Bounds: (740744.717767204, 4251801.958449183, 775784.717767204, 4287081.958449183)
+         CRS: EPSG:32641
+         nodata: 0.0
+         fill_value_default: 0.0
 </code></pre></div>
-<img src="https://raw.githubusercontent.com/spaceml-org/georeader/main/notebooks/images/sample_read.png" alt="awesome georeader" width="50%"></p>
-<p>Saving the <code>GeoTensor</code> as a COG GeoTIFF: </p>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span> <span class="nn">georeader.save</span> <span class="kn">import</span> <span class="n">save_cog</span>
+<p>Reading now fails (we haven't loaded the data).</p>
+<div class="highlight"><pre><span></span><code><span class="n">fs</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">one_band_file</span><span class="p">,</span> <span class="n">filepath</span><span class="p">)</span>
+<span class="n">rst</span> <span class="o">=</span> <span class="n">RasterioReader</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+<span class="n">data_rst</span> <span class="o">=</span> <span class="n">rst</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+<span class="n">data_rst</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>---------------------------------------------------------------------------
 
-<span class="c1"># Supports writing in bucket location (e.g. gs://bucket-name/s2_crop.tif)</span>
-<span class="n">save_cog</span><span class="p">(</span><span class="n">data_memory</span><span class="p">,</span> <span class="s2">&quot;s2_crop.tif&quot;</span><span class="p">,</span> <span class="n">descriptions</span><span class="o">=</span><span class="n">s2obj</span><span class="o">.</span><span class="n">bands</span><span class="p">)</span>
+CPLE_AppDefinedError                      Traceback (most recent call last)
+
+CPLE_AppDefinedError: LZWDecode:Corrupted LZW table at scanline 0
+
+
+The above exception was the direct cause of the following exception:
+
+
+CPLE_AppDefinedError                      Traceback (most recent call last)
+
+CPLE_AppDefinedError: TIFFReadEncodedTile() failed.
+
+
+The above exception was the direct cause of the following exception:
+
+
+CPLE_AppDefinedError                      Traceback (most recent call last)
+
+File rasterio/_io.pyx:969, in rasterio._io.DatasetReaderBase._read()
+
+
+File rasterio/_io.pyx:199, in rasterio._io.io_multi_band()
+
+
+File rasterio/_io.pyx:205, in rasterio._io.io_multi_band()
+
+
+File rasterio/_err.pyx:325, in rasterio._err.StackChecker.exc_wrap_int()
+
+
+CPLE_AppDefinedError: removeme.tif, band 1: IReadBlock failed at X offset 0, Y offset 0: TIFFReadEncodedTile() failed.
+
+
+The above exception was the direct cause of the following exception:
+
+
+RasterioIOError                           Traceback (most recent call last)
+
+Cell In[4], line 3
+      1 fs.copy(one_band_file, filepath)
+      2 rst = RasterioReader(filepath)
+----&gt; 3 data_rst = rst.load()
+      4 data_rst
+
+
+File ~/git/georeader/georeader/rasterio_reader.py:554, in RasterioReader.load(self, boundless)
+    546 def load(self, boundless:bool=True) -&gt; geotensor.GeoTensor:
+    547     &quot;&quot;&quot;
+    548     Load all raster in memory in an GeoTensor object
+    549 
+   (...)
+    552 
+    553     &quot;&quot;&quot;
+--&gt; 554     np_data = self.read(boundless=boundless)
+    555     if boundless:
+    556         transform = self.transform
+
+
+File ~/git/georeader/georeader/rasterio_reader.py:704, in RasterioReader.read(self, **kwargs)
+    699 for i, p in enumerate(self.paths):
+    700     # with rasterio.Env(**options):
+    701     #     with rasterio.open(p, &quot;r&quot;, overview_level=self.overview_level) as src:
+    702     with self._rio_open(p, overview_level=self.overview_level) as src:
+    703         # rasterio.read API: https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.read
+--&gt; 704         read_data = src.read(**kwargs)
+    706         # Add pad when reading
+    707         if pad is not None and need_pad:
+
+
+File rasterio/_io.pyx:644, in rasterio._io.DatasetReaderBase.read()
+
+
+File rasterio/_io.pyx:972, in rasterio._io.DatasetReaderBase._read()
+
+
+RasterioIOError: Read failed. See previous exception for details.
 </code></pre></div>
-<h2 id="tutorials">Tutorials<a class="headerlink" href="#tutorials" title="Permanent link">&para;</a></h2>
-<h3 id="sentinel-2">Sentinel-2<a class="headerlink" href="#sentinel-2" title="Permanent link">&para;</a></h3>
-<ul>
-<li><a href="https://github.com/spaceml-org/georeader/blob/main/docs/read_S2_SAFE_from_bucket.ipynb">Reading Sentinel-2 images from the public Google bucket</a> <a href="https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/read_S2_SAFE_from_bucket.ipynb"><img alt="Open In Colab" src="https://colab.research.google.com/assets/colab-badge.svg" /></a></li>
-<li><a href="https://github.com/spaceml-org/georeader/blob/main/docs/Sentinel-2/explore_metadata_s2.ipynb">Explore metadata of Sentinel-2 object</a> <a href="https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/Sentinel-2/explore_metadata_s2.ipynb"><img alt="Open In Colab" src="https://colab.research.google.com/assets/colab-badge.svg" /></a></li>
-<li><a href="https://github.com/spaceml-org/georeader/blob/main/docs/Sentinel-2/query_mosaic_s2_images.ipynb">Query Sentinel-2 images over a location and time span, mosaic and plot them</a> <a href="https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/Sentinel-2/query_mosaic_s2_images.ipynb"><img alt="Open In Colab" src="https://colab.research.google.com/assets/colab-badge.svg" /></a></li>
-<li><a href="https://github.com/spaceml-org/georeader/blob/main/docs/Sentinel-2/run_in_gee_image.ipynb">Sentinel-2 images from GEE and CloudSEN12 cloud detection</a> <a href="https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/Sentinel-2/run_in_gee_image.ipynb"><img alt="Open In Colab" src="https://colab.research.google.com/assets/colab-badge.svg" /></a></li>
-</ul>
-<h3 id="read-rasters-from-different-satellites">Read rasters from different satellites<a class="headerlink" href="#read-rasters-from-different-satellites" title="Permanent link">&para;</a></h3>
-<ul>
-<li><a href="https://github.com/spaceml-org/georeader/blob/main/docs/reading_overlapping_sentinel2_aviris.ipynb">Tutorial to read overlapping tiles from a GeoTIFF and a Sentinel-2 image</a> <a href="https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/reading_overlapping_sentinel2_aviris.ipynb"><img alt="Open In Colab" src="https://colab.research.google.com/assets/colab-badge.svg" /></a></li>
-<li><a href="https://github.com/spaceml-org/georeader/blob/main/docs/read_overlapping_probav_and_sentinel2.ipynb">Example of reading a Proba-V image overlapping with Sentinel-2 forcing same resolution</a></li>
-<li><a href="https://github.com/spaceml-org/georeader/blob/main/docs/emit_explore.ipynb">Work with EMIT images</a> <a href="https://colab.research.google.com/github/spaceml-org/georeader/blob/main/docs/emit_explore.ipynb"><img alt="Open In Colab" src="https://colab.research.google.com/assets/colab-badge.svg" /></a></li>
-<li><a href="https://github.com/spaceml-org/georeader/blob/main/docs/simultaneous_prisma_emit.ipynb">Read overlapping images of PRISMA and EMIT</a> </li>
-<li><a href="https://github.com/spaceml-org/georeader/blob/main/docs/enmap_with_cloudsen12.ipynb">Read EnMAP images, integrate them to Sentinel-2 bands, convert radiance to TOA reflectance and run CloudSEN12 cloud detection model</a> </li>
-</ul>
-<h3 id="used-in-other-projects">Used in other projects<a class="headerlink" href="#used-in-other-projects" title="Permanent link">&para;</a></h3>
-<ul>
-<li><a href="https://spaceml-org.github.io/ml4floods/content/ml4ops/HOWTO_postprocess_inference.html">georeader with ml4floods to automatically download and produce flood extent maps: the Kherson Dam Break example</a></li>
-<li><a href="https://github.com/spaceml-org/STARCOP/blob/main/notebooks/simulate_aviris_2_sentinel2.ipynb">georeader with STARCOP to simulate Sentinel-2 from AVIRIS images</a></li>
-<li><a href="https://github.com/spaceml-org/STARCOP/blob/main/notebooks/inference_on_raw_EMIT_nc_file.ipynb">georeader with STARCOP to run plume detection in EMIT images</a></li>
-<li><a href="https://github.com/IPL-UV/cloudsen12_models/blob/main/notebooks/run_in_gee_image.ipynb">georeader with CloudSEN12 to run cloud detection in Sentinel-2 images</a></li>
-</ul>
-<h2 id="citation">Citation<a class="headerlink" href="#citation" title="Permanent link">&para;</a></h2>
-<p>If you find this code useful please cite:
-<div class="highlight"><pre><span></span><code>@article{portales-julia_global_2023,
-    title = {Global flood extent segmentation in optical satellite images},
-    volume = {13},
-    issn = {2045-2322},
-    doi = {10.1038/s41598-023-47595-7},
-    number = {1},
-    urldate = {2023-11-30},
-    journal = {Scientific Reports},
-    author = {Portalés-Julià, Enrique and Mateo-García, Gonzalo and Purcell, Cormac and Gómez-Chova, Luis},
-    month = nov,
-    year = {2023},
-    pages = {20316},
-}
-@article{ruzicka_starcop_2023,
-    title = {Semantic segmentation of methane plumes with hyperspectral machine learning models},
-    volume = {13},
-    issn = {2045-2322},
-    url = {https://www.nature.com/articles/s41598-023-44918-6},
-    doi = {10.1038/s41598-023-44918-6},
-    number = {1},
-    journal = {Scientific Reports},
-    author = {Růžička, Vít and Mateo-Garcia, Gonzalo and Gómez-Chova, Luis and Vaughan, Anna, and Guanter, Luis and Markham, Andrew},
-    month = nov,
-    year = {2023},
-    pages = {19999},
-}
-</code></pre></div></p>
-<h2 id="acknowledgments">Acknowledgments<a class="headerlink" href="#acknowledgments" title="Permanent link">&para;</a></h2>
-<p>This research has been supported by the DEEPCLOUD project (PID2019-109026RB-I00) funded by the Spanish Ministry of Science and Innovation (MCIN/AEI/10.13039/501100011033) and the European Union (NextGenerationEU).</p>
-<p><img width="300" title="DEEPCLOUD project (PID2019-109026RB-I00, University of Valencia) funded by MCIN/AEI/10.13039/501100011033." alt="DEEPCLOUD project (PID2019-109026RB-I00, University of Valencia) funded by MCIN/AEI/10.13039/501100011033." src="https://www.uv.es/chovago/logos/logoMICIN.jpg"></p>
-<ul>
-<li><strong>Documentation</strong> <a href="https://spaceml-org.github.io/georeader/">https://spaceml-org.github.io/georeader/</a></li>
-</ul>
+<div class="highlight"><pre><span></span><code><span class="n">rst</span><span class="o">.</span><span class="n">rio_env_options</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>{&#39;GDAL_DISABLE_READDIR_ON_OPEN&#39;: &#39;EMPTY_DIR&#39;,
+ &#39;GDAL_HTTP_MERGE_CONSECUTIVE_RANGES&#39;: &#39;YES&#39;,
+ &#39;GDAL_CACHEMAX&#39;: 2000000000,
+ &#39;GDAL_HTTP_MULTIPLEX&#39;: &#39;YES&#39;}
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="n">fs</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+</code></pre></div>
+<p>Reading and loading the data will return the old data instead of the new one. (The rgb raster had 3 bands and the other one only one).</p>
+<div class="highlight"><pre><span></span><code><span class="n">filepath</span> <span class="o">=</span> <span class="s2">&quot;az://mycontainer/removeme2.tif&quot;</span>
+<span class="k">if</span> <span class="n">fs</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">filepath</span><span class="p">):</span>
+    <span class="n">fs</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+
+<span class="n">fs</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">rgb_file</span><span class="p">,</span> <span class="n">filepath</span><span class="p">)</span>
+<span class="n">rst_mem</span> <span class="o">=</span> <span class="n">RasterioReader</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+<span class="n">rst_mem</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>         Transform: | 30.00, 0.00, 740744.72|
+| 0.00,-30.00, 4287081.96|
+| 0.00, 0.00, 1.00|
+         Shape: (3, 1176, 1168)
+         Resolution: (30.0, 30.0)
+         Bounds: (740744.717767204, 4251801.958449183, 775784.717767204, 4287081.958449183)
+         CRS: EPSG:32641
+         fill_value_default: 0.0
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="n">fs</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">one_band_file</span><span class="p">,</span> <span class="n">filepath</span><span class="p">)</span>
+<span class="n">rst</span> <span class="o">=</span> <span class="n">RasterioReader</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+<span class="n">data_rst</span> <span class="o">=</span> <span class="n">rst</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+<span class="n">data_rst</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>         Transform: | 30.00, 0.00, 740744.72|
+| 0.00,-30.00, 4287081.96|
+| 0.00, 0.00, 1.00|
+         Shape: (3, 1176, 1168)
+         Resolution: (30.0, 30.0)
+         Bounds: (740744.717767204, 4251801.958449183, 775784.717767204, 4287081.958449183)
+         CRS: EPSG:32641
+         fill_value_default: 0.0
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="n">fs</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+</code></pre></div>
+<p>Adding option  <code>read_with_CPL_VSIL_CURL_NON_CACHED</code> fixes the problem, we see that after the second copy the raster has 1 channel instead of 3.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span> <span class="nn">georeader</span> <span class="kn">import</span> <span class="n">rasterio_reader</span>
+<span class="n">rasterio_reader</span><span class="o">.</span><span class="n">RIO_ENV_OPTIONS_DEFAULT</span><span class="p">[</span><span class="s2">&quot;read_with_CPL_VSIL_CURL_NON_CACHED&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="n">filepath</span> <span class="o">=</span> <span class="s2">&quot;az://mycontainer/removeme3.tif&quot;</span>
+<span class="k">if</span> <span class="n">fs</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">filepath</span><span class="p">):</span>
+    <span class="n">fs</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+
+<span class="n">fs</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">rgb_file</span><span class="p">,</span> <span class="n">filepath</span><span class="p">)</span>
+<span class="n">rst_mem</span> <span class="o">=</span> <span class="n">RasterioReader</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+<span class="n">rst_mem</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>         Transform: | 30.00, 0.00, 740744.72|
+| 0.00,-30.00, 4287081.96|
+| 0.00, 0.00, 1.00|
+         Shape: (3, 1176, 1168)
+         Resolution: (30.0, 30.0)
+         Bounds: (740744.717767204, 4251801.958449183, 775784.717767204, 4287081.958449183)
+         CRS: EPSG:32641
+         fill_value_default: 0.0
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="n">fs</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">one_band_file</span><span class="p">,</span> <span class="n">filepath</span><span class="p">)</span>
+<span class="n">rst</span> <span class="o">=</span> <span class="n">RasterioReader</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+<span class="n">data_rst</span> <span class="o">=</span> <span class="n">rst</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+<span class="n">data_rst</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>         Transform: | 30.00, 0.00, 255639.31|
+| 0.00,-30.00, 3165851.00|
+| 0.00, 0.00, 1.00|
+         Shape: (1, 1262, 1369)
+         Resolution: (30.0, 30.0)
+         Bounds: (255639.3130302397, 3127990.9952690094, 296709.31303023966, 3165850.9952690094)
+         CRS: EPSG:32640
+         fill_value_default: -1.0
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="n">fs</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+</code></pre></div>
+<p>If we don't load the data we don't have the error and the file is correctly readed:</p>
+<div class="highlight"><pre><span></span><code><span class="n">filepath</span> <span class="o">=</span> <span class="s2">&quot;az://mycontainer/removeme3.tif&quot;</span>
+<span class="k">if</span> <span class="n">fs</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">filepath</span><span class="p">):</span>
+    <span class="n">fs</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+
+<span class="n">fs</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">rgb_file</span><span class="p">,</span> <span class="n">filepath</span><span class="p">)</span>
+<span class="n">rst</span> <span class="o">=</span> <span class="n">RasterioReader</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+<span class="n">rst</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>         Paths: [&#39;az://mycontainer/removeme3.tif&#39;]
+         Transform: | 30.00, 0.00, 740744.72|
+| 0.00,-30.00, 4287081.96|
+| 0.00, 0.00, 1.00|
+         Shape: (3, 1176, 1168)
+         Resolution: (30.0, 30.0)
+         Bounds: (740744.717767204, 4251801.958449183, 775784.717767204, 4287081.958449183)
+         CRS: EPSG:32641
+         nodata: 0.0
+         fill_value_default: 0.0
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="n">fs</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">one_band_file</span><span class="p">,</span> <span class="n">filepath</span><span class="p">)</span>
+<span class="n">rst</span> <span class="o">=</span> <span class="n">RasterioReader</span><span class="p">(</span><span class="n">filepath</span><span class="p">)</span>
+<span class="n">data_rst</span> <span class="o">=</span> <span class="n">rst</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+<span class="n">data_rst</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>         Transform: | 30.00, 0.00, 255639.31|
+| 0.00,-30.00, 3165851.00|
+| 0.00, 0.00, 1.00|
+         Shape: (1, 1262, 1369)
+         Resolution: (30.0, 30.0)
+         Bounds: (255639.3130302397, 3127990.9952690094, 296709.31303023966, 3165850.9952690094)
+         CRS: EPSG:32640
+         fill_value_default: -1.0
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="n">rst</span><span class="o">.</span><span class="n">rio_env_options</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>{&#39;GDAL_DISABLE_READDIR_ON_OPEN&#39;: &#39;EMPTY_DIR&#39;,
+ &#39;GDAL_HTTP_MERGE_CONSECUTIVE_RANGES&#39;: &#39;YES&#39;,
+ &#39;GDAL_CACHEMAX&#39;: 2000000000,
+ &#39;GDAL_HTTP_MULTIPLEX&#39;: &#39;YES&#39;,
+ &#39;read_with_CPL_VSIL_CURL_NON_CACHED&#39;: True}
+</code></pre></div>
 
 
 
@@ -1344,10 +1285,10 @@
     </div>
     
     
-    <script id="__config" type="application/json">{"base": ".", "features": [], "search": "assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    <script id="__config" type="application/json">{"base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
     
     
-      <script src="assets/javascripts/bundle.83f73b43.min.js"></script>
+      <script src="../../assets/javascripts/bundle.83f73b43.min.js"></script>
       
     
   </body>
