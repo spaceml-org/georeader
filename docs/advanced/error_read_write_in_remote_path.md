@@ -11,20 +11,14 @@ import fsspec
 
 os.environ["AZURE_STORAGE_CONNECTION_STRING"] = "????"
 fs = fsspec.filesystem("az")
-fs
+
 ```
-
-
-
-
-    <adlfs.spec.AzureBlobFileSystem at 0x7fdf4429a020>
-
-
 
 This example will read a 3-band rgb COG and modify it by a one band COG with a different shape. We will see that when the COG is modified we can't read the file again if we don't set the `read_with_CPL_VSIL_CURL_NON_CACHED` option. We will see either a read error (if we haven't loaded the data) or we will see the old cached data (if we have load the data).
 
 
 ```python
+# Set up the files
 # rasterio_reader.RIO_ENV_OPTIONS_DEFAULT["CPL_CURL_VERBOSE"] = "YES"
 rgb_file = "az://mycontainer/rgb.tif"
 one_band_file = "az://mycontainer/one_band.tif"
@@ -296,7 +290,7 @@ data_rst
 fs.delete(filepath)
 ```
 
-If we don't load the data we don't have the error and the file is correctly readed:
+If we don't load the data we don't have the error and the file is correctly readed too:
 
 
 ```python
