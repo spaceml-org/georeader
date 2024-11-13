@@ -30,7 +30,7 @@ nav:
       - PRISMA: simultaneous_prisma_emit.ipynb
       - EnMAP: enmap_with_cloudsen12.ipynb
     - Advanced:
-      - VSIL cache problem: error_read_write_in_remote_path.md
+      - VSIL cache problem: advanced/error_read_write_in_remote_path.md
 plugins:
   - search
   - social
