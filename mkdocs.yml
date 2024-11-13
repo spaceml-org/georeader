@@ -12,7 +12,7 @@ nav:
     - read: modules/read_module.md
     - save: modules/save_module.md
     - reflectance: modules/reflectance_module.md
-    - Geotensor: modules/geotensor_module.md
+    - GeoTensor: modules/geotensor_module.md
     - RasterioReader: modules/rasterio_reader.md
     - rasterize: modules/rasterize_module.md
     - vectorize: modules/vectorize_module.md
@@ -25,9 +25,12 @@ nav:
       - From the public bucket: read_S2_SAFE_from_bucket.ipynb
       - Metadata: Sentinel-2/explore_metadata_s2.ipynb
       - Mosaic: Sentinel-2/query_mosaic_s2_images.ipynb
-    - EMIT: emit_explore.ipynb
-    - PRISMA: simultaneous_prisma_emit.ipynb
-    - EnMAP: enmap_with_cloudsen12.ipynb
+    - Hyperspectral sensors:
+      - EMIT: emit_explore.ipynb
+      - PRISMA: simultaneous_prisma_emit.ipynb
+      - EnMAP: enmap_with_cloudsen12.ipynb
+    - Advanced:
+      - VSIL cache problem: error_read_write_in_remote_path.md
 plugins:
   - search
   - social

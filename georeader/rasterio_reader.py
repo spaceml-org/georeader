@@ -12,6 +12,7 @@ from shapely.geometry import Polygon
 from georeader.abstract_reader import same_extent, GeoData
 from georeader.read import WEB_MERCATOR_CRS, SIZE_DEFAULT, window_from_tile, read_from_tile
 from numpy.typing import NDArray
+from contextlib import contextmanager
 
 # https://developmentseed.org/titiler/advanced/performance_tuning/#aws-configuration
 RIO_ENV_OPTIONS_DEFAULT = dict(
@@ -142,26 +143,25 @@ class RasterioReader:
         # TODO keep just a global nodata of size (T,C,) and fill with these values?
         self.fill_value_default = fill_value_default
         self.overview_level = overview_level
-        with rasterio.Env(**self.rio_env_options):
-            with rasterio.open(self.paths[0], "r", overview_level=overview_level) as src:
-                self.real_transform = src.transform
-                self.crs = src.crs
-                self.dtype = src.profile["dtype"]
-                self.real_count = src.count
-                self.real_indexes = list(range(1, self.real_count + 1))
-                if self.stack:
-                    self.real_shape = (len(self.paths), src.count,) + src.shape
-                else:
-                    self.real_shape = (len(self.paths) * self.real_count, ) + src.shape
+        with self._rio_open(paths[0], overview_level=overview_level) as src:
+            self.real_transform = src.transform
+            self.crs = src.crs
+            self.dtype = src.profile["dtype"]
+            self.real_count = src.count
+            self.real_indexes = list(range(1, self.real_count + 1))
+            if self.stack:
+                self.real_shape = (len(self.paths), src.count,) + src.shape
+            else:
+                self.real_shape = (len(self.paths) * self.real_count, ) + src.shape
 
-                self.real_width = src.width
-                self.real_height = src.height
+            self.real_width = src.width
+            self.real_height = src.height
 
-                self.nodata = src.nodata
-                if self.fill_value_default is None:
-                    self.fill_value_default = self.nodata if (self.nodata is not None) else 0
+            self.nodata = src.nodata
+            if self.fill_value_default is None:
+                self.fill_value_default = self.nodata if (self.nodata is not None) else 0
 
-                self.res = src.res
+            self.res = src.res
 
         # if (abs(self.real_transform.b) > 1e-6) or (abs(self.real_transform.d) > 1e-6):
         #     warnings.warn(f"transform of {self.paths[0]} is not rectilinear {self.real_transform}. "
@@ -189,23 +189,24 @@ class RasterioReader:
         #  (checking width and height will not be needed since we're reading with boundless option but I don't see the point to ignore it)
         if check and len(self.paths) > 1:
             for p in self.paths:
-                with rasterio.Env(**self.rio_env_options):
-                    with rasterio.open(p, "r", overview_level=overview_level) as src:
-                        if not src.transform.almost_equals(self.real_transform, 1e-6):
-                            raise ValueError(f"Different transform in {self.paths[0]} and {p}: {self.real_transform} {src.transform}")
-                        if not str(src.crs).lower() == str(self.crs).lower():
-                            raise ValueError(f"Different CRS in {self.paths[0]} and {p}: {self.crs} {src.crs}")
-                        if self.real_count != src.count:
-                            raise ValueError(f"Different number of bands in {self.paths[0]} and {p} {self.real_count} {src.count}")
-                        if src.nodata != self.nodata:
-                            warnings.warn(
-                                f"Different nodata in {self.paths[0]} and {p}: {self.nodata} {src.nodata}. This might lead to unexpected behaviour")
+                # with rasterio.Env(**self.rio_env_options):
+                #     with rasterio.open(p, "r", overview_level=overview_level) as src:
+                with self._rio_open(p, overview_level=overview_level) as src:
+                    if not src.transform.almost_equals(self.real_transform, 1e-6):
+                        raise ValueError(f"Different transform in {self.paths[0]} and {p}: {self.real_transform} {src.transform}")
+                    if not str(src.crs).lower() == str(self.crs).lower():
+                        raise ValueError(f"Different CRS in {self.paths[0]} and {p}: {self.crs} {src.crs}")
+                    if self.real_count != src.count:
+                        raise ValueError(f"Different number of bands in {self.paths[0]} and {p} {self.real_count} {src.count}")
+                    if src.nodata != self.nodata:
+                        warnings.warn(
+                            f"Different nodata in {self.paths[0]} and {p}: {self.nodata} {src.nodata}. This might lead to unexpected behaviour")
 
-                        if (self.real_width != src.width) or (self.real_height != src.height):
-                            if allow_different_shape:
-                                warnings.warn(f"Different shape in {self.paths[0]} and {p}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width}) Might lead to unexpected behaviour")
-                            else:
-                                raise ValueError(f"Different shape in {self.paths[0]} and {p}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width})")
+                    if (self.real_width != src.width) or (self.real_height != src.height):
+                        if allow_different_shape:
+                            warnings.warn(f"Different shape in {self.paths[0]} and {p}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width}) Might lead to unexpected behaviour")
+                        else:
+                            raise ValueError(f"Different shape in {self.paths[0]} and {p}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width})")
 
         self.check = check
         if indexes is not None:
@@ -329,24 +330,34 @@ class RasterioReader:
         """
         tags = []
         for i, p in enumerate(self.paths):
-            with rasterio.Env(**self.rio_env_options):
-                with rasterio.open(p, "r", overview_level=self.overview_level) as src:
-                    tags.append(src.tags())
+            with self._rio_open(p) as src:
+                tags.append(src.tags())
 
         if (not self.stack) and (len(tags) == 1):
             return tags[0]
 
         return tags
 
+    @contextmanager
+    def _rio_open(self, path:str, mode:str="r", overview_level:Optional[int]=None) -> rasterio.DatasetReader:
+        options = self.rio_env_options
+        if "read_with_CPL_VSIL_CURL_NON_CACHED" in options:
+            options = options.copy()
+            if options["read_with_CPL_VSIL_CURL_NON_CACHED"]:
+                options["CPL_VSIL_CURL_NON_CACHED"] = _vsi_path(path)
+                del options["read_with_CPL_VSIL_CURL_NON_CACHED"]
+        with rasterio.Env(**options):
+                with rasterio.open(path, mode=mode, overview_level=overview_level) as src:
+                    yield src        
+
     @property
     def descriptions(self) -> Union[List[List[str]], List[str]]:
         """
         Returns a list with the descriptions for each tiff file. (This is usually the name of the bands of the raster)
 
-        If stack it returns just the List with the descriptions
 
         Returns:
-            List of lists with the descriptions of the bands of each tiff file
+            If `stack` it returns the flattened list of descriptions for each tiff file. If not `stack` it returns a list of lists.
         
         Examples:
             >>> r = RasterioReader("path/to/raster.tif") # Raster with band names B1, B2, B3
@@ -354,9 +365,10 @@ class RasterioReader:
         """
         descriptions_all = []
         for i, p in enumerate(self.paths):
-            with rasterio.Env(**self.rio_env_options):
-                with rasterio.open(p, "r") as src:
-                    desc = src.descriptions
+            # with rasterio.Env(**self.rio_env_options):
+            #     with rasterio.open(p, "r") as src:
+            with self._rio_open(p) as src:
+                desc = src.descriptions
 
             if self.stack:
                 descriptions_all.append([desc[i-1] for i in self.indexes])
@@ -493,9 +505,10 @@ class RasterioReader:
         """
         Returns a list of the available overview levels for the current raster.
         """
-        with rasterio.Env(**self.rio_env_options):
-            with rasterio.open(self.paths[time_index]) as src:
-                return src.overviews(index)
+        # with rasterio.Env(**self.rio_env_options):
+        #     with rasterio.open(self.paths[time_index]) as src:
+        with self._rio_open(self.paths[time_index]) as src:
+            return src.overviews(index)
     
     def reader_overview(self, overview_level:int) -> '__class__':
         if overview_level < 0:
@@ -520,9 +533,10 @@ class RasterioReader:
             list of (block_idx, window)
 
         """
-        with rasterio.Env(**self.rio_env_options):
-            with rasterio.open(self.paths[time_idx]) as src:
-                windows_return = [(block_idx, rasterio.windows.intersection(window, self.window_focus)) for block_idx, window in src.block_windows(bidx) if rasterio.windows.intersect(self.window_focus, window)]
+        # with rasterio.Env(**self.rio_env_options):
+        #     with rasterio.open(self.paths[time_idx]) as src:
+        with self._rio_open(self.paths[time_idx]) as src:
+            windows_return = [(block_idx, rasterio.windows.intersection(window, self.window_focus)) for block_idx, window in src.block_windows(bidx) if rasterio.windows.intersect(self.window_focus, window)]
 
         return windows_return
 
@@ -621,11 +635,6 @@ class RasterioReader:
 
         kwargs["window"] = window
 
-        if "read_with_CPL_VSIL_CURL_NON_CACHED" in kwargs:
-            read_with_CPL_VSIL_CURL_NON_CACHED = kwargs.pop("read_with_CPL_VSIL_CURL_NON_CACHED")
-        else:
-            read_with_CPL_VSIL_CURL_NON_CACHED = False
-
         if "boundless" not in kwargs:
             kwargs["boundless"] = True
 
@@ -688,30 +697,23 @@ class RasterioReader:
                     pad = None
 
             for i, p in enumerate(self.paths):
-                options = self.rio_env_options.copy()
-                if read_with_CPL_VSIL_CURL_NON_CACHED:
-                    options["CPL_VSIL_CURL_NON_CACHED"] = _vsi_path(p)
-                elif "read_with_CPL_VSIL_CURL_NON_CACHED" in options:
-                    if options["read_with_CPL_VSIL_CURL_NON_CACHED"]:
-                        options["CPL_VSIL_CURL_NON_CACHED"] = _vsi_path(p)
-                    del options["read_with_CPL_VSIL_CURL_NON_CACHED"]
+                # with rasterio.Env(**options):
+                #     with rasterio.open(p, "r", overview_level=self.overview_level) as src:
+                with self._rio_open(p, overview_level=self.overview_level) as src:
+                    # rasterio.read API: https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.read
+                    read_data = src.read(**kwargs)
 
-                with rasterio.Env(**options):
-                    with rasterio.open(p, "r", overview_level=self.overview_level) as src:
-                        # rasterio.read API: https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.read
-                        read_data = src.read(**kwargs)
-
-                        # Add pad when reading
-                        if pad is not None and need_pad:
-                            slice_y = slice(pad["y"][0], -pad["y"][1] if pad["y"][1] !=0 else None)
-                            slice_x = slice(pad["x"][0], -pad["x"][1] if pad["x"][1] !=0 else None)
-                            obj_out[i, :, slice_y, slice_x] = read_data
-                        else:
-                            obj_out[i] = read_data
-                            # pad_list_np = _get_pad_list(pad)
-                        #
-                        # read_data = np.pad(read_data, tuple(pad_list_np), mode="constant",
-                        #                    constant_values=self.fill_value_default)
+                    # Add pad when reading
+                    if pad is not None and need_pad:
+                        slice_y = slice(pad["y"][0], -pad["y"][1] if pad["y"][1] !=0 else None)
+                        slice_x = slice(pad["x"][0], -pad["x"][1] if pad["x"][1] !=0 else None)
+                        obj_out[i, :, slice_y, slice_x] = read_data
+                    else:
+                        obj_out[i] = read_data
+                        # pad_list_np = _get_pad_list(pad)
+                    #
+                    # read_data = np.pad(read_data, tuple(pad_list_np), mode="constant",
+                    #                    constant_values=self.fill_value_default)
 
 
 
