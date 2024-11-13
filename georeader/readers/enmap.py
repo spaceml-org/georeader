@@ -84,6 +84,16 @@ def _find_metadata_rpcs(tree,
 def _rasterio_build_rpcs(rpcs) -> rasterio.rpc.RPC:
     ''' Creates an RPC Rasterio object 
     '''
+    # Setting the height offset to zero
+    rpcs['height_off']=0
+    '''
+    Setting the height offset to 0 tricks the RPCs
+    to generate lat/lon coordinates at the averge
+    height of the scene (whatever that height might
+    be according to the DEM). This improves EnMAPs
+    georeferencing without conducting a terrain
+    orthorectification.
+    '''
     # Build an rpc object
     rpcs_rio = rasterio.rpc.RPC(rpcs['height_off'],
                            rpcs['height_scale'],
