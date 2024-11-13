@@ -45,6 +45,40 @@ def earth_sun_distance_correction_factor(date_of_acquisition:datetime) -> float:
     return 1 - 0.01673 * np.cos(0.0172 * (tm_yday - 4))
 
 
+def compute_sza(center_coords:Tuple[float, float], date_of_acquisition:datetime, crs_coords:Optional[str]=None) -> float:
+    """
+    This function returns the solar zenith angle for a given location and date of acquisition.
+
+    Args:
+        center_coords (Tuple[float, float]): location being considered (x,y) (long, lat if EPSG:4326)
+        date_of_acquisition (datetime): date of acquisition to compute the solar zenith angles. It 
+            is assumed to be UTC time.
+        crs_coords (Optional[str], optional): if None it will assume center_coords are in EPSG:4326. Defaults to None.
+
+    Returns:
+        float: solar zenith angle in degrees
+    """
+    try:
+        from pysolar.solar import get_altitude
+    except ImportError:
+        raise ImportError("pysolar is required to compute the solar zenith angle. Install it with `pip install pysolar`")
+
+    if crs_coords is not None and not window_utils.compare_crs(crs_coords, "EPSG:4326"):
+        from rasterio import warp
+        centers_long, centers_lat = warp.transform(crs_coords,
+                                                   {'init': 'epsg:4326'}, [center_coords[0]], [center_coords[1]])
+        centers_long = centers_long[0]
+        centers_lat = centers_lat[0]
+    else:
+        centers_long = center_coords[0]
+        centers_lat = center_coords[1]
+    
+    # Get Solar Altitude (in degrees)
+    solar_altitude = get_altitude(latitude_deg=centers_lat, longitude_deg=centers_long,
+                                  when=date_of_acquisition)
+    return 90 - solar_altitude
+
+
 def observation_date_correction_factor(center_coords:Tuple[float, float], 
                                        date_of_acquisition:datetime,
                                        crs_coords:Optional[str]=None) -> float:
@@ -62,22 +96,7 @@ def observation_date_correction_factor(center_coords:Tuple[float, float],
         correction factor
 
     """
-    from pysolar.solar import get_altitude
-    from rasterio import warp
-
-    if crs_coords is not None and not window_utils.compare_crs(crs_coords, "EPSG:4326"):
-        centers_long, centers_lat = warp.transform(crs_coords,
-                                                   {'init': 'epsg:4326'}, [center_coords[0]], [center_coords[1]])
-        centers_long = centers_long[0]
-        centers_lat = centers_lat[0]
-    else:
-        centers_long = center_coords[0]
-        centers_lat = center_coords[1]
-    
-    # Get Solar Altitude (in degrees)
-    solar_altitude = get_altitude(latitude_deg=centers_lat, longitude_deg=centers_long,
-                                  when=date_of_acquisition)
-    sza = 90 - solar_altitude
+    sza = compute_sza(center_coords, date_of_acquisition, crs_coords=crs_coords)
     d = earth_sun_distance_correction_factor(date_of_acquisition)
 
     return np.pi*(d**2) / np.cos(sza/180.*np.pi)
