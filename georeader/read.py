@@ -370,53 +370,33 @@ def read_reproject_like(data_in: GeoData, data_like: GeoData,
                           dst_nodata=dst_nodata)
 
 
-def resize(data_in:GeoData, resolution_dst:Union[float, Tuple[float, float]],
-           window_out:Optional[rasterio.windows.Window]=None,
-           anti_aliasing:bool=True, anti_aliasing_sigma:Optional[Union[float,np.ndarray]]=None,
-           resampling: rasterio.warp.Resampling = rasterio.warp.Resampling.cubic_spline,
-           return_only_data: bool = False)-> Union[
-    GeoTensor, np.ndarray]:
+def apply_anti_aliasing(data_in:GeoData, anti_aliasing_sigma:Optional[Union[float,np.ndarray]]=None,
+                        resolution_dst:Optional[Union[float, Tuple[float, float]]]=None) -> GeoTensor:
     """
-    Change the spatial resolution of data_in to `resolution_dst`. This function is a wrapper of the `read_reproject` function
-    that adds anti_aliasing before reprojecting.
+    Apply anti-aliasing to `data_in` assuming it will be downsampled to `resolution_dst`.
 
     Args:
-        data_in: GeoData to change the resolution. Expected coords "x" and "y".
-        resolution_dst: spatial resolution in data_in crs
-        window_out: Optional. output size of the fragment to read and reproject. Defaults to the ceiling size
-        anti_aliasing: Whether to apply a Gaussian filter to smooth the image prior to downsampling
-        anti_aliasing_sigma:  anti_aliasing_sigma : {float}, optional
-                Standard deviation for Gaussian filtering used when anti-aliasing.
-                By default, this value is chosen as (s - 1) / 2 where s is the
-                downsampling factor, where s > 1
-        resampling: specifies how data is reprojected from `rasterio.warp.Resampling`.
-        return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
-            returns an GeoTensor object (georreferenced array).
+        data_in (GeoData): GeoData to apply anti-aliasing
+        anti_aliasing_sigma (Optional[Union[float,np.ndarray]], optional): Standard deviation for Gaussian filtering used when anti-aliasing.
+                By default, this value is chosen as (s - 1) / 2 where s is the downsampling factor, where s > 1. Defaults to None.
+        resolution_dst (Optional[Union[float, Tuple[float, float]]], optional): spatial resolution in data_in crs. Defaults
+            to None.
 
     Returns:
-        GeoTensor with spatial resolution `resolution_dst`
-
+        GeoTensor: GeoTensor with anti-aliasing applied
     """
     resolution_or = data_in.res
     if isinstance(resolution_dst, numbers.Number):
         resolution_dst = (abs(resolution_dst), abs(resolution_dst))
-
+    
     scale = np.array([resolution_dst[0] / resolution_or[0], resolution_dst[1] / resolution_or[1]])
-
-    if window_out is None:
-        spatial_shape = data_in.shape[-2:]
-
-        # scale < 1 => make image smaller (resolution_or < resolution_dst)
-        # scale > 1 => make image larger (resolution_or > resolution_dst)
-        output_shape_exact = spatial_shape[0] / scale[0], spatial_shape[1] / scale[1]
-        output_shape_rounded = round(output_shape_exact[0], ndigits=3), round(output_shape_exact[1], ndigits=3)
-        output_shape = ceil(output_shape_rounded[0]), ceil(output_shape_rounded[1])
-        window_out = rasterio.windows.Window(col_off=0, row_off=0, width=output_shape[1], height=output_shape[0])
-
-    if anti_aliasing and any(s1<s2 for s1,s2 in zip(resolution_or, resolution_dst)):
+    
+    if any(s1<s2 for s1,s2 in zip(resolution_or, resolution_dst)):
         # If we are downscaling the image and requested anti_aliasing
-
-        from scipy import ndimage as ndi
+        try:
+            from scipy import ndimage as ndi
+        except ImportError:
+            raise ImportError("scipy is required to apply anti-aliasing")
 
         # Copy or load the tensor in memory
         if isinstance(data_in, GeoTensor):
@@ -451,7 +431,55 @@ def resize(data_in:GeoData, resolution_dst:Union[float, Tuple[float, float]],
         else:
             data_in.values[...] = ndi.gaussian_filter(data_in.values,
                                                       anti_aliasing_sigma, cval=0, mode="reflect")
+    
+    return data_in
 
+
+def resize(data_in:GeoData, resolution_dst:Union[float, Tuple[float, float]],
+           window_out:Optional[rasterio.windows.Window]=None,
+           anti_aliasing:bool=True, anti_aliasing_sigma:Optional[Union[float,np.ndarray]]=None,
+           resampling: rasterio.warp.Resampling = rasterio.warp.Resampling.cubic_spline,
+           return_only_data: bool = False)-> Union[
+    GeoTensor, np.ndarray]:
+    """
+    Change the spatial resolution of data_in to `resolution_dst`. This function is a wrapper of the `read_reproject` function
+    that adds anti_aliasing before reprojecting.
+
+    Args:
+        data_in: GeoData to change the resolution. Expected coords "x" and "y".
+        resolution_dst: spatial resolution in data_in crs
+        window_out: Optional. output size of the fragment to read and reproject. Defaults to the ceiling size
+        anti_aliasing: Whether to apply a Gaussian filter to smooth the image prior to downsampling
+        anti_aliasing_sigma:  anti_aliasing_sigma : {float}, optional
+                Standard deviation for Gaussian filtering used when anti-aliasing.
+                By default, this value is chosen as (s - 1) / 2 where s is the
+                downsampling factor, where s > 1
+        resampling: specifies how data is reprojected from `rasterio.warp.Resampling`.
+        return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
+            returns an GeoTensor object (georreferenced array).
+
+    Returns:
+        GeoTensor with spatial resolution `resolution_dst`
+
+    """
+    resolution_or = data_in.res
+    if isinstance(resolution_dst, numbers.Number):
+        resolution_dst = (abs(resolution_dst), abs(resolution_dst))
+    scale = np.array([resolution_dst[0] / resolution_or[0], resolution_dst[1] / resolution_or[1]])
+
+    if window_out is None:
+        spatial_shape = data_in.shape[-2:]
+
+        # scale < 1 => make image smaller (resolution_or < resolution_dst)
+        # scale > 1 => make image larger (resolution_or > resolution_dst)
+        output_shape_exact = spatial_shape[0] / scale[0], spatial_shape[1] / scale[1]
+        output_shape_rounded = round(output_shape_exact[0], ndigits=3), round(output_shape_exact[1], ndigits=3)
+        output_shape = ceil(output_shape_rounded[0]), ceil(output_shape_rounded[1])
+        window_out = rasterio.windows.Window(col_off=0, row_off=0, width=output_shape[1], height=output_shape[0])
+
+    if anti_aliasing:
+        data_in = apply_anti_aliasing(data_in, anti_aliasing_sigma=anti_aliasing_sigma, 
+                                      resolution_dst=resolution_dst)
 
     return read_reproject(data_in, dst_crs=data_in.crs, resolution_dst_crs=resolution_dst,
                           dst_transform=data_in.transform, window_out=window_out,
