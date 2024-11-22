@@ -12,25 +12,29 @@ from georeader import window_utils
 from georeader.abstract_reader import GeoData
 
 
-def rasterize_geometry_like(geometry:Union[Polygon, MultiPolygon, LineString], data_like: GeoData, value:Number=1,
+def rasterize_geometry_like(geometry:Union[Polygon, MultiPolygon, LineString], 
+                            data_like: GeoData, value:Number=1,
                             dtype:Any=np.uint8,
                             crs_geometry:Optional[Any]=None, fill:Union[int, float]=0, all_touched:bool=False,
                             return_only_data:bool=False)-> Union[GeoTensor, np.ndarray]:
     """
-    Rasterise the `geometry` to the same extent and resolution as defined `data_like` GeoData object
+    Rasterise the `geometry` to the same extent and resolution as defined `data_like` GeoData object.
 
     Args:
         geometry: geometry to rasterise
-        data_like: geoData to use transform, bounds and crs for rasterisation
+        data_like: geoData to use transform, bounds and crs for rasterisation. Output
+            raster will have the same extent, resolution, crs and shape as this object.
         value: value to use in the points within the geometry
-        dtype: dtype of the rasterise raster.
+        dtype: dtype of the rasterised raster.
         crs_geometry: CRS of geometry
-        fill: fill option for rasterio.features.rasterize
-        all_touched: all_touched option for rasterio.features.rasterize
-        return_only_data: if `True` returns only the np.ndarray without georref info.
+        fill: fill option for `rasterio.features.rasterize`. Value for pixels not covered by the geometries.
+        all_touched: all_touched option for `rasterio.features.rasterize`. If True, all pixels touched 
+            by geometries will be burned in.  If false, only pixels whose center is within the polygon or that
+            are selected by Bresenham's line algorithm will be burned in.
+        return_only_data: if `True` returns only the `np.ndarray`.
 
     Returns:
-        GeoTensor or np.ndarray with shape (H, W) with the rasterised polygon
+        `GeoTensor` or `np.ndarray` with shape `(H, W)` with the rasterised polygon
     """
     shape_out = data_like.shape
     if crs_geometry and not window_utils.compare_crs(data_like.crs, crs_geometry):
@@ -53,7 +57,7 @@ def rasterize_from_geometry(geometry:Union[Polygon, MultiPolygon, LineString],
                             crs_geom_bounds:Optional[Any]=None, fill:Union[int, float]=0, all_touched:bool=False,
                             return_only_data:bool=False)-> Union[GeoTensor, np.ndarray]:
     """
-    Rasterise the provided geometry over the bounds with the specified resolution.
+    Rasterise the provided geometry over the bounds with the specified resolution, transform, shape and crs.
 
     Args:
         geometry: geometry to rasterise (with crs `crs_geom_bounds`)
@@ -64,12 +68,14 @@ def rasterize_from_geometry(geometry:Union[Polygon, MultiPolygon, LineString],
         value: column to take the values for rasterisation.
         dtype: dtype of the rasterise raster.
         crs_geom_bounds: CRS of geometry and bounds
-        fill: fill option for rasterio.features.rasterize
-        all_touched: all_touched option for rasterio.features.rasterize
+        fill: fill option for `rasterio.features.rasterize`. Value for pixels not covered by the geometries.
+        all_touched: all_touched option for `rasterio.features.rasterize`. If True, all pixels touched 
+            by geometries will be burned in.  If false, only pixels whose center is within the polygon or that
+            are selected by Bresenham's line algorithm will be burned in.
         return_only_data: if `True` returns only the np.ndarray without georref info.
 
     Returns:
-        GeoTensor or np.ndarray with shape (H, W) with the rasterised polygon
+        `GeoTensor` or `np.ndarray` with shape `(H, W)` with the rasterised polygon
     """
 
     transform = window_utils.figure_out_transform(transform=transform, bounds=bounds,
@@ -98,15 +104,18 @@ def rasterize_geopandas_like(dataframe:gpd.GeoDataFrame,data_like: GeoData, colu
     Rasterise the geodataframe to the same extent and resolution as defined `data_like` GeoData object
     
     Args:
-        dataframe: geodataframe with columns geometry and `column`. The 'geometry' column is expected to have shapely geometries
+        dataframe: `GeoDataFrame` with columns `geometry` and `column`. 
+            The 'geometry' column is expected to have shapely geometries.
         data_like: geoData to use transform, bounds and crs for rasterisation
         column: column to take the values for rasterisation.
-        fill: fill option for rasterio.features.rasterize
-        all_touched: all_touched option for rasterio.features.rasterize
-        return_only_data: if `True` returns only the np.ndarray without georref info.
+        fill: fill option for `rasterio.features.rasterize`. Value for pixels not covered by the geometries.
+        all_touched: all_touched option for `rasterio.features.rasterize`. If True, all pixels touched 
+            by geometries will be burned in.  If false, only pixels whose center is within the polygon or that
+            are selected by Bresenham's line algorithm will be burned in.
+        return_only_data: if `True` returns only the `np.ndarray`.
 
     Returns:
-        GeoTensor or np.ndarray with shape (H, W) with the rasterised polygons of the dataframe
+        `GeoTensor` or `np.ndarray` with shape (H, W) with the rasterised polygons of the dataframe
 
     """
 
@@ -131,7 +140,8 @@ def rasterize_from_geopandas(dataframe:gpd.GeoDataFrame,
     Rasterise the provided geodataframe over the bounds with the specified resolution.
 
     Args:
-        dataframe: geodataframe with columns geometry and `column`. The 'geometry' column is expected to have shapely geometries
+        dataframe: `GeoDataFrame` with columns `geometry` and `column`. 
+            The 'geometry' column is expected to have shapely geometries.
         bounds: bounds where the polygons will be rasterised with CRS `crs_out`.
         transform: if transform is provided if will use this for the resolution.
         resolution: spatial resolution of the rasterised array
@@ -139,12 +149,14 @@ def rasterize_from_geopandas(dataframe:gpd.GeoDataFrame,
         column: column to take the values for rasterisation.
         crs_out: defaults to dataframe.crs. This function will transform the geometries from dataframe.crs to this crs
             before rasterisation. `bounds` are in this crs.
-        fill: fill option for rasterio.features.rasterize
-        all_touched: all_touched option for rasterio.features.rasterize
-        return_only_data: if `True` returns only the np.ndarray without georref info.
+        fill: fill option for `rasterio.features.rasterize`. Value for pixels not covered by the geometries.
+        all_touched: all_touched option for `rasterio.features.rasterize`. If True, all pixels touched 
+            by geometries will be burned in.  If false, only pixels whose center is within the polygon or that
+            are selected by Bresenham's line algorithm will be burned in.
+        return_only_data: if `True` returns only the `np.ndarray`.
 
     Returns:
-        GeoTensor or np.ndarray with shape (H, W) with the rasterised polygons  of the dataframe
+        `GeoTensor` or `np.ndarray` with shape `(H, W)` with the rasterised polygons of the dataframe
     """
 
     if crs_out is None:
