@@ -484,7 +484,7 @@ class GeoTensor:
             >>> gt.pad({"x": (10, 10), "y": (10, 10)})
             >>> assert gt.shape == (3, 120, 120)
         """
-        if constant_values is None:
+        if constant_values is None and mode == "constant":
             constant_values = self.fill_value_default
 
         # Pad the data
@@ -526,7 +526,8 @@ class GeoTensor:
         return GeoTensor(values_new, transform_current, self.crs,
                          self.fill_value_default)
 
-    def resize(self, output_shape:Tuple[int,int],
+    def resize(self, output_shape:Optional[Tuple[int,int]]=None,
+               resolution_dst:Optional[Tuple[float,float]]=None,
                anti_aliasing:bool=True, anti_aliasing_sigma:Optional[Union[float,np.ndarray]]=None,
                interpolation:Optional[str]="bilinear",
                mode_pad:str="constant")-> '__class__':
@@ -535,13 +536,15 @@ class GeoTensor:
         The geoinformation of the output tensor is changed accordingly.
 
         Args:
-            output_shape: output spatial shape
+            output_shape: output spatial shape if None resolution_dst must be provided. If not provided, 
+                the output shape is computed from the resolution_dst rounding to the closest integer.
+            resolution_dst: output resolution if None output_shape must be provided.
             anti_aliasing: Whether to apply a Gaussian filter to smooth the image prior to downsampling
             anti_aliasing_sigma:  anti_aliasing_sigma : {float}, optional
                 Standard deviation for Gaussian filtering used when anti-aliasing.
                 By default, this value is chosen as (s - 1) / 2 where s is the
                 downsampling factor, where s > 1
-            interpolation: – algorithm used for resizing: 'nearest' | 'bilinear' | ‘bicubic’
+            interpolation: Algorithm used for resizing: 'nearest' | 'bilinear' | 'bicubic'
             mode_pad: mode pad for resize function
 
         Returns:
@@ -559,7 +562,14 @@ class GeoTensor:
 
 
         assert len(output_shape) == 2, f"Expected output shape to be the spatial dimensions found: {output_shape}"
-        resolution_dst =  spatial_shape[0]*resolution_or[0]/output_shape[0], \
+        if output_shape is None:
+            assert resolution_dst is not None, f"Can't have output_shape and resolution_dst as None"
+            output_shape = int(round(spatial_shape[0] / resolution_or[0] * resolution_dst[0])), \
+                            int(round(spatial_shape[1] / resolution_or[1] * resolution_dst[1]))
+            
+        else:
+            assert resolution_dst is None, f"Both output_shape and resolution_dst can't be provided"
+            resolution_dst =  spatial_shape[0]*resolution_or[0]/output_shape[0], \
                           spatial_shape[1]*resolution_or[1]/output_shape[1]
 
         # Compute output transform

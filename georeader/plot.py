@@ -226,9 +226,9 @@ def add_shape_to_plot(shape:Union[gpd.GeoDataFrame, List[Geometry], Geometry], a
     
     return ax
     
-    
+from numpy.typing import NDArray
 
-def plot_segmentation_mask(mask:GeoData, color_array:np.array,
+def plot_segmentation_mask(mask:GeoData, color_array:Optional[NDArray]=None,
                            interpretation_array:Optional[List[str]]=None,
                            legend:bool=True, ax:Optional[plt.Axes]=None,
                            add_scalebar:bool=False,
@@ -252,6 +252,14 @@ def plot_segmentation_mask(mask:GeoData, color_array:np.array,
         plt.Axes
 
     """
+    if color_array is None:
+        if interpretation_array is not None:
+            nlabels = len(interpretation_array)
+        else:
+            nlabels = len(np.unique(mask))
+        
+        color_array = plt.cm.tab20.colors[:nlabels]
+
     cmap_categorical = colors.ListedColormap(color_array)
     color_array = np.array(color_array)
     norm_categorical = colors.Normalize(vmin=-.5,
@@ -269,6 +277,8 @@ def plot_segmentation_mask(mask:GeoData, color_array:np.array,
               kwargs_scalebar=kwargs_scalebar, bounds_in_latlng=bounds_in_latlng)
 
     if legend:
+        if interpretation_array is None:
+            interpretation_array = [str(i) for i in range(color_array.shape[0])]
         patches = []
         for c, interp in zip(color_array, interpretation_array):
             patches.append(mpatches.Patch(color=c, label=interp))
