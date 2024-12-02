@@ -500,8 +500,11 @@ class GeoTensor:
                     pad_list_torch.extend(list(pad_width[k]))
                 else:
                     pad_list_torch.extend([0,0])
-            values_new = torch.nn.functional.pad(self.values, tuple(pad_list_torch), mode=mode,
-                                                 value=constant_values)
+            
+            kwargs_extra = {}
+            if mode == "constant":
+                kwargs_extra["value"] = constant_values
+            values_new = torch.nn.functional.pad(self.values, tuple(pad_list_torch), mode=mode, **kwargs_extra)
         else:
             pad_list_np = []
             for k in self.dims:
