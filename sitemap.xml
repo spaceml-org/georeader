@@ -2,74 +2,78 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://spaceml-org.github.io/georeader/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
     </url>
     <url>
          <loc>https://spaceml-org.github.io/georeader/emit_explore/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
     </url>
     <url>
          <loc>https://spaceml-org.github.io/georeader/enmap_with_cloudsen12/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
     </url>
     <url>
          <loc>https://spaceml-org.github.io/georeader/read_S2_SAFE_from_bucket/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
     </url>
     <url>
          <loc>https://spaceml-org.github.io/georeader/read_overlapping_probav_and_sentinel2/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
     </url>
     <url>
          <loc>https://spaceml-org.github.io/georeader/reading_overlapping_sentinel2_aviris/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
     </url>
     <url>
          <loc>https://spaceml-org.github.io/georeader/simultaneous_prisma_emit/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
     </url>
     <url>
          <loc>https://spaceml-org.github.io/georeader/Sentinel-2/explore_metadata_s2/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
     </url>
     <url>
          <loc>https://spaceml-org.github.io/georeader/Sentinel-2/query_mosaic_s2_images/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
     </url>
     <url>
          <loc>https://spaceml-org.github.io/georeader/Sentinel-2/run_in_gee_image/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
+    </url>
+    <url>
+         <loc>https://spaceml-org.github.io/georeader/Sentinel-2/s2_mosaic_from_gee/</loc>
+         <lastmod>2024-12-03</lastmod>
     </url>
     <url>
          <loc>https://spaceml-org.github.io/georeader/advanced/error_read_write_in_remote_path/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
     </url>
     <url>
          <loc>https://spaceml-org.github.io/georeader/modules/geotensor_module/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
     </url>
     <url>
          <loc>https://spaceml-org.github.io/georeader/modules/rasterio_reader/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
     </url>
     <url>
          <loc>https://spaceml-org.github.io/georeader/modules/rasterize_module/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
     </url>
     <url>
          <loc>https://spaceml-org.github.io/georeader/modules/read_module/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
     </url>
     <url>
          <loc>https://spaceml-org.github.io/georeader/modules/reflectance_module/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
     </url>
     <url>
          <loc>https://spaceml-org.github.io/georeader/modules/save_module/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
     </url>
     <url>
          <loc>https://spaceml-org.github.io/georeader/modules/vectorize_module/</loc>
-         <lastmod>2024-11-13</lastmod>
+         <lastmod>2024-12-03</lastmod>
     </url>
 </urlset>

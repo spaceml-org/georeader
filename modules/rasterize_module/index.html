@@ -813,6 +813,27 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../Sentinel-2/s2_mosaic_from_gee/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Mosaic from GEE
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1122,7 +1143,7 @@
 
     <div class="doc doc-contents ">
 
-        <p>Rasterise the provided geometry over the bounds with the specified resolution.</p>
+        <p>Rasterise the provided geometry over the bounds with the specified resolution, transform, shape and crs.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1273,7 +1294,7 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>fill option for rasterio.features.rasterize</p>
+                <p>fill option for <code>rasterio.features.rasterize</code>. Value for pixels not covered by the geometries.</p>
               </div>
             </td>
             <td>
@@ -1289,7 +1310,9 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>all_touched option for rasterio.features.rasterize</p>
+                <p>all_touched option for <code>rasterio.features.rasterize</code>. If True, all pixels touched 
+by geometries will be burned in.  If false, only pixels whose center is within the polygon or that
+are selected by Bresenham's line algorithm will be burned in.</p>
               </div>
             </td>
             <td>
@@ -1331,7 +1354,7 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>GeoTensor or np.ndarray with shape (H, W) with the rasterised polygon</p>
+                <p><code>GeoTensor</code> or <code>np.ndarray</code> with shape <code>(H, W)</code> with the rasterised polygon</p>
               </div>
             </td>
           </tr>
@@ -1340,11 +1363,7 @@
 
             <details class="quote">
               <summary>Source code in <code>georeader/rasterize.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">46</span>
-<span class="normal">47</span>
-<span class="normal">48</span>
-<span class="normal">49</span>
-<span class="normal">50</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">50</span>
 <span class="normal">51</span>
 <span class="normal">52</span>
 <span class="normal">53</span>
@@ -1386,7 +1405,13 @@
 <span class="normal">89</span>
 <span class="normal">90</span>
 <span class="normal">91</span>
-<span class="normal">92</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">rasterize_from_geometry</span><span class="p">(</span><span class="n">geometry</span><span class="p">:</span><span class="n">Union</span><span class="p">[</span><span class="n">Polygon</span><span class="p">,</span> <span class="n">MultiPolygon</span><span class="p">,</span> <span class="n">LineString</span><span class="p">],</span>
+<span class="normal">92</span>
+<span class="normal">93</span>
+<span class="normal">94</span>
+<span class="normal">95</span>
+<span class="normal">96</span>
+<span class="normal">97</span>
+<span class="normal">98</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">rasterize_from_geometry</span><span class="p">(</span><span class="n">geometry</span><span class="p">:</span><span class="n">Union</span><span class="p">[</span><span class="n">Polygon</span><span class="p">,</span> <span class="n">MultiPolygon</span><span class="p">,</span> <span class="n">LineString</span><span class="p">],</span>
                             <span class="n">bounds</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                             <span class="n">transform</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">rasterio</span><span class="o">.</span><span class="n">Affine</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                             <span class="n">resolution</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -1396,7 +1421,7 @@
                             <span class="n">crs_geom_bounds</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fill</span><span class="p">:</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">all_touched</span><span class="p">:</span><span class="nb">bool</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                             <span class="n">return_only_data</span><span class="p">:</span><span class="nb">bool</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">GeoTensor</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Rasterise the provided geometry over the bounds with the specified resolution.</span>
+<span class="sd">    Rasterise the provided geometry over the bounds with the specified resolution, transform, shape and crs.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        geometry: geometry to rasterise (with crs `crs_geom_bounds`)</span>
@@ -1407,12 +1432,14 @@
 <span class="sd">        value: column to take the values for rasterisation.</span>
 <span class="sd">        dtype: dtype of the rasterise raster.</span>
 <span class="sd">        crs_geom_bounds: CRS of geometry and bounds</span>
-<span class="sd">        fill: fill option for rasterio.features.rasterize</span>
-<span class="sd">        all_touched: all_touched option for rasterio.features.rasterize</span>
+<span class="sd">        fill: fill option for `rasterio.features.rasterize`. Value for pixels not covered by the geometries.</span>
+<span class="sd">        all_touched: all_touched option for `rasterio.features.rasterize`. If True, all pixels touched </span>
+<span class="sd">            by geometries will be burned in.  If false, only pixels whose center is within the polygon or that</span>
+<span class="sd">            are selected by Bresenham&#39;s line algorithm will be burned in.</span>
 <span class="sd">        return_only_data: if `True` returns only the np.ndarray without georref info.</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        GeoTensor or np.ndarray with shape (H, W) with the rasterised polygon</span>
+<span class="sd">        `GeoTensor` or `np.ndarray` with shape `(H, W)` with the rasterised polygon</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">transform</span> <span class="o">=</span> <span class="n">window_utils</span><span class="o">.</span><span class="n">figure_out_transform</span><span class="p">(</span><span class="n">transform</span><span class="o">=</span><span class="n">transform</span><span class="p">,</span> <span class="n">bounds</span><span class="o">=</span><span class="n">bounds</span><span class="p">,</span>
@@ -1473,7 +1500,8 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>geodataframe with columns geometry and <code>column</code>. The 'geometry' column is expected to have shapely geometries</p>
+                <p><code>GeoDataFrame</code> with columns <code>geometry</code> and <code>column</code>. 
+The 'geometry' column is expected to have shapely geometries.</p>
               </div>
             </td>
             <td>
@@ -1586,7 +1614,7 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>fill option for rasterio.features.rasterize</p>
+                <p>fill option for <code>rasterio.features.rasterize</code>. Value for pixels not covered by the geometries.</p>
               </div>
             </td>
             <td>
@@ -1602,7 +1630,9 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>all_touched option for rasterio.features.rasterize</p>
+                <p>all_touched option for <code>rasterio.features.rasterize</code>. If True, all pixels touched 
+by geometries will be burned in.  If false, only pixels whose center is within the polygon or that
+are selected by Bresenham's line algorithm will be burned in.</p>
               </div>
             </td>
             <td>
@@ -1618,7 +1648,7 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>if <code>True</code> returns only the np.ndarray without georref info.</p>
+                <p>if <code>True</code> returns only the <code>np.ndarray</code>.</p>
               </div>
             </td>
             <td>
@@ -1644,7 +1674,7 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>GeoTensor or np.ndarray with shape (H, W) with the rasterised polygons  of the dataframe</p>
+                <p><code>GeoTensor</code> or <code>np.ndarray</code> with shape <code>(H, W)</code> with the rasterised polygons of the dataframe</p>
               </div>
             </td>
           </tr>
@@ -1653,16 +1683,7 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
 
             <details class="quote">
               <summary>Source code in <code>georeader/rasterize.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">122</span>
-<span class="normal">123</span>
-<span class="normal">124</span>
-<span class="normal">125</span>
-<span class="normal">126</span>
-<span class="normal">127</span>
-<span class="normal">128</span>
-<span class="normal">129</span>
-<span class="normal">130</span>
-<span class="normal">131</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">131</span>
 <span class="normal">132</span>
 <span class="normal">133</span>
 <span class="normal">134</span>
@@ -1706,7 +1727,19 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
 <span class="normal">172</span>
 <span class="normal">173</span>
 <span class="normal">174</span>
-<span class="normal">175</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">rasterize_from_geopandas</span><span class="p">(</span><span class="n">dataframe</span><span class="p">:</span><span class="n">gpd</span><span class="o">.</span><span class="n">GeoDataFrame</span><span class="p">,</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">rasterize_from_geopandas</span><span class="p">(</span><span class="n">dataframe</span><span class="p">:</span><span class="n">gpd</span><span class="o">.</span><span class="n">GeoDataFrame</span><span class="p">,</span>
                              <span class="n">column</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span>
                              <span class="n">bounds</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                              <span class="n">transform</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">rasterio</span><span class="o">.</span><span class="n">Affine</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -1718,7 +1751,8 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
 <span class="sd">    Rasterise the provided geodataframe over the bounds with the specified resolution.</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        dataframe: geodataframe with columns geometry and `column`. The &#39;geometry&#39; column is expected to have shapely geometries</span>
+<span class="sd">        dataframe: `GeoDataFrame` with columns `geometry` and `column`. </span>
+<span class="sd">            The &#39;geometry&#39; column is expected to have shapely geometries.</span>
 <span class="sd">        bounds: bounds where the polygons will be rasterised with CRS `crs_out`.</span>
 <span class="sd">        transform: if transform is provided if will use this for the resolution.</span>
 <span class="sd">        resolution: spatial resolution of the rasterised array</span>
@@ -1726,12 +1760,14 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
 <span class="sd">        column: column to take the values for rasterisation.</span>
 <span class="sd">        crs_out: defaults to dataframe.crs. This function will transform the geometries from dataframe.crs to this crs</span>
 <span class="sd">            before rasterisation. `bounds` are in this crs.</span>
-<span class="sd">        fill: fill option for rasterio.features.rasterize</span>
-<span class="sd">        all_touched: all_touched option for rasterio.features.rasterize</span>
-<span class="sd">        return_only_data: if `True` returns only the np.ndarray without georref info.</span>
+<span class="sd">        fill: fill option for `rasterio.features.rasterize`. Value for pixels not covered by the geometries.</span>
+<span class="sd">        all_touched: all_touched option for `rasterio.features.rasterize`. If True, all pixels touched </span>
+<span class="sd">            by geometries will be burned in.  If false, only pixels whose center is within the polygon or that</span>
+<span class="sd">            are selected by Bresenham&#39;s line algorithm will be burned in.</span>
+<span class="sd">        return_only_data: if `True` returns only the `np.ndarray`.</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        GeoTensor or np.ndarray with shape (H, W) with the rasterised polygons  of the dataframe</span>
+<span class="sd">        `GeoTensor` or `np.ndarray` with shape `(H, W)` with the rasterised polygons of the dataframe</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">if</span> <span class="n">crs_out</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -1777,7 +1813,7 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Rasterise the <code>geometry</code> to the same extent and resolution as defined <code>data_like</code> GeoData object</p>
+        <p>Rasterise the <code>geometry</code> to the same extent and resolution as defined <code>data_like</code> GeoData object.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -1816,7 +1852,8 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>geoData to use transform, bounds and crs for rasterisation</p>
+                <p>geoData to use transform, bounds and crs for rasterisation. Output
+raster will have the same extent, resolution, crs and shape as this object.</p>
               </div>
             </td>
             <td>
@@ -1848,7 +1885,7 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>dtype of the rasterise raster.</p>
+                <p>dtype of the rasterised raster.</p>
               </div>
             </td>
             <td>
@@ -1880,7 +1917,7 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>fill option for rasterio.features.rasterize</p>
+                <p>fill option for <code>rasterio.features.rasterize</code>. Value for pixels not covered by the geometries.</p>
               </div>
             </td>
             <td>
@@ -1896,7 +1933,9 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>all_touched option for rasterio.features.rasterize</p>
+                <p>all_touched option for <code>rasterio.features.rasterize</code>. If True, all pixels touched 
+by geometries will be burned in.  If false, only pixels whose center is within the polygon or that
+are selected by Bresenham's line algorithm will be burned in.</p>
               </div>
             </td>
             <td>
@@ -1912,7 +1951,7 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>if <code>True</code> returns only the np.ndarray without georref info.</p>
+                <p>if <code>True</code> returns only the <code>np.ndarray</code>.</p>
               </div>
             </td>
             <td>
@@ -1938,7 +1977,7 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>GeoTensor or np.ndarray with shape (H, W) with the rasterised polygon</p>
+                <p><code>GeoTensor</code> or <code>np.ndarray</code> with shape <code>(H, W)</code> with the rasterised polygon</p>
               </div>
             </td>
           </tr>
@@ -1975,25 +2014,33 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
 <span class="normal">40</span>
 <span class="normal">41</span>
 <span class="normal">42</span>
-<span class="normal">43</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">rasterize_geometry_like</span><span class="p">(</span><span class="n">geometry</span><span class="p">:</span><span class="n">Union</span><span class="p">[</span><span class="n">Polygon</span><span class="p">,</span> <span class="n">MultiPolygon</span><span class="p">,</span> <span class="n">LineString</span><span class="p">],</span> <span class="n">data_like</span><span class="p">:</span> <span class="n">GeoData</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span><span class="n">Number</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<span class="normal">43</span>
+<span class="normal">44</span>
+<span class="normal">45</span>
+<span class="normal">46</span>
+<span class="normal">47</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">rasterize_geometry_like</span><span class="p">(</span><span class="n">geometry</span><span class="p">:</span><span class="n">Union</span><span class="p">[</span><span class="n">Polygon</span><span class="p">,</span> <span class="n">MultiPolygon</span><span class="p">,</span> <span class="n">LineString</span><span class="p">],</span> 
+                            <span class="n">data_like</span><span class="p">:</span> <span class="n">GeoData</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span><span class="n">Number</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
                             <span class="n">dtype</span><span class="p">:</span><span class="n">Any</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">,</span>
                             <span class="n">crs_geometry</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fill</span><span class="p">:</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">all_touched</span><span class="p">:</span><span class="nb">bool</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                             <span class="n">return_only_data</span><span class="p">:</span><span class="nb">bool</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">GeoTensor</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Rasterise the `geometry` to the same extent and resolution as defined `data_like` GeoData object</span>
+<span class="sd">    Rasterise the `geometry` to the same extent and resolution as defined `data_like` GeoData object.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        geometry: geometry to rasterise</span>
-<span class="sd">        data_like: geoData to use transform, bounds and crs for rasterisation</span>
+<span class="sd">        data_like: geoData to use transform, bounds and crs for rasterisation. Output</span>
+<span class="sd">            raster will have the same extent, resolution, crs and shape as this object.</span>
 <span class="sd">        value: value to use in the points within the geometry</span>
-<span class="sd">        dtype: dtype of the rasterise raster.</span>
+<span class="sd">        dtype: dtype of the rasterised raster.</span>
 <span class="sd">        crs_geometry: CRS of geometry</span>
-<span class="sd">        fill: fill option for rasterio.features.rasterize</span>
-<span class="sd">        all_touched: all_touched option for rasterio.features.rasterize</span>
-<span class="sd">        return_only_data: if `True` returns only the np.ndarray without georref info.</span>
+<span class="sd">        fill: fill option for `rasterio.features.rasterize`. Value for pixels not covered by the geometries.</span>
+<span class="sd">        all_touched: all_touched option for `rasterio.features.rasterize`. If True, all pixels touched </span>
+<span class="sd">            by geometries will be burned in.  If false, only pixels whose center is within the polygon or that</span>
+<span class="sd">            are selected by Bresenham&#39;s line algorithm will be burned in.</span>
+<span class="sd">        return_only_data: if `True` returns only the `np.ndarray`.</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        GeoTensor or np.ndarray with shape (H, W) with the rasterised polygon</span>
+<span class="sd">        `GeoTensor` or `np.ndarray` with shape `(H, W)` with the rasterised polygon</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">shape_out</span> <span class="o">=</span> <span class="n">data_like</span><span class="o">.</span><span class="n">shape</span>
     <span class="k">if</span> <span class="n">crs_geometry</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">window_utils</span><span class="o">.</span><span class="n">compare_crs</span><span class="p">(</span><span class="n">data_like</span><span class="o">.</span><span class="n">crs</span><span class="p">,</span> <span class="n">crs_geometry</span><span class="p">):</span>
@@ -2044,7 +2091,8 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>geodataframe with columns geometry and <code>column</code>. The 'geometry' column is expected to have shapely geometries</p>
+                <p><code>GeoDataFrame</code> with columns <code>geometry</code> and <code>column</code>. 
+The 'geometry' column is expected to have shapely geometries.</p>
               </div>
             </td>
             <td>
@@ -2092,7 +2140,7 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>fill option for rasterio.features.rasterize</p>
+                <p>fill option for <code>rasterio.features.rasterize</code>. Value for pixels not covered by the geometries.</p>
               </div>
             </td>
             <td>
@@ -2108,7 +2156,9 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>all_touched option for rasterio.features.rasterize</p>
+                <p>all_touched option for <code>rasterio.features.rasterize</code>. If True, all pixels touched 
+by geometries will be burned in.  If false, only pixels whose center is within the polygon or that
+are selected by Bresenham's line algorithm will be burned in.</p>
               </div>
             </td>
             <td>
@@ -2124,7 +2174,7 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>if <code>True</code> returns only the np.ndarray without georref info.</p>
+                <p>if <code>True</code> returns only the <code>np.ndarray</code>.</p>
               </div>
             </td>
             <td>
@@ -2150,7 +2200,7 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>GeoTensor or np.ndarray with shape (H, W) with the rasterised polygons of the dataframe</p>
+                <p><code>GeoTensor</code> or <code>np.ndarray</code> with shape (H, W) with the rasterised polygons of the dataframe</p>
               </div>
             </td>
           </tr>
@@ -2159,13 +2209,7 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
 
             <details class="quote">
               <summary>Source code in <code>georeader/rasterize.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 94</span>
-<span class="normal"> 95</span>
-<span class="normal"> 96</span>
-<span class="normal"> 97</span>
-<span class="normal"> 98</span>
-<span class="normal"> 99</span>
-<span class="normal">100</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">100</span>
 <span class="normal">101</span>
 <span class="normal">102</span>
 <span class="normal">103</span>
@@ -2184,22 +2228,34 @@ before rasterisation. <code>bounds</code> are in this crs.</p>
 <span class="normal">116</span>
 <span class="normal">117</span>
 <span class="normal">118</span>
-<span class="normal">119</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">rasterize_geopandas_like</span><span class="p">(</span><span class="n">dataframe</span><span class="p">:</span><span class="n">gpd</span><span class="o">.</span><span class="n">GeoDataFrame</span><span class="p">,</span><span class="n">data_like</span><span class="p">:</span> <span class="n">GeoData</span><span class="p">,</span> <span class="n">column</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">rasterize_geopandas_like</span><span class="p">(</span><span class="n">dataframe</span><span class="p">:</span><span class="n">gpd</span><span class="o">.</span><span class="n">GeoDataFrame</span><span class="p">,</span><span class="n">data_like</span><span class="p">:</span> <span class="n">GeoData</span><span class="p">,</span> <span class="n">column</span><span class="p">:</span><span class="nb">str</span><span class="p">,</span>
                              <span class="n">fill</span><span class="p">:</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">all_touched</span><span class="p">:</span><span class="nb">bool</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                              <span class="n">return_only_data</span><span class="p">:</span><span class="nb">bool</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">GeoTensor</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Rasterise the geodataframe to the same extent and resolution as defined `data_like` GeoData object</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        dataframe: geodataframe with columns geometry and `column`. The &#39;geometry&#39; column is expected to have shapely geometries</span>
+<span class="sd">        dataframe: `GeoDataFrame` with columns `geometry` and `column`. </span>
+<span class="sd">            The &#39;geometry&#39; column is expected to have shapely geometries.</span>
 <span class="sd">        data_like: geoData to use transform, bounds and crs for rasterisation</span>
 <span class="sd">        column: column to take the values for rasterisation.</span>
-<span class="sd">        fill: fill option for rasterio.features.rasterize</span>
-<span class="sd">        all_touched: all_touched option for rasterio.features.rasterize</span>
-<span class="sd">        return_only_data: if `True` returns only the np.ndarray without georref info.</span>
+<span class="sd">        fill: fill option for `rasterio.features.rasterize`. Value for pixels not covered by the geometries.</span>
+<span class="sd">        all_touched: all_touched option for `rasterio.features.rasterize`. If True, all pixels touched </span>
+<span class="sd">            by geometries will be burned in.  If false, only pixels whose center is within the polygon or that</span>
+<span class="sd">            are selected by Bresenham&#39;s line algorithm will be burned in.</span>
+<span class="sd">        return_only_data: if `True` returns only the `np.ndarray`.</span>
 
 <span class="sd">    Returns:</span>
-<span class="sd">        GeoTensor or np.ndarray with shape (H, W) with the rasterised polygons of the dataframe</span>
+<span class="sd">        `GeoTensor` or `np.ndarray` with shape (H, W) with the rasterised polygons of the dataframe</span>
 
 <span class="sd">    &quot;&quot;&quot;</span>
 
