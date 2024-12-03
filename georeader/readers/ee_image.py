@@ -217,8 +217,7 @@ def export_cube(query:gpd.GeoDataFrame, geometry:Union[Polygon, MultiPolygon],
     """
     Download all images in the query that intersects the geometry. 
 
-    Note: This function is intended for small areas. If the area is too big that there are several images per day that intesesects the geometry 
-         it will not group the images by day.
+    Note: This function is intended for small areas. If the area is too big that there are several images per day that intesesects the geometry, it will not group the images by day.
 
     Args:
         query (gpd.GeoDataFrame): dataframe from `georeaders.readers.query`. Required columns: gee_id, collection_name, bands_gee
