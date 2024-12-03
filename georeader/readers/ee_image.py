@@ -1,12 +1,9 @@
 from georeader.geotensor import GeoTensor, concatenate
-from georeader.abstract_reader import GeoData
-from georeader.rasterio_reader import RasterioReader
-from shapely.geometry import Polygon, MultiPolygon, mapping, box
+from georeader.abstract_reader import FakeGeoData
+from shapely.geometry import Polygon, MultiPolygon, box
 from typing import Union, Dict, Optional, Tuple, List, Any
 import rasterio.windows
 from rasterio import Affine
-import numpy as np
-from collections import namedtuple
 from georeader import read, window_utils
 from io import BytesIO
 import rasterio
@@ -14,16 +11,16 @@ from georeader import mosaic
 from concurrent.futures import ThreadPoolExecutor
 import geopandas as gpd
 from tqdm import tqdm
+import warnings
 
 try:
     import ee
 except ImportError:
     raise ImportError("Please install the package 'earthengine-api' to use this module: pip install earthengine-api")
 
-FakeGeoData=namedtuple("FakeGeoData",["crs", "transform"])
 
-
-def export_image_fast(image:ee.Image, geometry:Union[ee.Geometry, Polygon, MultiPolygon],
+def export_image_fast(image:ee.Image, 
+                      geometry:Union[ee.Geometry, Polygon, MultiPolygon],
                       cat_bands:bool=True,
                       fill_value_default:Optional[float]=0,
                       return_metadata:bool=False) -> Union[GeoTensor, Dict[str, GeoTensor],
@@ -44,34 +41,8 @@ def export_image_fast(image:ee.Image, geometry:Union[ee.Geometry, Polygon, Multi
         GeoTensor object or Dict of band, GeoTensor.
 
     """
-    if not isinstance(geometry, ee.Geometry):
-        geometry = ee.Geometry(mapping(geometry))
+    raise NotImplementedError("This function has been deprecated. Use `export_image` instead")
 
-    image_clip_info = image.clip(geometry).getInfo()
-
-    feature_exported = image.sampleRectangle(geometry, defaultValue=fill_value_default).getInfo()
-
-    out = {}
-    band_ordered = []
-    for band in image_clip_info["bands"]:
-        band_id = band["id"]
-        crs = band["crs"]
-        transform_full_image = Affine(*band["crs_transform"])
-        window = rasterio.windows.Window(col_off=band["origin"][0], row_off=band["origin"][1],
-                                         width=band["dimensions"][0], height=band["dimensions"][1])
-        transform = rasterio.windows.transform(window, transform_full_image)
-        arr = np.array(feature_exported["properties"][band_id])
-        data_tensor = GeoTensor(arr, crs=crs, transform=transform, fill_value_default=fill_value_default)
-        out[band_id] = data_tensor
-        band_ordered.append(band_id)
-
-    if cat_bands:
-        out = concatenate([out[b] for b in band_ordered])
-
-    if return_metadata:
-        return out, image_clip_info
-
-    return out
 
 def split_bounds(bounds:Tuple[float, float, float, float]) -> List[Tuple[float, float, float, float]]:
     min_x, min_y, max_x, max_y = bounds
@@ -85,35 +56,57 @@ def split_bounds(bounds:Tuple[float, float, float, float]) -> List[Tuple[float, 
         (mid_x, mid_y, max_x, max_y),  # Upper right quadrant
     ]
 
-def export_image_getpixels(asset_id: str,
-                           geometry:Union[Polygon, MultiPolygon],
-                           proj:Dict[str, Any],
-                           bands_gee:List[str],
-                           dtype_dst:Optional[str]=None,
-                           crs_polygon:str="EPSG:4326") -> GeoTensor:
+def export_image(image_or_asset_id:Union[str, ee.Image], 
+                 geometry:Union[Polygon, MultiPolygon],
+                 transform:Affine, crs:str,
+                 bands_gee:List[str], 
+                 dtype_dst:Optional[str]=None,
+                 pad_add:Tuple[int, int]=(0, 0),
+                 crs_polygon:str="EPSG:4326",
+                 resolution_dst: Optional[Union[float, Tuple[float, float]]]=None) -> GeoTensor:
     """
-    Exports an image from the GEE as a GeoTensor. It uses the `ee.data.getPixels` method to export.
+    Exports an image from the GEE as a GeoTensor. 
+     It uses the `ee.data.getPixels` or `ee.data.computePixels` method to export the image.
 
     Args:
-        asset_id (str): Name of the asset
+        image_or_asset_id (Union[str, ee.Image]): Name of the asset or ee.Image object.
         geometry (Union[Polygon, MultiPolygon]): geometry to export
-        proj (Dict[str, Any]): Dict with fields:
-            - crs: crs of the image
-            - transform: transform of the image
+        transform (Affine): transform of the geometry
+        crs (str): crs of the geometry
+        pad_add: pad in pixels to add to the resulting `window` that is read. This is useful when this function 
+            is called for interpolation/CNN prediction.
         bands_gee (List[str]): List of bands to export
         crs_polygon (str, optional): crs of the geometry. Defaults to "EPSG:4326".
 
     Returns:
         GeoTensor: GeoTensor object
     """
-    geodata = FakeGeoData(crs=proj["crs"], transform=Affine(*proj["transform"]))
+    if isinstance(image_or_asset_id, str):
+        method = ee.data.getPixels
+        request_params = {"assetId": image_or_asset_id}
+    elif isinstance(image_or_asset_id, ee.Image):
+        method = ee.data.computePixels
+        request_params = {"expression": image_or_asset_id}
+        # TODO if crs and transform are not provided get it from the image?
+    else:
+        raise ValueError(f"image_or_asset_id must be a string or ee.Image object found {type(image_or_asset_id)}")
+
+    geodata = FakeGeoData(crs=crs, transform=transform)
+
+    # Pixel coordinates surrounding the geometry
     window_polygon = read.window_from_polygon(geodata, geometry, crs_polygon=crs_polygon,
                                               window_surrounding=True)
+    if any(p > 0 for p in pad_add):
+        window_in = window_utils.pad_window(window_in, pad_add)
     window_polygon = window_utils.round_outer_window(window_polygon)
+
+    # Shift the window to the image coordinates
     transform_window = rasterio.windows.transform(window_polygon, geodata.transform)
 
-    try:
-        data_raw = ee.data.getPixels({"assetId": asset_id, 
+    if resolution_dst is not None:
+        transform_window = window_utils.transform_to_resolution_dst(transform_window, resolution_dst)
+
+    request_params.update({
                     'fileFormat':"GEO_TIFF", 
                     'bandIds':  bands_gee,
                     'grid': {
@@ -132,6 +125,9 @@ def export_image_getpixels(asset_id: str,
                         'crsCode': geodata.crs
                     }
                     })
+
+    try:
+        data_raw = method(request_params)
         data = rasterio.open(BytesIO(data_raw))
         geotensor = GeoTensor(data.read(), transform=data.transform,
                              crs=data.crs, fill_value_default=data.nodata)
@@ -150,8 +146,11 @@ def export_image_getpixels(asset_id: str,
                 pols_execute.append(pol.intersection(geometry))
 
             def process_bound(poly):
-                gt = export_image_getpixels(asset_id, poly, 
-                                            proj, bands_gee, dtype_dst, crs_polygon)
+                gt = export_image(image_or_asset_id=image_or_asset_id, geometry=poly, 
+                                  crs=crs, transform=transform, 
+                                  bands_gee=bands_gee, dtype_dst=dtype_dst, 
+                                  crs_polygon=crs_polygon,
+                                  resolution_dst=resolution_dst)
                 return gt
 
             with ThreadPoolExecutor() as executor:
@@ -173,6 +172,41 @@ def export_image_getpixels(asset_id: str,
             raise e
     return geotensor
 
+
+def export_image_getpixels(asset_id: str,
+                           geometry:Union[Polygon, MultiPolygon],
+                           proj:Dict[str, Any],
+                           bands_gee:List[str],
+                           dtype_dst:Optional[str]=None,
+                           crs_polygon:str="EPSG:4326") -> GeoTensor:
+    """
+    Deprecated. Use `export_image` instead
+
+    Exports an image from the GEE as a GeoTensor. 
+        It uses the `ee.data.getPixels` method to export.
+
+    Args:
+        asset_id (str): Name of the asset
+        geometry (Union[Polygon, MultiPolygon]): geometry to export
+        proj (Dict[str, Any]): Dict with fields:
+            - crs: crs of the image
+            - transform: transform of the image
+        bands_gee (List[str]): List of bands to export
+        crs_polygon (str, optional): crs of the geometry. Defaults to "EPSG:4326".
+
+    Returns:
+        GeoTensor: GeoTensor object
+    """
+    warnings.warn(
+            "This function has been deprecated. Use export_image instead",
+            DeprecationWarning
+        )
+    crs=proj["crs"]
+    transform=Affine(*proj["transform"])
+    return export_image(asset_id, geometry, crs=crs,transform=transform, 
+                        bands_gee=bands_gee, dtype_dst=dtype_dst, 
+                        crs_polygon=crs_polygon)
+    
 
 def export_cube(query:gpd.GeoDataFrame, geometry:Union[Polygon, MultiPolygon], 
                 transform:Optional[Affine]=None, crs:Optional[str]=None,
@@ -225,10 +259,6 @@ def export_cube(query:gpd.GeoDataFrame, geometry:Union[Polygon, MultiPolygon],
             raise ValueError("proj column is required in the query dataframe if transform is not provided")
         transform = Affine(*first_image["proj"]["transform"])
     
-    proj = {
-            "crs": crs,
-            "transform": list(transform)[:6]
-        }
     
     # geotensor_list = []
     # for i, image in query.iterrows():
@@ -243,8 +273,9 @@ def export_cube(query:gpd.GeoDataFrame, geometry:Union[Polygon, MultiPolygon],
             bands_gee_iter = image["bands_gee"]
         else:
             bands_gee_iter = bands_gee
-        geotensor = export_image_getpixels(asset_id, geometry, proj, bands_gee_iter, 
-                                           crs_polygon=crs_polygon, dtype_dst=dtype_dst)
+        geotensor = export_image(asset_id, geometry=geometry, crs=crs, transform=transform,
+                                 bands_gee_iter=bands_gee_iter, 
+                                 crs_polygon=crs_polygon, dtype_dst=dtype_dst)
         return geotensor
 
     with ThreadPoolExecutor() as executor:

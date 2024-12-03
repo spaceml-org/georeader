@@ -379,7 +379,8 @@ class GeoTensor:
                 size = self.width if (k == "x") else self.height
                 slices_window.append(slice(0, size))
 
-        window_current = rasterio.windows.Window.from_slices(*slices_window, boundless=False) # if negative it will complain
+        window_current = rasterio.windows.Window.from_slices(*slices_window, boundless=False, height=self.height,
+                                                             width=self.width)
 
         transform_current = rasterio.windows.transform(window_current, transform=self.transform)
 

@@ -5,6 +5,9 @@ from typing import Tuple, Any, Union, Optional
 from shapely.geometry import Polygon
 import rasterio
 import rasterio.windows
+from collections import namedtuple
+
+FakeGeoData=namedtuple("FakeGeoData",["crs", "transform"])
 
 class AbstractGeoData:
     def __init__(self):

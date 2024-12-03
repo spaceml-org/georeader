@@ -1,10 +1,10 @@
 [tool.poetry]
 name = "georeader-spaceml"
-version = "1.3.8"
+version = "1.3.9"
 description = "🛰️ Process raster data in python"
-authors = ["Gonzalo Mateo-García"]
-repository = "https://github.com/gonzmg88/georeader"
-documentation = "https://gonzmg88.github.io/georeader/"
+authors = ["Gonzalo Mateo-García", "Kike Portales", "Manuel Montesino San Martin"]
+repository = "https://github.com/spaceml-org/georeader"
+documentation = "https://spaceml-org.github.io/georeader/"
 readme = "README.md"
 packages = [
   {include = "georeader"}
