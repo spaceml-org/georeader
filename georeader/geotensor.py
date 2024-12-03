@@ -512,8 +512,11 @@ class GeoTensor:
                     pad_list_np.append(pad_width[k])
                 else:
                     pad_list_np.append((0,0))
-            values_new = np.pad(self.values, tuple(pad_list_np), mode=mode,
-                                constant_values=constant_values)
+            
+            kwargs_extra = {}
+            if mode == "constant":
+                kwargs_extra["constant_values"] = constant_values
+            values_new = np.pad(self.values, tuple(pad_list_np), mode=mode, **kwargs_extra)
 
         # Compute the new transform
         slices_window = []
