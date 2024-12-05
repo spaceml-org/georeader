@@ -54,33 +54,19 @@ def window_from_polygon(data_in: Union[GeoData, rasterio.DatasetReader],
         Window object with location in pixel coordinates relative to `data_in` of the polygon
 
     """
+    data_in_crs = data_in.crs
+    data_in_transform = data_in.transform
+
     # convert polygon to GeoData crs
-    if (crs_polygon is not None) and not window_utils.compare_crs(crs_polygon, data_in.crs):
-        # https://rasterio.readthedocs.io/en/latest/api/rasterio.warp.html#rasterio.warp.transform_geom
-        polygon_crs_data = window_utils.polygon_to_crs(polygon, crs_polygon, data_in.crs)
-    else:
-        polygon_crs_data = polygon
+    coords_multipol = window_utils.exterior_pixel_coords(polygon=polygon, crs_polygon=crs_polygon, 
+                                                         crs=data_in_crs, transform=data_in_transform)
 
-    if isinstance(polygon_crs_data, MultiPolygon):
-        polygons = polygon_crs_data.geoms
-    elif isinstance(polygon_crs_data, Polygon):
-        polygons = [polygon_crs_data]
-    else:
-        raise NotImplementedError(f"Received shape of type {type(polygon_crs_data)} different from {Polygon} or {MultiPolygon}")
+    # Figure out min max rows and cols to build the window
+    row_off = min(c[1] for coords in coords_multipol for c in coords)
+    col_off = min(c[0] for coords in coords_multipol for c in coords)
 
-    # Collect all the pixel coordinates of the exterior polygons
-    coords = []
-    transform_inv = ~data_in.transform
-    for pol in polygons:
-        for pcoord in pol.exterior.coords:
-            coords.append(transform_inv * pcoord)
-
-    # Figure out min max rows and cols to build window
-    row_off = min(c[1] for c in coords)
-    col_off = min(c[0] for c in coords)
-
-    row_max = max(c[1] for c in coords)
-    col_max = max(c[0] for c in coords)
+    row_max = max(c[1] for coords in coords_multipol for c in coords)
+    col_max = max(c[0] for coords in coords_multipol for c in coords)
     if window_surrounding:
         row_max += 1
         col_max += 1
@@ -88,7 +74,6 @@ def window_from_polygon(data_in: Union[GeoData, rasterio.DatasetReader],
     return rasterio.windows.Window(row_off=row_off, col_off=col_off,
                                    width=col_max-col_off,
                                    height=row_max-row_off)
-
 
 def window_from_bounds(data_in: Union[GeoData, rasterio.DatasetReader], 
                        bounds:Tuple[float, float, float, float],

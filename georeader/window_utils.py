@@ -283,10 +283,67 @@ def normalize_bounds(bounds:Tuple[float, float, float, float], margin_add_if_equ
 
 def polygon_to_crs(polygon:Union[Polygon, MultiPolygon], 
                    crs_polygon:Any, dst_crs:Any) -> Union[Polygon, MultiPolygon]:
+    """
+    Transform a polygon from one crs to another
+
+    Args:
+        polygon (Union[Polygon, MultiPolygon]): Polygon or MultiPolygon to transform
+        crs_polygon (Any): crs of the polygon
+        dst_crs (Any): destination crs
+
+    Returns:
+        Union[Polygon, MultiPolygon]: Transformed polygon
+    """
     if compare_crs(crs_polygon, dst_crs):
         return polygon
     
     return shape(rasterio.warp.transform_geom(crs_polygon, dst_crs, mapping(polygon)))
+
+
+def exterior_pixel_coords(transform:rasterio.Affine, crs:Any, 
+                          polygon:Union[Polygon, MultiPolygon], 
+                          crs_polygon:Optional[str]=None) -> List[List[Tuple[float, float]]]:
+    """
+    Get the pixel coordinates of the exterior of a polygon or multipolygon.
+
+    The function returns a list of lists of tuples. Each list corresponds to a polygon in the multipolygon.
+    If the polygon is a Polygon, the list will have only one element.
+
+    Args:
+        transform (rasterio.Affine): geotransform
+        crs (Any): crs of the transform
+        polygon (Union[Polygon, MultiPolygon]): Polygon or MultiPolygon to get the pixel coordinates
+        crs_polygon (Optional[str], optional): crs of the polygon. Defaults to None. if None it 
+            assumes `crs_polygon` is the same as `crs`.
+
+    Raises:
+        NotImplementedError: If the polygon is not a Polygon or MultiPolygon
+
+    Returns:
+        List[List[Tuple[float, float]]]: List of lists of tuples. If the polygon is a Polygon, the list will have only one element.
+    """
+    if (crs_polygon is not None) and not compare_crs(crs_polygon, crs):
+        # https://rasterio.readthedocs.io/en/latest/api/rasterio.warp.html#rasterio.warp.transform_geom
+        polygon_crs_data = polygon_to_crs(polygon, crs_polygon, crs)
+    else:
+        polygon_crs_data = polygon
+
+    if isinstance(polygon_crs_data, MultiPolygon):
+        polygons = polygon_crs_data.geoms
+    elif isinstance(polygon_crs_data, Polygon):
+        polygons = [polygon_crs_data]
+    else:
+        raise NotImplementedError(f"Received shape of type {type(polygon_crs_data)} different from {Polygon} or {MultiPolygon}")
+
+    # Collect all the pixel coordinates of the exterior polygons
+    coords = []
+    transform_inv = ~transform
+    for pol in polygons:
+        coords_iter = []
+        for pcoord in pol.exterior.coords:
+            coords_iter.append(transform_inv * pcoord)
+        coords.append(coords_iter)
+    return coords
 
 
 def pad_list_numpy(pad_width:Dict[str, Tuple[int, int]]) -> List[Tuple[int, int]]:
