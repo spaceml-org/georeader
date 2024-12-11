@@ -97,7 +97,7 @@ def export_image(image_or_asset_id:Union[str, ee.Image],
     window_polygon = read.window_from_polygon(geodata, geometry, crs_polygon=crs_polygon,
                                               window_surrounding=True)
     if any(p > 0 for p in pad_add):
-        window_in = window_utils.pad_window(window_in, pad_add)
+        window_polygon = window_utils.pad_window(window_polygon, pad_add)
     window_polygon = window_utils.round_outer_window(window_polygon)
 
     # Shift the window to the image coordinates
