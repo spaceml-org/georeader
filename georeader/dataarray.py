@@ -88,17 +88,19 @@ def toDataArray(x:GeoTensor, x_axis_name:str="x", y_axis_name:str="y", extra_coo
     """
     coords = getcoords_from_transform_shape(x.transform, x.shape[-2:], 
                                             x_axis_name=x_axis_name, y_axis_name=y_axis_name)
+    rename_dict_axis = {"x":x_axis_name, "y":y_axis_name}
+    x_dims_renamed = [rename_dict_axis[xd] if xd in rename_dict_axis else xd for xd in x.dims]
     cords_ordered = OrderedDict()
-    for d in x.dims:
+    for d in x_dims_renamed:
         if (extra_coords is not None) and (d in extra_coords):
             cords_ordered[d] = extra_coords[d]
         elif d in coords:
             cords_ordered[d] = coords[d]
         else:
-            cords_ordered[d] = np.arange(x.shape[x.dims.index(d)])
+            cords_ordered[d] = np.arange(x.shape[x_dims_renamed.index(d)])
     
     return xr.DataArray(x.values, coords=cords_ordered, 
-                        dims=x.dims,
+                        dims=x_dims_renamed,
                         attrs={"crs":x.crs , 
                                "fill_value_default":x.fill_value_default})
 
