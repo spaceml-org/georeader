@@ -1,7 +1,7 @@
 import georeader
 from shapely.geometry import Polygon
 from georeader.abstract_reader import GeoData
-from scipy.interpolate import CloughTocher2DInterpolator
+from scipy.interpolate import griddata
 from georeader.window_utils import polygon_to_crs, transform_to_resolution_dst
 from typing import Tuple, Union, Optional, Any
 import rasterio
@@ -13,6 +13,7 @@ import numpy as np
 from numpy.typing import NDArray
 import math
 
+METHOD_DEFAULT = "cubic"
 
 def footprint(lons:NDArray, lats:NDArray) -> Polygon:
     """
@@ -45,7 +46,8 @@ def footprint(lons:NDArray, lats:NDArray) -> Polygon:
 def read_reproject_like(data:NDArray, lons: NDArray, lats:NDArray, 
                         data_like:GeoData, resolution_dst:Optional[Union[float, Tuple[float,float]]]=None,
                         fill_value_default:Optional[float]=None,
-                        crs:Optional[Any]="EPSG:4326") -> GeoTensor:
+                        crs:Optional[Any]="EPSG:4326",
+                        method:str=METHOD_DEFAULT) -> GeoTensor:
     """
     Reprojects data to the same crs, transform and shape as data_like
 
@@ -58,6 +60,8 @@ def read_reproject_like(data:NDArray, lons: NDArray, lats:NDArray,
          Otherwise, the output resolution will be the same as data_like. Defaults to None.
         fill_value_default (Optional[float], optional): fill value. Defaults to None.
         crs (Optional[Any], optional): Input crs. Defaults to "EPSG:4326".
+        method (str, optional): Interpolation method. Defaults to "cubic". One of
+            "nearest", "linear", "cubic". (See https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html#scipy.interpolate.griddata)
 
     Returns:
         GeoTensor: with reprojected data
@@ -71,13 +75,15 @@ def read_reproject_like(data:NDArray, lons: NDArray, lats:NDArray,
 
     fill_value_default = fill_value_default or data_like.fill_value_default
     return reproject(data, lons, lats, width, height, transform, dst_crs, 
-                     fill_value_default=fill_value_default, crs=crs)
+                     fill_value_default=fill_value_default, crs=crs,
+                     method=method)
 
 
 def read_to_crs(data:NDArray, lons: NDArray, lats:NDArray, 
                 resolution_dst:Union[float, Tuple[float,float]], 
                 dst_crs:Optional[Any]=None,fill_value_default:float=-1,
-                crs:Optional[Any]="EPSG:4326") -> GeoTensor:
+                crs:Optional[Any]="EPSG:4326",
+                method:str=METHOD_DEFAULT) -> GeoTensor:
     """
     Reprojects data to the given dst_crs figuring out the transform and shape.
 
@@ -90,6 +96,8 @@ def read_to_crs(data:NDArray, lons: NDArray, lats:NDArray,
             the dst_crs will be the UTM crs of the center of the data. Defaults to None.
         fill_value_default (float, optional): fill value. Defaults to -1.
         crs (_type_, optional): Input crs. Defaults to "EPSG:4326".
+        method (str, optional): Interpolation method. Defaults to "cubic". One of
+            "nearest", "linear", "cubic". (See https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html#scipy.interpolate.griddata)
 
     Returns:
         GeoTensor: with reprojected data
@@ -121,16 +129,17 @@ def read_to_crs(data:NDArray, lons: NDArray, lats:NDArray,
 
     return reproject(data, lons, lats, width, height, transform, dst_crs, 
                      fill_value_default=fill_value_default,
-                     crs=crs)
+                     crs=crs, method=method)
 
 
 def reproject(data:NDArray, lons: NDArray, lats: NDArray,
               width:int, height:int, transform:rasterio.transform.Affine,
-              dst_crs:Any, crs:Optional[Any]="EPSG:4326", fill_value_default=-1) -> GeoTensor:
+              dst_crs:Any, crs:Optional[Any]="EPSG:4326", fill_value_default=-1,
+              method:str=METHOD_DEFAULT) -> GeoTensor:
     """
     Reprojects data to  given crs, transform and shape.
 
-    This function implements a 2D interpolation using scipy.interpolate.CloughTocher2DInterpolator
+    This function implements a 2D interpolation using the scipy.interpolate.griddata function.
 
     Args:
         data (Array): input data 2D or 3D in the form (height, width, bands)
@@ -142,6 +151,8 @@ def reproject(data:NDArray, lons: NDArray, lats: NDArray,
         dst_crs (Any): Output crs
         crs (Any, optional): Input crs. Defaults to "EPSG:4326".
         fill_value_default (int, optional): fill value. Defaults to -1.
+        method (str, optional): Interpolation method. Defaults to "cubic". One of
+            "nearest", "linear", "cubic". (See https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html#scipy.interpolate.griddata)
 
     Raises:
         ValueError: if data is not 2D or 3D
@@ -161,10 +172,14 @@ def reproject(data:NDArray, lons: NDArray, lats: NDArray,
     # Generate the meshgrid of lons and lats to interpolate the data
     lonsdst, latssdst = meshgrid(transform, width, height, source_crs=dst_crs, dst_crs=crs)
 
-    interpfun = CloughTocher2DInterpolator(list(zip(lons.ravel(), lats.ravel())), 
-                                           data_ravel)
+    # interpfun = CloughTocher2DInterpolator(list(zip(lons.ravel(), lats.ravel())), 
+    #                                        data_ravel)
     
-    dataout = interpfun(lonsdst, latssdst) # (H, W) or (H, W, C)
+    # dataout = interpfun(lonsdst, latssdst) # (H, W) or (H, W, C)
+
+    dataout = griddata((lons.ravel(), lats.ravel()), data_ravel, 
+                       (lonsdst.ravel(), latssdst.ravel()), method=method)
+
     nanvals = np.isnan(dataout)
     if np.any(nanvals):
         dataout[nanvals] = fill_value_default
