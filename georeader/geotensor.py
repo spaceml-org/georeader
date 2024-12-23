@@ -567,15 +567,13 @@ class GeoTensor:
         spatial_shape = input_shape[-2:]
         resolution_or = self.res
 
-
-        assert len(output_shape) == 2, f"Expected output shape to be the spatial dimensions found: {output_shape}"
         if output_shape is None:
             assert resolution_dst is not None, f"Can't have output_shape and resolution_dst as None"
             output_shape = int(round(spatial_shape[0] / resolution_or[0] * resolution_dst[0])), \
-                            int(round(spatial_shape[1] / resolution_or[1] * resolution_dst[1]))
-            
+                            int(round(spatial_shape[1] / resolution_or[1] * resolution_dst[1]))            
         else:
             assert resolution_dst is None, f"Both output_shape and resolution_dst can't be provided"
+            assert len(output_shape) == 2, f"Expected output shape to be the spatial dimensions found: {output_shape}"
             resolution_dst =  spatial_shape[0]*resolution_or[0]/output_shape[0], \
                           spatial_shape[1]*resolution_or[1]/output_shape[1]
 
