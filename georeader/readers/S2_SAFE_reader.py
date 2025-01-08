@@ -964,9 +964,9 @@ class S2ImageL1C(S2Image):
         return np.array(vals)
 
 
-# Cache for the spectral response function of S2A and S2B
+# Cache for the spectral response function of S2A, S2B and S2C
 SRF_S2 = {}
-SRF_FILE_DEFAULT = "https://sentinel.esa.int/documents/247904/685211/S2-SRF_COPE-GSEG-EOPG-TN-15-0007_3.1.xlsx"
+SRF_FILE_DEFAULT = "https://sentiwiki.copernicus.eu/__attachments/1692737/COPE-GSEG-EOPG-TN-15-0007%20-%20Sentinel-2%20Spectral%20Response%20Functions%202024%20-%204.0.xlsx"
 
 
 def read_srf(satellite:str, 
@@ -979,14 +979,14 @@ def read_srf(satellite:str,
     This function requires the fsspec package and pandas and openpyxl for reading excel files.
 
     Args:
-        satellite (str): satellite name (S2A or S2B)
+        satellite (str): satellite name (S2A, S2B or S2C)
         srf_file (str): path to the srf file
         cache (bool): if True, the srf is cached for future calls. Default True
 
     Returns:
         pd.DataFrame: spectral response function for each of the bands of S2
     """
-    assert satellite in ["S2A", "S2B"], "satellite must be S2A or S2B"
+    assert satellite in ["S2A", "S2B", "S2C"], "satellite must be S2A or S2B"
 
     if cache:
         global SRF_S2
@@ -997,7 +997,13 @@ def read_srf(satellite:str,
         # home_dir = os.path.join(os.path.expanduser('~'),".georeader")
         home_dir = os.path.join(os.path.expanduser('~'),".georeader")
         os.makedirs(home_dir, exist_ok=True)
-        srf_file_local = os.path.join(home_dir, os.path.basename(srf_file))
+        srf_filename = os.path.basename(srf_file)
+
+        # Decode the url to get the filename. Also, replace spaces with underscores
+        import urllib.parse
+        srf_filename = urllib.parse.unquote(srf_filename).replace(" ", "_")
+        
+        srf_file_local = os.path.join(home_dir, srf_filename)
         if not os.path.exists(srf_file_local):
             import fsspec
             with fsspec.open(srf_file, "rb") as f:
@@ -1260,7 +1266,7 @@ def s2_name_split(s2file:str) -> Optional[Tuple[str, str, str, str, str, str, st
 
     S2A_MSIL1C_20151218T182802_N0201_R127_T11SPD_20151218T182756.SAFE
     MMM_MSIXXX_YYYYMMDDTHHMMSS_Nxxyy_ROOO_Txxxxx_<Product Discriminator>.SAFE
-    MMM: is the mission ID(S2A/S2B)
+    MMM: is the mission ID(S2A/S2B/S2C)
     MSIXXX: MSIL1C denotes the Level-1C product level/ MSIL2A denotes the Level-2A product level
     YYYYMMDDHHMMSS: the datatake sensing start time
     Nxxyy: the PDGS Processing Baseline number (e.g. N0204)
