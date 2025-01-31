@@ -55,9 +55,27 @@ def filter_products_overlap(area:Union[Polygon,MultiPolygon],
     return products_gpd.loc[indexes_selected]
 
 
-def solar_datetime(area:Union[Polygon,MultiPolygon],
-                   datetime_utc: datetime) -> datetime:
-    longitude = area.centroid.coords[0][0]
+def solar_datetime(area:Union[Polygon,MultiPolygon]=None,
+                   datetime_utc: datetime=None,
+                   longitude:float=None) -> datetime:
+    """
+    Returns the solar datetime for a given area or longitude following the formula:
+    solar_datetime = datetime_utc + timedelta(hours=longitude * 12 / 180)
+
+    Args:
+        area (Union[Polygon,MultiPolygon], optional): Polygon to calculate the longitude,
+         if longitude is not provided. Defaults to None.
+        datetime_utc (datetime, optional): Datetime in UTC. Defaults to None.
+        longitude (float, optional): Longitude, if not provided, it will be calculated from the area. Defaults to None.
+
+    Returns:
+        datetime: Datetime in solar time
+    """
+    assert datetime_utc is not None, "datetime_utc must be provided"
+
+    if longitude is None:
+        assert area is not None, "Either area or longitude must be provided"
+        longitude = area.centroid.coords[0][0]
     hours_add = longitude * 12 / 180.
 
     return datetime_utc + timedelta(hours=hours_add)

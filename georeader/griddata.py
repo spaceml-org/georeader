@@ -178,7 +178,7 @@ def reproject(data:NDArray, lons: NDArray, lats: NDArray,
     # dataout = interpfun(lonsdst, latssdst) # (H, W) or (H, W, C)
 
     dataout = griddata((lons.ravel(), lats.ravel()), data_ravel, 
-                       (lonsdst.ravel(), latssdst.ravel()), method=method)
+                       (lonsdst, latssdst), method=method)
 
     nanvals = np.isnan(dataout)
     if np.any(nanvals):
