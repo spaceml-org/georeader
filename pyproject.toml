@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "georeader-spaceml"
-version = "1.3.13"
+version = "1.3.15"
 description = "🛰️ Process raster data in python"
 authors = ["Gonzalo Mateo-García", "Kike Portales", "Manuel Montesino San Martin"]
 repository = "https://github.com/spaceml-org/georeader"
@@ -53,6 +53,7 @@ earthengine-api = "^1.2.0"
 netcdf4 = "^1.7.2"
 pysolar = "^0.11"
 adlfs = "^2024.7.0"
+scipy = "^1.15.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

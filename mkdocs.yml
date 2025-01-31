@@ -31,6 +31,7 @@ nav:
       - EMIT: emit_explore.ipynb
       - PRISMA: simultaneous_prisma_emit.ipynb
       - EnMAP: enmap_with_cloudsen12.ipynb
+      - PRISMA cloud detection: prisma_with_cloudsen12.ipynb
     - Advanced:
       - VSIL cache problem: advanced/error_read_write_in_remote_path.md
 plugins:
