@@ -53,6 +53,7 @@ earthengine-api = "^1.2.0"
 netcdf4 = "^1.7.2"
 pysolar = "^0.11"
 adlfs = "^2024.7.0"
+scipy = "^1.15.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
