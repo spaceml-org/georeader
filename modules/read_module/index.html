@@ -2505,14 +2505,7 @@ If out_shape is not None it will be ignored. If None and out_shape is None the o
 
             <details class="quote">
               <summary>Source code in <code>georeader/read.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">675</span>
-<span class="normal">676</span>
-<span class="normal">677</span>
-<span class="normal">678</span>
-<span class="normal">679</span>
-<span class="normal">680</span>
-<span class="normal">681</span>
-<span class="normal">682</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">682</span>
 <span class="normal">683</span>
 <span class="normal">684</span>
 <span class="normal">685</span>
@@ -2568,7 +2561,14 @@ If out_shape is not None it will be ignored. If None and out_shape is None the o
 <span class="normal">735</span>
 <span class="normal">736</span>
 <span class="normal">737</span>
-<span class="normal">738</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">read_from_tile</span><span class="p">(</span><span class="n">data</span><span class="p">:</span><span class="n">GeoData</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span><span class="nb">int</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span><span class="nb">int</span><span class="p">,</span> <span class="n">z</span><span class="p">:</span><span class="nb">int</span><span class="p">,</span> <span class="n">dst_crs</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span><span class="o">=</span><span class="n">WEB_MERCATOR_CRS</span><span class="p">,</span> 
+<span class="normal">738</span>
+<span class="normal">739</span>
+<span class="normal">740</span>
+<span class="normal">741</span>
+<span class="normal">742</span>
+<span class="normal">743</span>
+<span class="normal">744</span>
+<span class="normal">745</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">read_from_tile</span><span class="p">(</span><span class="n">data</span><span class="p">:</span><span class="n">GeoData</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span><span class="nb">int</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span><span class="nb">int</span><span class="p">,</span> <span class="n">z</span><span class="p">:</span><span class="nb">int</span><span class="p">,</span> <span class="n">dst_crs</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span><span class="o">=</span><span class="n">WEB_MERCATOR_CRS</span><span class="p">,</span> 
                    <span class="n">out_shape</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span><span class="nb">int</span><span class="p">]]</span><span class="o">=</span><span class="p">(</span><span class="n">SIZE_DEFAULT</span><span class="p">,</span> <span class="n">SIZE_DEFAULT</span><span class="p">),</span> 
                    <span class="n">resolution_dst_crs</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                    <span class="n">assert_if_not_intersects</span><span class="p">:</span><span class="nb">bool</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">GeoTensor</span><span class="p">]:</span>
@@ -2649,7 +2649,8 @@ If out_shape is not None it will be ignored. If None and out_shape is None the o
 
     <div class="doc doc-contents ">
 
-        <p>Change the crs of data_in to dst_crs. This function is a wrapper of the <code>read_reproject</code> function</p>
+        <p>Change the crs of data_in to dst_crs. This function is a wrapper of the <code>read_reproject</code> function
+to reproject data_in to dst_crs.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -2688,11 +2689,44 @@ If out_shape is not None it will be ignored. If None and out_shape is None the o
             </td>
             <td>
               <div class="doc-md-description">
-                <p>dst crs</p>
+                <p>dst crs. Examples: "EPSG:4326", "EPSG:3857"</p>
               </div>
             </td>
             <td>
                 <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>resampling</code>
+            </td>
+            <td>
+                  <code><span title="rasterio.warp.Resampling">Resampling</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Defaults to <code>rasterio.warp.Resampling.cubic_spline</code></p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="rasterio.warp.Resampling.cubic_spline">cubic_spline</span></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>resolution_dst_crs</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Union">Union</span>[float, <span title="typing.Tuple">Tuple</span>[float, float]]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>spatial resolution of the output <code>GeoTensor</code> in <code>dst_crs</code> CRS. Defaults to None. 
+If not provided it will compute the resolution to match the resolution of the input.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -2704,7 +2738,8 @@ If out_shape is not None it will be ignored. If None and out_shape is None the o
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Defaults to False.</p>
+                <p>Defaults to <code>False</code>. 
+If <code>True</code> it returns a np.ndarray otherwise a <code>GeoTensor</code> object (georreferenced array).</p>
               </div>
             </td>
             <td>
@@ -2763,17 +2798,31 @@ If out_shape is not None it will be ignored. If None and out_shape is None the o
 <span class="normal">495</span>
 <span class="normal">496</span>
 <span class="normal">497</span>
-<span class="normal">498</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">read_to_crs</span><span class="p">(</span><span class="n">data_in</span><span class="p">:</span><span class="n">GeoData</span><span class="p">,</span> <span class="n">dst_crs</span><span class="p">:</span><span class="n">Any</span><span class="p">,</span> 
+<span class="normal">498</span>
+<span class="normal">499</span>
+<span class="normal">500</span>
+<span class="normal">501</span>
+<span class="normal">502</span>
+<span class="normal">503</span>
+<span class="normal">504</span>
+<span class="normal">505</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">read_to_crs</span><span class="p">(</span><span class="n">data_in</span><span class="p">:</span><span class="n">GeoData</span><span class="p">,</span> <span class="n">dst_crs</span><span class="p">:</span><span class="n">Any</span><span class="p">,</span> 
                 <span class="n">resampling</span><span class="p">:</span><span class="n">rasterio</span><span class="o">.</span><span class="n">warp</span><span class="o">.</span><span class="n">Resampling</span> <span class="o">=</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">warp</span><span class="o">.</span><span class="n">Resampling</span><span class="o">.</span><span class="n">cubic_spline</span><span class="p">,</span>
                 <span class="n">resolution_dst_crs</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                 <span class="n">return_only_data</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span><span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">GeoTensor</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Change the crs of data_in to dst_crs. This function is a wrapper of the `read_reproject` function</span>
+<span class="sd">    to reproject data_in to dst_crs.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        data_in (GeoData): GeoData to reproyect</span>
-<span class="sd">        dst_crs (Any): dst crs</span>
-<span class="sd">        return_only_data (bool, optional): Defaults to False.</span>
+<span class="sd">        dst_crs (Any): dst crs. Examples: &quot;EPSG:4326&quot;, &quot;EPSG:3857&quot;</span>
+<span class="sd">        resampling (rasterio.warp.Resampling, optional): </span>
+<span class="sd">            Defaults to `rasterio.warp.Resampling.cubic_spline`</span>
+<span class="sd">        resolution_dst_crs (Optional[Union[float, Tuple[float, float]]], optional): </span>
+<span class="sd">            spatial resolution of the output `GeoTensor` in `dst_crs` CRS. Defaults to None. </span>
+<span class="sd">            If not provided it will compute the resolution to match the resolution of the input.</span>
+<span class="sd">        return_only_data (bool, optional): Defaults to `False`. </span>
+<span class="sd">            If `True` it returns a np.ndarray otherwise a `GeoTensor` object (georreferenced array).</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        Union[GeoTensor, np.ndarray]: data in dst_crs</span>
@@ -2853,22 +2902,6 @@ If out_shape is not None it will be ignored. If None and out_shape is None the o
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>resampling</code>
-            </td>
-            <td>
-                  <code><span title="rasterio.warp.Resampling">Resampling</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>specifies how data is reprojected from <code>rasterio.warp.Resampling</code>.</p>
-              </div>
-            </td>
-            <td>
-                  <code><span title="rasterio.warp.Resampling.cubic_spline">cubic_spline</span></code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
                 <code>resolution_dst</code>
             </td>
             <td>
@@ -2881,6 +2914,22 @@ If out_shape is not None it will be ignored. If None and out_shape is None the o
             </td>
             <td>
                   <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>resampling</code>
+            </td>
+            <td>
+                  <code><span title="rasterio.warp.Resampling">Resampling</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>specifies how data is reprojected from <code>rasterio.warp.Resampling</code>.</p>
+              </div>
+            </td>
+            <td>
+                  <code><span title="rasterio.warp.Resampling.cubic_spline">cubic_spline</span></code>
             </td>
           </tr>
           <tr class="doc-section-item">
@@ -3007,8 +3056,8 @@ returns an GeoTensor object (georreferenced array).</p>
 <span class="sd">    Args:</span>
 <span class="sd">        data_in: GeoData to read and reproject. Expected coords &quot;x&quot; and &quot;y&quot;.</span>
 <span class="sd">        data_like: GeoData to get the bounds and resolution to reproject `data_in`.</span>
-<span class="sd">        resampling: specifies how data is reprojected from `rasterio.warp.Resampling`.</span>
 <span class="sd">        resolution_dst: if not None it will overwrite the resolution of `data_like`.</span>
+<span class="sd">        resampling: specifies how data is reprojected from `rasterio.warp.Resampling`.</span>
 <span class="sd">        dtype_dst: if None it will be inferred</span>
 <span class="sd">        return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise</span>
 <span class="sd">            returns an GeoTensor object (georreferenced array).</span>
@@ -3355,22 +3404,6 @@ returns an GeoTensor object (georreferenced array).</p>
           </tr>
           <tr class="doc-section-item">
             <td>
-                <code>bounds</code>
-            </td>
-            <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Tuple">Tuple</span>[float, float, float, float]]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Optional. bounds in CRS specified by <code>dst_crs</code>. If not provided <code>window_out</code> must be given.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
                 <code>dst_crs</code>
             </td>
             <td>
@@ -3379,6 +3412,22 @@ returns an GeoTensor object (georreferenced array).</p>
             <td>
               <div class="doc-md-description">
                 <p>CRS to reproject.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>bounds</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Tuple">Tuple</span>[float, float, float, float]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Optional. bounds in CRS specified by <code>dst_crs</code>. If not provided <code>window_out</code> must be given.</p>
               </div>
             </td>
             <td>
@@ -3529,14 +3578,7 @@ returns an GeoTensor object (georreferenced array).</p>
 
             <details class="quote">
               <summary>Source code in <code>georeader/read.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">524</span>
-<span class="normal">525</span>
-<span class="normal">526</span>
-<span class="normal">527</span>
-<span class="normal">528</span>
-<span class="normal">529</span>
-<span class="normal">530</span>
-<span class="normal">531</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">531</span>
 <span class="normal">532</span>
 <span class="normal">533</span>
 <span class="normal">534</span>
@@ -3677,7 +3719,14 @@ returns an GeoTensor object (georreferenced array).</p>
 <span class="normal">669</span>
 <span class="normal">670</span>
 <span class="normal">671</span>
-<span class="normal">672</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">read_reproject</span><span class="p">(</span><span class="n">data_in</span><span class="p">:</span> <span class="n">GeoData</span><span class="p">,</span> <span class="n">dst_crs</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="normal">672</span>
+<span class="normal">673</span>
+<span class="normal">674</span>
+<span class="normal">675</span>
+<span class="normal">676</span>
+<span class="normal">677</span>
+<span class="normal">678</span>
+<span class="normal">679</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">read_reproject</span><span class="p">(</span><span class="n">data_in</span><span class="p">:</span> <span class="n">GeoData</span><span class="p">,</span> <span class="n">dst_crs</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                    <span class="n">bounds</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                    <span class="n">resolution_dst_crs</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
                    <span class="n">dst_transform</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">rasterio</span><span class="o">.</span><span class="n">Affine</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
@@ -3690,8 +3739,8 @@ returns an GeoTensor object (georreferenced array).</p>
 
 <span class="sd">    Args:</span>
 <span class="sd">        data_in: GeoData to read and reproject. Expected coords &quot;x&quot; and &quot;y&quot;.</span>
-<span class="sd">        bounds: Optional. bounds in CRS specified by `dst_crs`. If not provided `window_out` must be given.</span>
 <span class="sd">        dst_crs: CRS to reproject.</span>
+<span class="sd">        bounds: Optional. bounds in CRS specified by `dst_crs`. If not provided `window_out` must be given.</span>
 <span class="sd">        resolution_dst_crs: resolution in the CRS specified by `dst_crs`. If not provided will use the the resolution</span>
 <span class="sd">            intrinsic of dst_transform.</span>
 <span class="sd">        dst_transform: Optional dest transform. If not provided the dst_transform is a rectilinear transform computed</span>
@@ -3986,14 +4035,7 @@ Defaults to rasterio.warp.Resampling.cubic_spline.</p>
 
             <details class="quote">
               <summary>Source code in <code>georeader/read.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">741</span>
-<span class="normal">742</span>
-<span class="normal">743</span>
-<span class="normal">744</span>
-<span class="normal">745</span>
-<span class="normal">746</span>
-<span class="normal">747</span>
-<span class="normal">748</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">748</span>
 <span class="normal">749</span>
 <span class="normal">750</span>
 <span class="normal">751</span>
@@ -4077,7 +4119,14 @@ Defaults to rasterio.warp.Resampling.cubic_spline.</p>
 <span class="normal">829</span>
 <span class="normal">830</span>
 <span class="normal">831</span>
-<span class="normal">832</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">read_rpcs</span><span class="p">(</span><span class="n">input_npy</span><span class="p">:</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">rpcs</span><span class="p">:</span><span class="n">rasterio</span><span class="o">.</span><span class="n">rpc</span><span class="o">.</span><span class="n">RPC</span><span class="p">,</span> 
+<span class="normal">832</span>
+<span class="normal">833</span>
+<span class="normal">834</span>
+<span class="normal">835</span>
+<span class="normal">836</span>
+<span class="normal">837</span>
+<span class="normal">838</span>
+<span class="normal">839</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span> <span class="nf">read_rpcs</span><span class="p">(</span><span class="n">input_npy</span><span class="p">:</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">rpcs</span><span class="p">:</span><span class="n">rasterio</span><span class="o">.</span><span class="n">rpc</span><span class="o">.</span><span class="n">RPC</span><span class="p">,</span> 
               <span class="n">fill_value_default</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
               <span class="n">dst_crs</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
               <span class="n">resolution_dst_crs</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
