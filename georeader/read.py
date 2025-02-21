@@ -327,8 +327,8 @@ def read_reproject_like(data_in: GeoData, data_like: GeoData,
     Args:
         data_in: GeoData to read and reproject. Expected coords "x" and "y".
         data_like: GeoData to get the bounds and resolution to reproject `data_in`.
-        resampling: specifies how data is reprojected from `rasterio.warp.Resampling`.
         resolution_dst: if not None it will overwrite the resolution of `data_like`.
+        resampling: specifies how data is reprojected from `rasterio.warp.Resampling`.
         dtype_dst: if None it will be inferred
         return_only_data: defaults to `False`. If `True` it returns a np.ndarray otherwise
             returns an GeoTensor object (georreferenced array).
@@ -477,11 +477,18 @@ def read_to_crs(data_in:GeoData, dst_crs:Any,
                 return_only_data: bool = False)-> Union[GeoTensor, np.ndarray]:
     """
     Change the crs of data_in to dst_crs. This function is a wrapper of the `read_reproject` function
+    to reproject data_in to dst_crs.
 
     Args:
         data_in (GeoData): GeoData to reproyect
-        dst_crs (Any): dst crs
-        return_only_data (bool, optional): Defaults to False.
+        dst_crs (Any): dst crs. Examples: "EPSG:4326", "EPSG:3857"
+        resampling (rasterio.warp.Resampling, optional): 
+            Defaults to `rasterio.warp.Resampling.cubic_spline`
+        resolution_dst_crs (Optional[Union[float, Tuple[float, float]]], optional): 
+            spatial resolution of the output `GeoTensor` in `dst_crs` CRS. Defaults to None. 
+            If not provided it will compute the resolution to match the resolution of the input.
+        return_only_data (bool, optional): Defaults to `False`. 
+            If `True` it returns a np.ndarray otherwise a `GeoTensor` object (georreferenced array).
 
     Returns:
         Union[GeoTensor, np.ndarray]: data in dst_crs
@@ -534,8 +541,8 @@ def read_reproject(data_in: GeoData, dst_crs: Optional[str]=None,
 
     Args:
         data_in: GeoData to read and reproject. Expected coords "x" and "y".
-        bounds: Optional. bounds in CRS specified by `dst_crs`. If not provided `window_out` must be given.
         dst_crs: CRS to reproject.
+        bounds: Optional. bounds in CRS specified by `dst_crs`. If not provided `window_out` must be given.
         resolution_dst_crs: resolution in the CRS specified by `dst_crs`. If not provided will use the the resolution
             intrinsic of dst_transform.
         dst_transform: Optional dest transform. If not provided the dst_transform is a rectilinear transform computed
