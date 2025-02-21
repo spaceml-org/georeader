@@ -101,7 +101,7 @@ save_cog(data_memory, "s2_crop.tif", descriptions=s2obj.bands)
  * [georeader with CloudSEN12 to run cloud detection in Sentinel-2 images](https://github.com/IPL-UV/cloudsen12_models/blob/main/notebooks/run_in_gee_image.ipynb)
 
 
-## Citation
+##  Citation 
 
 If you find this code useful please cite:
 ```
@@ -132,6 +132,11 @@ If you find this code useful please cite:
 	pages = {19999},
 }
 ```
+## Licence
+
+The georeader package is published under a [GNU Lesser GPL v3 licence](https://www.gnu.org/licenses/lgpl-3.0.en.html)
+
+`georeader` tutorials and notebooks are released under a [Creative Commons non-commercial licence](https://creativecommons.org/licenses/by-nc/4.0/legalcode.txt).
 
 ## Acknowledgments
 This research has been supported by the DEEPCLOUD project (PID2019-109026RB-I00) funded by the Spanish Ministry of Science and Innovation (MCIN/AEI/10.13039/501100011033) and the European Union (NextGenerationEU).
