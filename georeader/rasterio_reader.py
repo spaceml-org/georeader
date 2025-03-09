@@ -393,13 +393,16 @@ class RasterioReader:
             rasterio.windows.WindowError: if bounless is False and window does not intersects self.window_focus
 
         Returns:
-            New reader object
+            RasterioReader: New reader object
         """
         rst_reader = RasterioReader(list(self.paths),
                                     allow_different_shape=self.allow_different_shape,
-                                    window_focus=self.window_focus, fill_value_default=self.fill_value_default,
-                                    stack=self.stack, overview_level=self.overview_level,
-                                    check=False)
+                                    window_focus=self.window_focus, 
+                                    fill_value_default=self.fill_value_default,
+                                    stack=self.stack, 
+                                    overview_level=self.overview_level,
+                                    check=False, 
+                                    rio_env_options=self.rio_env_options)
 
         rst_reader.set_window(window, relative=True, boundless=boundless)
         rst_reader.set_indexes(self.indexes, relative=False)
@@ -483,9 +486,11 @@ class RasterioReader:
                 slice_.append(slice(0, spatial_shape[_i]))
 
         rst_reader = RasterioReader(paths, allow_different_shape=self.allow_different_shape,
-                                    window_focus=self.window_focus, fill_value_default=self.fill_value_default,
+                                    window_focus=self.window_focus, 
+                                    fill_value_default=self.fill_value_default,
                                     stack=stack, overview_level=self.overview_level,
-                                    check=False)
+                                    check=False,
+                                    rio_env_options=self.rio_env_options)
         window_current = rasterio.windows.Window.from_slices(*slice_, boundless=boundless,
                                                              width=self.width, height=self.height)
 
@@ -498,11 +503,13 @@ class RasterioReader:
         return rst_reader
 
     def __copy__(self) -> '__class__':
-        return RasterioReader(self.paths, allow_different_shape=self.allow_different_shape,
+        rst = RasterioReader(self.paths, allow_different_shape=self.allow_different_shape,
                               window_focus=self.window_focus, 
                               fill_value_default=self.fill_value_default,
                               stack=self.stack, overview_level=self.overview_level,
-                              check=False)
+                              check=False, rio_env_options=self.rio_env_options)
+        rst.set_indexes(self.indexes, relative=False)
+        return rst
     
     def overviews(self, index:int=1, time_index:int=0) -> List[int]:
         """
@@ -513,14 +520,41 @@ class RasterioReader:
                 return src.overviews(index)
     
     def reader_overview(self, overview_level:int) -> '__class__':
+        """
+        Returns a new reader with the overview level specified.
+
+        Args:
+            overview_level (int): overview level to read. 
+                If negative it will be relative to the last overview level
+                The higher the number the higher the resolution. -1 is the highest resolution 
+                (which is the original one)
+                
+        Returns:
+            RasterioReader: new reader with the overview level specified
+        """
         if overview_level < 0:
             overview_level = len(self.overviews()) + overview_level
         
-        return RasterioReader(self.paths, allow_different_shape=self.allow_different_shape,
-                              window_focus=self.window_focus, 
-                              fill_value_default=self.fill_value_default,
-                              stack=self.stack, overview_level=overview_level,
-                              check=False)
+        rst = RasterioReader(self.paths, allow_different_shape=self.allow_different_shape,
+                             window_focus=None, 
+                             fill_value_default=self.fill_value_default,
+                             stack=self.stack,
+                             indexes=self.indexes,
+                             overview_level=overview_level,
+                             check=False,
+                             rio_env_options=self.rio_env_options)
+
+        # if self.window_focus hasn't been changed we're good
+        if self.window_focus.width == self.real_width and\
+            self.window_focus.height == self.real_height and\
+            self.window_focus.col_off == 0 and\
+            self.window_focus.row_off == 0:
+            return rst
+        
+        # TODO we need to convert the self.window_focus to the dst crs
+        # window_utils.
+        warnings.warn("Window focus is not supported in overview level. Returning the overview level with the full raster")
+        return rst
     
     def block_windows(self, bidx:int=1, time_idx:int=0) -> List[Tuple[int, rasterio.windows.Window]]:
         """
