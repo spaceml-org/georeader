@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 import geopandas as gpd
 from tqdm import tqdm
 import warnings
+import numpy as np
 
 try:
     import ee
@@ -283,6 +284,74 @@ def export_cube(query:gpd.GeoDataFrame, geometry:Union[Polygon, MultiPolygon],
     
     return concatenate(geotensor_list)
     
+def _find_padding(v:int, divisor:int=8):
+    v_divisible = max(divisor, int(divisor * np.ceil(v / divisor)))
+    total_pad = v_divisible - v
+    pad_1 = total_pad // 2
+    pad_2 = total_pad - pad_1
+    return pad_1, pad_2
+    
+def interpolate_20mbands_s2ee(geotensor:GeoTensor, 
+                              channels_query_original:Optional[List[str]]=None, 
+                              inplace:bool=True) -> GeoTensor:
+    """
+    Interpolates 20m bands of Sentinel-2 to 10m using bilinear interpolation.
+    Input is intended to be a S2 image downloaded from the Google Earth Engine at 10m resolution
+    downloaded from collection COPERNICUS/S2_HARMONIZED.
+    
+    Rationale:
+    The GEE interpolates the 20m bands to 10m resolution using nearest interpolation. This function
+    is intended to fix this issue by re-interpolating the 20m bands to 10m using bilinear interpolation.
+
+    Args:
+        geotensor (GeoTensor): GeoTensor object with S2 image in np.uint16 multiplied by 10_000
+        channels_query_original (Optional[List[str]], optional): list of channels to interpolate. 
+            Defaults to None. They must be in S2_SAFE_reader.BANDS_S2_L1C
+        inplace (bool, optional): whether to modify the input GeoTensor. Defaults to True.
+
+    Returns:
+        GeoTensor: GeoTensor object with 20m bands interpolated to 10m
+    """
+    from georeader.readers import S2_SAFE_reader
+    # Assert image is of type np.uint16
+    assert geotensor.dtype == np.uint16, f"Expected np.uint16, found {geotensor.dtype}"
+    
+    if channels_query_original is None:
+        channels_query_original = S2_SAFE_reader.BANDS_S2_L1C
+    else:
+        # Check all channels in S2_SAFE_reader.BANDS_S2_L1C
+        for b in channels_query_original:
+            assert b in S2_SAFE_reader.BANDS_S2_L1C, f"S2 Channel {b} not found in {S2_SAFE_reader.BANDS_S2_L1C}"
+    
+    indexes_20m = [i for i, c in enumerate(channels_query_original) if c in S2_SAFE_reader.BANDS_RESOLUTION and S2_SAFE_reader.BANDS_RESOLUTION[c] == 20]
+
+    if not inplace:
+        geotensor = geotensor.copy()
+    
+    # Reproject 20m bands to 10m
+    # Pad if the shape is not divisible by 2 and use GeoTensor.resize
+    b20ms2:GeoTensor = geotensor.isel({"band": indexes_20m}).astype(np.float64) / 10_000
+    pad_r = _find_padding(b20ms2.shape[-2], divisor=2)
+    pad_c = _find_padding(b20ms2.shape[-1], divisor=2)
+    need_pad = any([p > 0 for p in pad_r + pad_r])
+    if need_pad:
+        # edge: Pads with the edge values of array.
+        b20ms2 = b20ms2.pad({"x": pad_c, "y": pad_r}, mode="edge")
+    
+    output_shape_20m = b20ms2.shape[-2] // 2, b20ms2.shape[-1] // 2
+    
+    b20ms2_20m:GeoTensor = b20ms2.resize(output_shape_20m, anti_aliasing=False,
+                                         interpolation="nearest")
+    b20ms2_20m10m:GeoTensor = b20ms2_20m.resize(b20ms2.shape[-2:],
+                                                anti_aliasing=False, interpolation="bilinear")
+    if need_pad:
+        slice_rows = slice(pad_r[0], None if pad_r[1] <= 0 else -pad_r[1])
+        slice_cols = slice(pad_c[0], None if pad_c[1] <= 0 else -pad_c[1])
+        b20ms2_20m10m.values = b20ms2_20m10m.values[(slice(None), slice_rows, slice_cols)]
+    
+    geotensor.values[indexes_20m,...] = np.round(b20ms2_20m10m.values * 10_000).astype(np.uint16)
+
+    return geotensor
 
 
                 
