@@ -5,7 +5,6 @@ from georeader.abstract_reader import GeoData
 from typing import Optional, List, Union, Any
 import matplotlib.axes
 import matplotlib.image
-import rasterio.plot as rasterioplt
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import rasterio.warp
@@ -17,15 +16,17 @@ try:
 except ImportError:
     from shapely.geometry.base import BaseGeometry as Geometry
 import geopandas as gpd
-import pandas as pd
-from matplotlib.patches import Patch
 import matplotlib.cm
+import matplotlib.colorbar as cbar
 
 
-def colorbar_next_to(im:matplotlib.cm.ScalarMappable, ax:plt.Axes, 
+def colorbar_next_to(im:matplotlib.cm.ScalarMappable, 
+                     ax:plt.Axes, 
+                     fig:Optional[plt.Figure]=None,
                      location:str='right', 
                      pad:float=0.05, 
-                     orientation:str='vertical'):
+                     orientation:str='vertical',
+                     label_colorbar:Optional[str]=None) -> cbar.Colorbar:
     """
     Add a colorbar next to the plot. 
     
@@ -53,7 +54,15 @@ def colorbar_next_to(im:matplotlib.cm.ScalarMappable, ax:plt.Axes,
     """
     divider = make_axes_locatable(ax)
     cax = divider.append_axes(location, size='5%', pad=pad)
-    plt.gcf().colorbar(im, cax=cax, orientation=orientation)
+    if fig is None:
+        fig = plt.gcf()
+
+    cbar = fig.colorbar(im, cax=cax, orientation=orientation)
+
+    if label_colorbar is not None:
+        cbar.set_label(label_colorbar)
+    
+    return cbar
 
 
 def show(data:GeoData, add_colorbar_next_to:bool=False,
