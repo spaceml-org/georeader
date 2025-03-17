@@ -1050,7 +1050,17 @@ def get_file(remote_path:str, local_path:str):
 
 
 def read_xml(xml_file:str) -> ET.Element:
-    """Reads xml with xml package """
+    """
+    Reads xml with xml package. If the file is in the public bucket it uses the `google_cloud_storage` package.
+    If the file is in a remote location it uses the `fsspec` package. 
+
+    Args:
+        xml_file (str): path to the xml file
+    
+    Returns:
+        ET.Element: root element of the xml
+    """
+    
     if xml_file.startswith(FULL_PATH_PUBLIC_BUCKET_SENTINEL_2):
         from google.cloud import storage
         from google.cloud.storage.retry import DEFAULT_RETRY
