@@ -670,13 +670,14 @@ class EMITImage:
     def load(self, boundless:bool=True, as_reflectance:bool=False)-> GeoTensor:
         data = self.load_raw() # (C, H, W) or (H, W)
         if as_reflectance:
+            invalids = np.isnan(data) | (data == self.nodata)
             thuiller = reflectance.load_thuillier_irradiance()
             response = reflectance.srf(self.wavelengths, self.fwhm, thuiller["Nanometer"].values)
             solar_irradiance_norm = thuiller["Radiance(mW/m2/nm)"].values.dot(response) / 1_000
             data = reflectance.radiance_to_reflectance(data, solar_irradiance_norm,
                                                        units=self.units,
                                                        observation_date_corr_factor=self.observation_date_correction_factor)
-
+            data[invalids] = self.nodata
         return self.georreference(data)
     
     def load_rgb(self, as_reflectance:bool=True) -> GeoTensor:
