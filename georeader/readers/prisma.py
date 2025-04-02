@@ -42,6 +42,7 @@ class PRISMA:
             dset = f[HE5_COORDS["swir_lon"]]
             self.lons = np.flip(dset[:, :], axis=0)
             self.attributes_prisma = dict(f.attrs)
+            sza = f.attrs["Sun_zenith_angle"]
         
         arr = self.attributes_prisma['List_Cw_Vnir'][self.attributes_prisma['List_Cw_Vnir'] > 0]
         self.nbands_vnir = len(arr)
@@ -56,10 +57,10 @@ class PRISMA:
         self.fwhm_swir:Optional[NDArray] = None
         self.wavelength_vnir:Optional[NDArray] = None
         self.fwhm_vnir:Optional[NDArray] = None
-        self.vza_swir:Optional[float] = None
-        self.vza_vnir:Optional[float] = None
-        self.sza_swir:Optional[float] = None
-        self.sza_vnir:Optional[float] = None
+        self.vza_swir:float = 0
+        self.vza_vnir:float = 0
+        self.sza_swir:float = sza
+        self.sza_vnir:float = sza
 
         # self.time_coverage_start = self.attributes_prisma['Product_StartTime']
         self.time_coverage_start = datetime.fromisoformat(self.attributes_prisma['Product_StartTime'].decode("utf-8")).replace(tzinfo=timezone.utc)
