@@ -644,7 +644,7 @@ class GeoTensor:
         if not rasterio.windows.intersect(window, window_data):
             return
 
-        assert data.shape[-2:] == (window.width, window.height), f"window {window} has different shape than data {data.shape}"
+        assert data.shape[-2:] == (window.height, window.width), f"window {window} has different shape than data {data.shape}"
         assert data.shape[:-2] == self.shape[:-2], f"Dimension of data in non-spatial channels found {data.shape} expected: {self.shape}"
 
         slice_dict, pad_width = window_utils.get_slice_pad(window_data, window)

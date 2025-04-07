@@ -36,7 +36,7 @@ def pad_window_to_size(window: rasterio.windows.Window, size: Tuple[int, int]) -
 
     Args:
         window: input window
-        size: Tuple. size of the output image
+        size: Tuple. size of the output image (height, width)
 
     Returns:
          window centered in `window` with width `size[1]` and height `size[0]`
@@ -48,8 +48,8 @@ def pad_window_to_size(window: rasterio.windows.Window, size: Tuple[int, int]) -
     pad_rows_half = pad_add_rows // 2
     pad_cols_half = pad_add_cols // 2
 
-    return rasterio.windows.Window(window.col_off - pad_rows_half,
-                                   window.row_off - pad_cols_half,
+    return rasterio.windows.Window(window.col_off - pad_cols_half,
+                                   window.row_off - pad_rows_half,
                                    width=window.width + pad_add_cols,
                                    height=window.height + pad_add_rows)
 
@@ -344,6 +344,51 @@ def exterior_pixel_coords(transform:rasterio.Affine, crs:Any,
             coords_iter.append(transform_inv * pcoord)
         coords.append(coords_iter)
     return coords
+
+
+def row_end(wv: rasterio.windows.Window) -> int:
+    return wv.row_off + wv.height
+
+def col_end(wv: rasterio.windows.Window) -> int:
+    return wv.col_off + wv.width
+
+def slice_save_for_pred(w_read:rasterio.windows.Window,
+                        w_write:rasterio.windows.Window) -> tuple[slice, slice]:
+    """
+    Compute the slice to to the prediction to save in the original image.
+    It is used to remove the padding added to the prediction to follow the tiling and 
+    stitching strategy of Huang et al. 2018
+
+    Args:
+        w_read (rasterio.windows.Window): _window to read the data
+        w_write (rasterio.windows.Window): _window to write the data
+
+    Returns:
+        tuple[slice, slice]: slices to save the prediction in the original image
+    
+    Example:
+        >>> from tqdm import tqdm
+        >>> from georeader import window_utils, read
+        >>> for w_write in tqdm(windows_write):
+                w_read = window_utils.pad_window_to_size(w_write, 
+                                                         size=(window_size_predict_nn, window_size_predict_nn))
+                slice_save = window_utils.slice_save_for_pred(w_read, w_write)
+                data = read.read_from_window(input_tensor, window=w_read, boundless=True, trigger_load=True)
+                out = model.predict(data)
+                out = out[slice_save]
+                output_tensor.write_from_window(out, window=w_write)
+        
+    """
+    # Compute slice of preds (basically take out the padding//2 on both sides..
+    row_off_slice_pred = w_write.row_off - w_read.row_off
+    col_off_slice_pred = w_write.col_off - w_read.col_off
+
+    row_end_slice_pred = row_end(w_write) -  row_end(w_read) # could be negative
+    col_end_slice_pred = col_end(w_write) -  col_end(w_read) # could be negative
+
+    slice_save = (slice(row_off_slice_pred, None if row_end_slice_pred == 0 else row_end_slice_pred),
+                  slice(col_off_slice_pred, None if col_end_slice_pred == 0 else col_end_slice_pred))
+    return slice_save
 
 
 def pad_list_numpy(pad_width:Dict[str, Tuple[int, int]]) -> List[Tuple[int, int]]:
