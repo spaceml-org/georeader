@@ -1121,19 +1121,29 @@ def DN_to_radiance(s2obj: S2ImageL1C, dn_data:Optional[GeoTensor]=None) -> GeoTe
     Returns:
         geotensor with radiances in W/m²/nm/sr
     """
+    from georeader import reflectance
     if dn_data is None:
         dn_data = s2obj.load()
 
-    data_values_new = dn_data.values.astype(np.float32) / 10_000
+    reflectance_values = dn_data.values.astype(np.float32) / 10_000
     s2obj.read_metadata_tl()
     solar_irr = s2obj.solar_irradiance()
     U = s2obj.scale_factor_U()
-    for i,b in enumerate(s2obj.bands):
-        mask = dn_data.values[i] == dn_data.fill_value_default
-        data_values_new[i] = data_values_new[i] * np.cos(s2obj.mean_sza/180*np.pi) * solar_irr[b] * U / np.pi
-        data_values_new[i][mask] = dn_data.fill_value_default
 
-    return GeoTensor(data_values_new, transform=dn_data.transform, crs=dn_data.crs,
+    # obfactor = (pi * d^2) / cos(solarzenithangle/180*pi)
+    obs_date_correction_factor = np.pi / (np.cos(s2obj.mean_sza/180*np.pi) * U)
+    radiance_values = reflectance.reflectance_to_radiance(reflectance_values,
+                                                          solar_irradiance=[solar_irr[b] for b in s2obj.bands],
+                                                          observation_date_corr_factor=obs_date_correction_factor)
+
+    # for i,b in enumerate(s2obj.bands):
+    #     mask = dn_data.values[i] == dn_data.fill_value_default
+    #     # data_values_new[i] = data_values_new[i] * np.cos(s2obj.mean_sza/180*np.pi) * solar_irr[b] * U / np.pi
+    #     data_values_new[i] = data_values_new[i] / obs_date_correction_factor * solar_irr[b]
+    #     data_values_new[i][mask] = dn_data.fill_value_default
+
+    return GeoTensor(radiance_values, transform=dn_data.transform, 
+                     crs=dn_data.crs,
                      fill_value_default=dn_data.fill_value_default)
 
 

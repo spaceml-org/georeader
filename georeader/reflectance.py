@@ -85,7 +85,14 @@ def observation_date_correction_factor(center_coords:Tuple[float, float],
     """
     This function returns the observation date correction factor given by the formula:
     
+    ``
       obfactor = (pi * d^2) / cos(solarzenithangle/180*pi)
+    ``
+    where:
+        - `d` is the Earth-sun distance correction factor. In Sentinel-2 they provide U
+            in the metadata which is the square inverse of this factor: `U = 1 / d^2`.
+            `d`is computed from the date of acquisition.
+        - `solarzenithangle` is obtained from the date of acquisition and location.
 
     Args:
         center_coords: location being considered (x,y) (long, lat if EPSG:4326) 
@@ -113,8 +120,8 @@ def radiance_to_reflectance(data:Union[GeoTensor, ArrayLike],
     Convert the radiance to ToA reflectance using the solar irradiance and the date of acquisition.
 
     ```
-    toaBandX = (radianceBandX / 100 * pi * d^2) / (cos(solarzenithangle/180*pi) * solarIrradianceBandX)
-    toaBandX = (radianceBandX / 100 / solarIrradianceBandX) * observation_date_correction_factor(center_coords, date_of_acquisition)
+    toaBandX = (radianceBandX  * pi * d^2) / (cos(solarzenithangle/180*pi) * solarIrradianceBandX)
+    toaBandX = (radianceBandX / solarIrradianceBandX) * observation_date_correction_factor(center_coords, date_of_acquisition)
     ```
 
     [ESA reference of ToA calculation](https://sentiwiki.copernicus.eu/web/s2-processing#S2Processing-TOAReflectanceComputation)
@@ -271,6 +278,79 @@ def integrated_irradiance(srf:pd.DataFrame,
 
     # integrate the product of the solar irradiance and the srf
     return np.sum(solar_irradiance["Radiance(mW/m2/nm)"].values[:, np.newaxis] * srf_interp, axis=0) / srf_interp.sum(axis=0)
+
+
+def reflectance_to_radiance(data:Union[GeoTensor, ArrayLike], 
+                            solar_irradiance:ArrayLike,
+                            date_of_acquisition:Optional[datetime]=None,
+                            center_coords:Optional[Tuple[float, float]]=None,
+                            crs_coords:Optional[str]=None,
+                            observation_date_corr_factor:Optional[float]=None) -> Union[GeoTensor, NDArray]:
+    """
+    Convert the ToA reflectance to radiance using the solar irradiance and the date of acquisition.
+    The formula is:
+
+    ```
+    radianceBandX = (toaBandX * solarIrradianceBandX * cos(solarzenithangle/180*pi)) / (pi * d^2)
+    radianceBandX = (toaBandX * solarIrradianceBandX) / observation_date_correction_factor(center_coords, date_of_acquisition)
+    ```
+
+    Formula for `observation_date_corr_factor`:
+    ```
+        obfactor = (pi * d^2) / cos(solarzenithangle/180*pi)
+    ```
+
+    [ESA reference of ToA calculation](https://sentiwiki.copernicus.eu/web/s2-processing#S2Processing-TOAReflectanceComputation)    
+
+    Args:
+        data (Union[GeoTensor, ArrayLike]): data to be converted (C, H, W) tensor in ToA reflectance units
+        solar_irradiance (ArrayLike): solar irradiance for each band (C,) in W/m²/nm
+        date_of_acquisition (Optional[datetime], optional): Date of acquisition to compute the 
+            solar zenith angles and the Earth-Sun distance correction factor.
+        center_coords (Optional[Tuple[float, float]], optional): location being considered to compute 
+            the solar zenith angles and the Earth-Sun distance correction factor.
+        crs_coords (Optional[str], optional): if None it will assume center_coords are in EPSG:4326. 
+            Defaults to None.
+        observation_date_corr_factor (Optional[float], optional): observation date correction factor. 
+            If provided, it will be used instead of computing it from the date of acquisition and the center coordinates.
+
+    Returns:
+        Union[GeoTensor, NDArray]: radiance (C, H, W) tensor in W/m²/nm
+    """
+    solar_irradiance = np.array(solar_irradiance)[:, np.newaxis, np.newaxis] # (C, 1, 1)
+    assert len(data.shape) == 3, f"Expected 3 channels found {len(data.shape)}"
+    assert data.shape[0] == len(solar_irradiance), \
+        f"Different number of channels {data.shape[0]} than number of radiances {len(solar_irradiance)}"
+
+    if observation_date_corr_factor is None:
+        assert date_of_acquisition is not None, "If observation_date_corr_factor is None, date_of_acquisition must be provided"
+        # Get latitude and longitude of the center of image to compute the solar angle
+        if center_coords is None:
+            assert isinstance(data, GeoTensor), "If center_coords is None, data must be a GeoTensor"
+            center_coords = data.transform * (data.shape[-1] // 2, data.shape[-2] // 2)
+            crs_coords = data.crs
+        
+        observation_date_corr_factor = observation_date_correction_factor(center_coords, 
+                                                                          date_of_acquisition, 
+                                                                          crs_coords=crs_coords)
+
+    if isinstance(data, GeoTensor):
+        data_values = data.values
+    else:
+        data_values = data
+
+    data_toa_reflectance = data_values
+    radiances = data_toa_reflectance / observation_date_corr_factor * solar_irradiance
+    
+    if not  isinstance(data, GeoTensor):
+        return radiances
+    
+    mask = data.values == data.fill_value_default
+    radiances[mask] = data.fill_value_default
+
+    return GeoTensor(values=radiances, crs=data.crs, transform=data.transform,
+                     fill_value_default=data.fill_value_default)
+
 
 
 def transform_to_srf(hyperspectral_data:Union[GeoData, NDArray], 
