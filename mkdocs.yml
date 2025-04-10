@@ -28,7 +28,7 @@ nav:
       - Metadata: Sentinel-2/explore_metadata_s2.ipynb
       - Mosaic: Sentinel-2/query_mosaic_s2_images.ipynb
       - Mosaic from GEE: Sentinel-2/s2_mosaic_from_gee.ipynb
-      - ToA reflectance to radiance: Sentinel-2/convert_to_reflectance.ipynb
+      - ToA reflectance to radiance: Sentinel-2/convert_to_radiance.ipynb
     - Hyperspectral sensors:
       - EMIT: emit_explore.ipynb
       - PRISMA: simultaneous_prisma_emit.ipynb
