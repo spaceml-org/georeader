@@ -26,6 +26,15 @@ ORDERS = {
     'bicubic': 2,
 }
 
+# https://developmentseed.org/titiler/advanced/performance_tuning/#aws-configuration
+RIO_ENV_OPTIONS_DEFAULT = dict(
+    GDAL_DISABLE_READDIR_ON_OPEN='EMPTY_DIR',
+    GDAL_HTTP_MERGE_CONSECUTIVE_RANGES="YES",
+    GDAL_CACHEMAX=2_000_000_000, # GDAL raster block cache size. If its value is small (less than 100000), 
+    # it is assumed to be measured in megabytes, otherwise in bytes. https://trac.osgeo.org/gdal/wiki/ConfigOptions#GDAL_CACHEMAX
+    GDAL_HTTP_MULTIPLEX="YES"
+)
+
 
 
 class GeoTensor:
@@ -66,7 +75,8 @@ class GeoTensor:
 
     def __init__(self, values:Tensor,
                  transform:rasterio.Affine, crs:Any,
-                 fill_value_default:Optional[Union[int, float]]=0):
+                 fill_value_default:Optional[Union[int, float]]=0,
+                 attrs:Optional[Dict[str, Any]]=None):
         """
         This class is a wrapper around a numpy or torch tensor with geospatial information.
 
@@ -76,6 +86,8 @@ class GeoTensor:
             crs (Any): coordinate reference system
             fill_value_default (Optional[Union[int, float]], optional): Value to fill when 
                 reading out of bounds. Could be None. Defaults to 0.
+            attrs (Optional[Dict[str, Any]], optional): dictionary with the attributes of the GeoTensor
+                Defaults to None.
 
         Raises:
             ValueError: when the shape of the tensor is not 2d, 3d or 4d.
@@ -87,6 +99,8 @@ class GeoTensor:
         shape = self.shape
         if (len(shape) < 2) or (len(shape) > 4):
             raise ValueError(f"Expected 2d-4d array found {shape}")
+
+        self.attrs = attrs if attrs is not None else {}
 
     @property
     def dims(self) -> Tuple[str]:
@@ -155,10 +169,6 @@ class GeoTensor:
     def astype(self, dtype) -> '__class__':
         return GeoTensor(self.values.astype(dtype), 
                          self.transform, self.crs, self.fill_value_default)
-
-    @property
-    def attrs(self) -> Dict[str, Any]:
-        return vars(self)
     
     def meshgrid(self, dst_crs:Optional[Any]=None) -> Tuple[NDArray, NDArray]:
         from georeader import griddata
@@ -531,7 +541,7 @@ class GeoTensor:
         window_current = rasterio.windows.Window.from_slices(*slices_window, boundless=True)
         transform_current = rasterio.windows.transform(window_current, transform=self.transform)
         return GeoTensor(values_new, transform_current, self.crs,
-                         self.fill_value_default)
+                         self.fill_value_default, attrs=self.attrs)
 
     def resize(self, output_shape:Optional[Tuple[int,int]]=None,
                resolution_dst:Optional[Tuple[float,float]]=None,
@@ -621,7 +631,114 @@ class GeoTensor:
                                             anti_aliasing_sigma=anti_aliasing_sigma)
 
         return GeoTensor(output_tensor, transform=transform, crs=self.crs,
-                         fill_value_default=self.fill_value_default)
+                         fill_value_default=self.fill_value_default,
+                         attrs=self.attrs)
+    
+    @classmethod
+    def load_file(cls, path:str, fs:Optional[Any]=None,
+                  load_tags:bool=False, load_descriptions:bool=False,
+                  rio_env_options:Optional[Dict[str, str]]=None) -> '__class__':
+        """
+        Load a GeoTensor from a file. It uses rasterio to read the data. This function
+        loads all the data in memory. For a lazy loading reader use `georeader.rasterio_reader`.
+
+        Args:
+            path (str): Path to the file.
+            fs (Optional[Any], optional): fsspec.Filesystem object. Defaults to None.
+            load_descriptions (bool, optional): If True, load the description of the image. Defaults to False.
+            load_tags (bool, optional): If True, load the tags of the image. Defaults to False.
+            rio_env_options (Optional[Dict[str, str]], optional): Rasterio environment options. Defaults to None.
+
+        Returns:
+            GeoTensor: GeoTensor object with the loaded data.
+        """
+
+        if fs is not None:
+            if load_descriptions:
+                raise NotImplementedError("""Description loading not supported with `fsspec`. This is because
+            the `descriptions` attribute cannote be loaded from a byte stream. This is a limitation of `rasterio`.
+            The issue is related to how `rasterio.io.MemoryFile` handles band descriptions 
+            compared to direct file access. This is a known limitation when working 
+            with in-memory file representations in GDAL (which `rasterio` uses under 
+            the hood). If you need to load descriptions, you can use `georeader.rasterio_reader`
+            class.""")
+
+            with fs.open(path, "rb") as fh:
+                return cls.load_bytes(fh.read(), 
+                                      load_tags=load_tags,
+                                      rio_env_options=rio_env_options)
+        
+        tags = None
+        descriptions = None
+        rio_env_options = RIO_ENV_OPTIONS_DEFAULT if rio_env_options is None else rio_env_options
+        with rasterio.Env(**rio_env_options):
+            with rasterio.open(path) as src:                
+                data = src.read()
+                transform = src.transform
+                crs = src.crs
+                fill_value_default = src.nodata
+                if load_tags:
+                    tags = src.tags()
+                if load_descriptions:
+                    descriptions = tuple(src.descriptions)
+        
+        attrs = {}
+        if tags is not None:
+            attrs["tags"] = tags
+        
+        if descriptions is not None:
+            attrs["descriptions"] = descriptions
+        
+        return cls(data, transform, crs, 
+                   fill_value_default=fill_value_default,
+                   attrs=attrs)
+    
+    @classmethod
+    def load_bytes(cls, bytes_read:Union[bytes, bytearray, memoryview], 
+                   load_tags:bool=False,
+                   rio_env_options:Optional[Dict[str, str]]=None) -> '__class__':
+        """
+        Load a GeoTensor from a byte stream. It uses rasterio to read the data. 
+
+
+        Args:
+            bytes_read (Union[bytes, bytearray, memoryview]): Byte stream to read.
+            load_tags (bool, optional): if True, load the tags of the image. Defaults to False.
+            rio_env_options (Optional[Dict[str, str]], optional): Rasterio environment options. Defaults to None.
+
+        Returns:
+            __class__: GeoTensor object with the loaded data.
+        
+        Note:
+            The `descriptions` attribute cannote be loaded from a byte stream. This is a limitation of `rasterio`.
+            The issue is related to how `rasterio.io.MemoryFile` handles band descriptions 
+            compared to direct file access. This is a known limitation when working 
+            with in-memory file representations in GDAL (which `rasterio` uses under 
+            the hood). If you need to load descriptions, you should use `georeader.rasterio_reader`
+            class.
+        """
+        import rasterio.io
+
+        tags = None
+        rio_env_options = RIO_ENV_OPTIONS_DEFAULT if rio_env_options is None else rio_env_options
+        with rasterio.Env(**rio_env_options):
+            with rasterio.io.MemoryFile(bytes_read) as mem:
+                with mem.open() as src:
+                    data = src.read()
+                    transform = src.transform
+                    crs = src.crs
+                    fill_value_default = src.nodata
+                    if load_tags:
+                        tags = src.tags()
+        
+        attrs = {}
+        if tags is not None:
+            attrs["tags"] = tags
+        
+        return cls(data, transform, crs, 
+                   fill_value_default=fill_value_default,
+                   attrs=attrs)
+        
 
     def write_from_window(self, data:Tensor, window:rasterio.windows.Window):
         """

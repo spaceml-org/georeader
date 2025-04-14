@@ -5,6 +5,7 @@ from typing import Tuple, Dict, List, Optional, Union, Any
 import warnings
 import numbers
 from georeader import geotensor
+
 from collections.abc import Iterable
 from georeader import window_utils
 from georeader.window_utils import window_bounds, get_slice_pad
@@ -13,14 +14,6 @@ from georeader.abstract_reader import same_extent, GeoData
 from georeader.read import WEB_MERCATOR_CRS, SIZE_DEFAULT, window_from_tile, read_from_tile
 from numpy.typing import NDArray
 
-# https://developmentseed.org/titiler/advanced/performance_tuning/#aws-configuration
-RIO_ENV_OPTIONS_DEFAULT = dict(
-    GDAL_DISABLE_READDIR_ON_OPEN='EMPTY_DIR',
-    GDAL_HTTP_MERGE_CONSECUTIVE_RANGES="YES",
-    GDAL_CACHEMAX=2_000_000_000, # GDAL raster block cache size. If its value is small (less than 100000), 
-    # it is assumed to be measured in megabytes, otherwise in bytes. https://trac.osgeo.org/gdal/wiki/ConfigOptions#GDAL_CACHEMAX
-    GDAL_HTTP_MULTIPLEX="YES"
-)
 
 # CPL_VSIL_CURL_NON_CACHED configuration option can be set to values like 
 # /vsicurl/http://example.com/foo.tif:/vsicurl/http://example.com/some_directory, so that at file handle closing, 
@@ -54,6 +47,7 @@ def _vsi_path(path:str)->str:
         warnings.warn(f"Protocol {protocol} not recognized. Returning the original path")
         return path
 
+RIO_ENV_OPTIONS_DEFAULT = geotensor.RIO_ENV_OPTIONS_DEFAULT
 
 class RasterioReader:
     """
