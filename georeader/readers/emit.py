@@ -11,7 +11,6 @@ import os
 import json
 from typing import Tuple, Optional, Any, Union, Dict
 from georeader.readers.download_utils import download_product as download_product_base
-from georeader.abstract_reader import AbstractGeoData
 import rasterio
 import rasterio.windows
 import numpy as np
