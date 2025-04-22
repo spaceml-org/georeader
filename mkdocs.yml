@@ -8,8 +8,8 @@ repo_name: spaceml-org/georeader
 
 nav:
   - Home: index.md
+  - GeoReader concepts and protocols: modules/read_module.md
   - Modules:
-    - read: modules/read_module.md
     - save: modules/save_module.md
     - reflectance: modules/reflectance_module.md
     - GeoTensor: modules/geotensor_module.md
@@ -17,6 +17,7 @@ nav:
     - rasterize: modules/rasterize_module.md
     - vectorize: modules/vectorize_module.md
     - ee_image: modules/ee_image.md
+    - plot: modules/plot_module.md
   - Tutorials:
     - Read overlapping rasters:
         - Overlapping S2 and Proba-V: read_overlapping_probav_and_sentinel2.ipynb
