@@ -21,6 +21,7 @@ nav:
     - Read overlapping rasters:
         - Overlapping S2 and Proba-V: read_overlapping_probav_and_sentinel2.ipynb
         - Overlapping S2 and AVIRIS: reading_overlapping_sentinel2_aviris.ipynb
+    - GeoTensors: geotensor_numpy_api.ipynb
     - Tile and stitch AI predictions: advanced/tiling_and_stitching.ipynb
     - Sentinel-2:
       - From Google Earth Engine: Sentinel-2/run_in_gee_image.ipynb
