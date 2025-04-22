@@ -69,7 +69,7 @@ class GeoData(GeoDataBase):
     @property
     def values(self) -> np.ndarray:
         # return np.zeros(self.shape, dtype=self.dtype)
-        raise self.load(boundless=True).values
+        return self.load(boundless=True).values
     
     @property
     def res(self) -> Tuple[float, float]:
