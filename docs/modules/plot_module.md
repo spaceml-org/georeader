@@ -75,17 +75,20 @@ This function adds vector data (like points, lines, polygons) to an existing map
 
 **Example:**
 ```python
-import geopandas as gpd
 from georeader import plot
+from shapely.geometry import box
 
 # Create a plot with raster data
-ax = plot.show(my_geotensor)
+ax = plot.show(rgb)
+bbox = box(45.43, -19.53, 45.45, -19.58)
 
-# Add a shapefile of country boundaries
-country_shapes = gpd.read_file("countries.shp")
-plot.add_shape_to_plot(country_shapes, ax=ax, polygon_no_fill=True, 
-                      kwargs_geopandas_plot={"color": "red"})
+plot.add_shape_to_plot(bbox, ax=ax, polygon_no_fill=True, 
+                       crs_plot=rgb.crs,
+                       crs_shape="EPSG:4326",
+                       kwargs_geopandas_plot={"color": "red"})
 ```
+![RGB with a square in red](../modules/pngs/rgb_shape.png)
+
 
 ## API Reference
 

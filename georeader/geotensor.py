@@ -1127,7 +1127,6 @@ class GeoTensor(np.ndarray):
             else:
                 pad_list_np.append((0, 0))
 
-        print(pad_list_np)
         kwargs_extra = {}
         if mode == "constant":
             kwargs_extra["constant_values"] = constant_values
