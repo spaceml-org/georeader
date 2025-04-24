@@ -220,10 +220,9 @@ def get_ch4enhancement_link(tile:str) -> str:
     return link
 
 
-def get_l2amask_link(tile:str) -> str:
+def get_l2amask_link(tile: str) -> str:
     """
     Get the link to download a product from the EMIT website (https://search.earthdata.nasa.gov/search)
-
 
     Args:
         tile (str): path to the product or filename of the L1B product with or without extension.
@@ -255,19 +254,56 @@ def get_l2amask_link(tile:str) -> str:
 
 class EMITImage:
     """
-    Class to read L1B EMIT images.
-
-    This class has been inspired by: https://github.com/emit-sds/emit-utils/
-
-    Example:
+    Class to read L1B EMIT (Earth Surface Mineral Dust Source Investigation) images.
+    
+    This class provides functionality to read and manipulate EMIT satellite imagery products.
+    It handles the specific format and metadata of EMIT HDF files, supporting operations
+    like loading radiometry data, masks, and viewing/solar angles.
+    
+    This class incorporates features from the official EMIT utilities:
+    https://github.com/emit-sds/emit-utils/
+    
+    Args:
+        filename (str): Path to the EMIT .nc file.
+        glt (Optional[GeoTensor]): Optional pre-loaded GLT (Geographic Lookup Table).
+            If None, it will be loaded from the file. Defaults to None.
+        band_selection (Optional[Union[int, Tuple[int, ...], slice]]): Optional band selection.
+            Defaults to slice(None) (all bands).
+    
+    Attributes:
+        filename (str): Path to the EMIT file.
+        nc_ds (netCDF4.Dataset): netCDF4 dataset for the EMIT file.
+        _nc_ds_obs (Optional[netCDF4.Dataset]): netCDF4 dataset for observation data.
+        _nc_ds_l2amask (Optional[netCDF4.Dataset]): netCDF4 dataset for L2A mask.
+        real_transform (rasterio.Affine): Affine transform for the image.
+        time_coverage_start (datetime): Start time of the acquisition.
+        time_coverage_end (datetime): End time of the acquisition.
+        dtype: Data type of the radiometry data.
+        dims (Tuple[str]): Names of dimensions ("band", "y", "x").
+        fill_value_default: Default fill value.
+        nodata: No data value.
+        units (str): Units of the radiometry data.
+        glt (GeoTensor): Geographic Lookup Table as a GeoTensor.
+        valid_glt (numpy.ndarray): Boolean mask of valid GLT values.
+        glt_relative (GeoTensor): Relative Geographic Lookup Table.
+        window_raw (rasterio.windows.Window): Window for raw data.
+        bandname_dimension (str): Dimension name for bands.
+        band_selection: Current band selection.
+        wavelengths (numpy.ndarray): Wavelengths of the selected bands.
+        fwhm (numpy.ndarray): Full Width at Half Maximum for each band.
+        
+    Examples:
         >>> from georeader.readers.emit import EMITImage, download_product
         >>> link = 'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/EMIT_L1B_RAD_001_20220828T051941_2224004_006/EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
         >>> filepath = download_product(link)
         >>> emit = EMITImage(filepath)
-        >>> # reproject to UTM
+        >>> # Reproject to UTM
         >>> crs_utm = georeader.get_utm_epsg(emit.footprint("EPSG:4326"))
         >>> emit_utm = emit.to_crs(crs_utm)
-
+        >>> # Load as reflectance
+        >>> reflectance = emit_utm.load(as_reflectance=True)
+        >>> # Get cloud mask
+        >>> cloud_mask = emit.nc_ds_l2amask
     """
     attributes_set_if_exists = ["_nc_ds_obs", "_mean_sza", "_mean_vza", 
                                 "_observation_bands", "_nc_ds_l2amask", "_mask_bands", 

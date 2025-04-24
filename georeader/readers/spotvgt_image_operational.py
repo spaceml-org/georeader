@@ -36,12 +36,15 @@ BANDS_DICT = {k: v for k, v in enumerate(BANDS_NAMES)}
 
 def read_band_toa(dataset, band: str, slice_to_read: Tuple[slice, slice]):
     """
+    Reads a band from the dataset and applies the necessary transformations.
 
-    see https://docs.terrascope.be/DataProducts/SPOT-VGT/references/SPOT_VGT_PUM_v1.3.pdf page 45
-    :param dataset:
-    :param band:
-    :param slice_to_read:
-    :return:
+    Args:
+        dataset: The HDF dataset.
+        band (str): The band name to read.
+        slice_to_read (Tuple[slice, slice]): The slice to read from the dataset.
+
+    Returns:
+        np.ndarray: The band data.
     """
     hdfreader = dataset[band]
     # Sometimes the dataset is called PIXEL_DATA others PIXEL DATA
@@ -60,15 +63,55 @@ def read_band_toa(dataset, band: str, slice_to_read: Tuple[slice, slice]):
 
 
 class SpotVGT:
+    """
+    SPOT-VGT reader for handling SPOT Vegetation satellite products.
+    
+    This class provides functionality to read and manipulate SPOT-VGT satellite imagery products.
+    It handles the specific format and metadata of SPOT-VGT HDF4 files, supporting operations
+    like loading radiometry data, masks, and cloud information.
+    
+    Args:
+        hdf4_file (str): Path to the HDF4 file or directory containing the SPOT-VGT product.
+        window (Optional[rasterio.windows.Window]): Optional window to focus on a specific 
+            region of the image. Defaults to None (entire image).
+    
+    Attributes:
+        hdf4_file (str): Path to the HDF4 file.
+        name (str): Basename of the HDF4 file.
+        satelliteID (str): Satellite ID extracted from the filename.
+        station (str): Station code extracted from the filename.
+        productID (str): Product ID extracted from the filename.
+        year, month, day (str): Date components extracted from the filename.
+        segment (str): Segment identifier extracted from the filename.
+        version (str): Product version extracted from the filename.
+        files (List[str]): List of files in the SPOT-VGT product.
+        files_dict (Dict[str, str]): Dictionary mapping band names to file paths.
+        metadata (Dict[str, str]): Metadata extracted from the LOG file.
+        real_shape (Tuple[int, int]): Shape of the full image (height, width).
+        real_transform (rasterio.Affine): Affine transform for the full image.
+        dtype_radiometry: Data type for radiometry data (typically np.float32).
+        window_focus (rasterio.windows.Window): Current window focus.
+        window_data (rasterio.windows.Window): Window representing the full data extent.
+        start_date (dt.datetime): Start acquisition date and time.
+        end_date (dt.datetime): End acquisition date and time.
+        crs: Coordinate reference system.
+        toatoc (str): Indicator of whether data is TOA (top of atmosphere).
+        res_name (str): Resolution name identifier (e.g., '1KM').
+        level_name (str): Processing level identifier.
+    
+    Examples:
+        >>> import rasterio.windows
+        >>> # Initialize the SpotVGT reader with a data path
+        >>> spot_reader = SpotVGT('/path/to/V2KRNP____20140321F146_V003')
+        >>> # Load radiometry data
+        >>> bands = spot_reader.load_radiometry()
+        >>> # Get cloud mask
+        >>> cloud_mask = spot_reader.load_sm_cloud_mask()
+        >>> # Focus on a specific window
+        >>> window = rasterio.windows.Window(col_off=100, row_off=100, width=200, height=200)
+        >>> spot_reader.set_window(window)
+    """
     def __init__(self, hdf4_file: str, window: Optional[rasterio.windows.Window] = None):
-        """
-        ## SPOT-VGT READER
-
-        User manual https://publications.vito.be/2016-1034-spotvgt-collection-3-products-user-manual-v10.pdf
-        :param hdf4_file: path to HDF4 file
-        :param window:
-        """
-
         self.hdf4_file = hdf4_file
         self.name = os.path.basename(self.hdf4_file)
         matches = re.match(r'V(\d{1})(\w{3})(\w{1})____(\d{4})(\d{2})(\d{2})F(\w{3})_V(\d{3})', self.name)
@@ -221,9 +264,9 @@ class SpotVGT:
 
     def load_sm(self, boundless: bool = True) -> geotensor.GeoTensor:
         """
-        ## Reference of values in `SM` flags.
+        Reference of values in `SM` flags.
 
-        From user manual https://docs.terrascope.be/DataProducts/SPOT-VGT/references/SPOT_VGT_PUM_v1.3.pdf pag 46
+        From [user manual](https://docs.terrascope.be/DataProducts/SPOT-VGT/references/SPOT_VGT_PUM_v1.3.pdf) pag 46
         * Clear  ->    000
         * Shadow ->    001
         * Undefined -> 010

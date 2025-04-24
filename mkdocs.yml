@@ -17,6 +17,7 @@ nav:
     - rasterize: modules/rasterize_module.md
     - vectorize: modules/vectorize_module.md
     - ee_image: modules/ee_image.md
+    - readers: modules/readers_module.md
   - Tutorials:
     - Read overlapping rasters:
         - Overlapping S2 and Proba-V: read_overlapping_probav_and_sentinel2.ipynb

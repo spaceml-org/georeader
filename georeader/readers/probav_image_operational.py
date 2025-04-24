@@ -1,7 +1,7 @@
 """
 Proba-V reader
 
-Unnoficial Proba-V reader. This reader is based in the Proba-V user manual: 
+Unnoficial Proba-V reader. This reader is based in the Proba-V user manual:
 https://publications.vito.be/2017-1333-probav-products-user-manual.pdf
 
 Author:  Gonzalo Mateo-García
@@ -29,16 +29,19 @@ try:
 except ImportError:
     raise ImportError("Please install h5py with 'pip install h5py'")
 
-FILTERS_HDF5 = { 'gzip': h5z.FILTER_DEFLATE,
-                 'szip': h5z.FILTER_SZIP,
-                 'shuffle': h5z.FILTER_SHUFFLE,
-                 'lzf': h5z.FILTER_LZF,
-                 'so': h5z.FILTER_SCALEOFFSET,
-                 'f32': h5z.FILTER_FLETCHER32}
+FILTERS_HDF5 = {
+    "gzip": h5z.FILTER_DEFLATE,
+    "szip": h5z.FILTER_SZIP,
+    "shuffle": h5z.FILTER_SHUFFLE,
+    "lzf": h5z.FILTER_LZF,
+    "so": h5z.FILTER_SCALEOFFSET,
+    "f32": h5z.FILTER_FLETCHER32,
+}
 
 BAND_NAMES = ["BLUE", "RED", "NIR", "SWIR"]
 
-def read_band_toa(dataset, band:str, slice_to_read:Tuple[slice, slice]):
+
+def read_band_toa(dataset, band: str, slice_to_read: Tuple[slice, slice]):
     attrs = dataset[band].attrs
     if ("OFFSET" in attrs) and ("SCALE" in attrs):
         if (attrs["OFFSET"] != 0) or (attrs["SCALE"] != 1):
@@ -53,21 +56,78 @@ def is_compression_available(dataset) -> bool:
 
 
 def assert_compression_available(dataset):
-    assert is_compression_available(dataset), f"Compression format to read image: {dataset.compression} not available.\n Reinstall h5py with pip: \n pip install h5py --no-deps --ignore-installed"
+    assert is_compression_available(
+        dataset
+    ), f"Compression format to read image: {dataset.compression} not available.\n Reinstall h5py with pip: \n pip install h5py --no-deps --ignore-installed"
 
 
 class ProbaV:
-    def __init__(self, hdf5_file:str, window:Optional[rasterio.windows.Window]=None,
-                 level_name:str="LEVEL3"):
+    """
+    Proba-V reader for handling Proba-V satellite products.
+
+    This class provides functionality to read and manipulate Proba-V satellite imagery products.
+    It handles the specific format and metadata of Proba-V HDF5 files, supporting operations
+    like loading radiometry data, masks, and cloud information.
+
+    Args:
+        hdf5_file (str): Path to the HDF5 file containing the Proba-V product.
+        window (Optional[rasterio.windows.Window]): Optional window to focus on a specific
+            region of the image. Defaults to None (entire image).
+        level_name (str): Processing level of the product, either "LEVEL2A" or "LEVEL3".
+            Defaults to "LEVEL3".
+
+    Attributes:
+        hdf5_file (str): Path to the HDF5 file.
+        name (str): Basename of the HDF5 file.
+        camera (str): Camera ID (for LEVEL2A products).
+        res_name (str): Resolution name identifier (e.g., '100M', '300M', '1KM').
+        version (str): Product version.
+        toatoc (str): Indicator of whether data is TOA (top of atmosphere) or TOC (top of canopy).
+        real_transform (rasterio.Affine): Affine transform for the full image.
+        real_shape (Tuple[int, int]): Shape of the full image (height, width).
+        dtype_radiometry: Data type for radiometry data (typically np.float32).
+        dtype_sm: Data type for SM (status map) data.
+        metadata (Dict[str, Any]): Dictionary with product metadata.
+        window_focus (rasterio.windows.Window): Current window focus.
+        window_data (rasterio.windows.Window): Window representing the full data extent.
+        start_date (datetime): Start acquisition date and time.
+        end_date (datetime): End acquisition date and time.
+        map_projection_wkt (str): WKT representation of the map projection.
+        crs: Coordinate reference system.
+        level_name (str): Processing level identifier.
+
+    Examples:
+        >>> import rasterio.windows
+        >>> # Initialize the ProbaV reader with a data path
+        >>> probav_reader = ProbaV('/path/to/probav_product.HDF5')
+        >>> # Load radiometry data
+        >>> bands = probav_reader.load_radiometry()
+        >>> # Get cloud mask
+        >>> cloud_mask = probav_reader.load_sm_cloud_mask()
+        >>> # Focus on a specific window
+        >>> window = rasterio.windows.Window(col_off=100, row_off=100, width=200, height=200)
+        >>> probav_reader.set_window(window)
+    """
+
+    def __init__(
+        self,
+        hdf5_file: str,
+        window: Optional[rasterio.windows.Window] = None,
+        level_name: str = "LEVEL3",
+    ):
         self.hdf5_file = hdf5_file
         self.name = os.path.basename(self.hdf5_file)
         if level_name == "LEVEL2A":
-            matches = re.match(r"PROBAV_L2A_\d{8}_\d{6}_(\d)_(\d..?M)_(V\d0\d)", self.name)
+            matches = re.match(
+                r"PROBAV_L2A_\d{8}_\d{6}_(\d)_(\d..?M)_(V\d0\d)", self.name
+            )
             if matches is not None:
                 self.camera, self.res_name, self.version = matches.groups()
             self.toatoc = "TOA"
         elif level_name == "LEVEL3":
-            matches = re.match(r"PROBAV_S1_(TO.)_.{6}_\d{8}_(\d..?M)_(V\d0\d)", self.name)
+            matches = re.match(
+                r"PROBAV_S1_(TO.)_.{6}_\d{8}_(\d..?M)_(V\d0\d)", self.name
+            )
             if matches is not None:
                 self.toatoc, self.res_name, self.version = matches.groups()
         else:
@@ -76,10 +136,22 @@ class ProbaV:
         try:
             with h5py.File(self.hdf5_file, "r") as input_f:
                 # reference metadata: http://www.vito-eodata.be/PDF/image/PROBAV-Products_User_Manual.pdf
-                valores_blue = input_f[f"{level_name}/RADIOMETRY/BLUE/{self.toatoc}"].attrs["MAPPING"][3:7].astype(np.float64)
-                self.real_transform = Affine(a=valores_blue[2], b=0, c=valores_blue[0],
-                                             d=0, e=-valores_blue[3], f=valores_blue[1])
-                self.real_shape = input_f[f"{level_name}/RADIOMETRY/BLUE/{self.toatoc}"].shape
+                valores_blue = (
+                    input_f[f"{level_name}/RADIOMETRY/BLUE/{self.toatoc}"]
+                    .attrs["MAPPING"][3:7]
+                    .astype(np.float64)
+                )
+                self.real_transform = Affine(
+                    a=valores_blue[2],
+                    b=0,
+                    c=valores_blue[0],
+                    d=0,
+                    e=-valores_blue[3],
+                    f=valores_blue[1],
+                )
+                self.real_shape = input_f[
+                    f"{level_name}/RADIOMETRY/BLUE/{self.toatoc}"
+                ].shape
                 # self.dtype_radiometry = input_f[f"{level_name}/RADIOMETRY/RED/{self.toatoc}"].dtype
 
                 # Set to float because we're converting the image to TOA when reading (see read_radiometry function)
@@ -90,38 +162,58 @@ class ProbaV:
             raise FileNotFoundError("Error opening file %s" % self.hdf5_file)
 
         if window is None:
-            self.window_focus = rasterio.windows.Window(row_off=0, col_off=0,
-                                                        width=self.real_shape[1],
-                                                        height=self.real_shape[0])
+            self.window_focus = rasterio.windows.Window(
+                row_off=0,
+                col_off=0,
+                width=self.real_shape[1],
+                height=self.real_shape[0],
+            )
         else:
-            self.window_focus = rasterio.windows.Window(row_off=0, col_off=0,
-                                                        width=self.real_shape[1],
-                                                        height=self.real_shape[0])
+            self.window_focus = rasterio.windows.Window(
+                row_off=0,
+                col_off=0,
+                width=self.real_shape[1],
+                height=self.real_shape[0],
+            )
 
-        self.window_data = rasterio.windows.Window(row_off=0, col_off=0,
-                                                   width=self.real_shape[1],
-                                                   height=self.real_shape[0])
+        self.window_data = rasterio.windows.Window(
+            row_off=0, col_off=0, width=self.real_shape[1], height=self.real_shape[0]
+        )
 
         if "OBSERVATION_END_DATE" in self.metadata:
-            self.end_date = datetime.strptime(" ".join(self.metadata["OBSERVATION_END_DATE"].astype(str).tolist()+
-                                                       self.metadata["OBSERVATION_END_TIME"].astype(str).tolist()),
-                                              "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-            self.start_date = datetime.strptime(" ".join(self.metadata["OBSERVATION_START_DATE"].astype(str).tolist()+
-                                                         self.metadata["OBSERVATION_START_TIME"].astype(str).tolist()),
-                                                "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-            self.map_projection_wkt = " ".join(self.metadata["MAP_PROJECTION_WKT"].astype(str).tolist())
+            self.end_date = datetime.strptime(
+                " ".join(
+                    self.metadata["OBSERVATION_END_DATE"].astype(str).tolist()
+                    + self.metadata["OBSERVATION_END_TIME"].astype(str).tolist()
+                ),
+                "%Y-%m-%d %H:%M:%S",
+            ).replace(tzinfo=timezone.utc)
+            self.start_date = datetime.strptime(
+                " ".join(
+                    self.metadata["OBSERVATION_START_DATE"].astype(str).tolist()
+                    + self.metadata["OBSERVATION_START_TIME"].astype(str).tolist()
+                ),
+                "%Y-%m-%d %H:%M:%S",
+            ).replace(tzinfo=timezone.utc)
+            self.map_projection_wkt = " ".join(
+                self.metadata["MAP_PROJECTION_WKT"].astype(str).tolist()
+            )
 
         # Proba-V images are lat/long
-        self.crs = rasterio.crs.CRS({'init': 'epsg:4326'})
+        self.crs = rasterio.crs.CRS({"init": "epsg:4326"})
 
         # Proba-V images have four bands
         self.level_name = level_name
 
-    def _get_window_pad(self, boundless:bool=True)->Tuple[rasterio.windows.Window, Optional[List]]:
+    def _get_window_pad(
+        self, boundless: bool = True
+    ) -> Tuple[rasterio.windows.Window, Optional[List]]:
         window_read = rasterio.windows.intersection(self.window_focus, self.window_data)
 
         if boundless:
-            _, pad_width = window_utils.get_slice_pad(self.window_data, self.window_focus)
+            _, pad_width = window_utils.get_slice_pad(
+                self.window_data, self.window_focus
+            )
             need_pad = any(p != 0 for p in pad_width["x"] + pad_width["y"])
             if need_pad:
                 pad_list_np = []
@@ -135,23 +227,26 @@ class ProbaV:
         else:
             pad_list_np = None
 
-
         return window_read, pad_list_np
 
-    def footprint(self, crs:Optional[str]=None) -> Polygon:
+    def footprint(self, crs: Optional[str] = None) -> Polygon:
         # TODO load footprint from metadata?
         pol = window_utils.window_polygon(self.window_focus, self.transform)
         if (crs is None) or window_utils.compare_crs(self.crs, crs):
             return pol
 
         return window_utils.polygon_to_crs(pol, self.crs, crs)
-    
-    def valid_footprint(self, crs:Optional[str]=None) -> Polygon:
+
+    def valid_footprint(self, crs: Optional[str] = None) -> Polygon:
         valids = self.load_mask()
         return valids.valid_footprint(crs=crs)
 
-    def _load_bands(self, bands_names:Union[List[str],str], boundless:bool=True,
-                    fill_value_default:Number=0) -> geotensor.GeoTensor:
+    def _load_bands(
+        self,
+        bands_names: Union[List[str], str],
+        boundless: bool = True,
+        fill_value_default: Number = 0,
+    ) -> geotensor.GeoTensor:
         window_read, pad_list_np = self._get_window_pad(boundless=boundless)
         slice_ = window_read.toslices()
         if isinstance(bands_names, str):
@@ -165,8 +260,12 @@ class ProbaV:
             for band in bands_names:
                 data = read_band_toa(input_f, band, slice_)
                 if pad_list_np is not None:
-                    data = np.pad(data, tuple(pad_list_np), mode="constant",
-                                  constant_values=fill_value_default)
+                    data = np.pad(
+                        data,
+                        tuple(pad_list_np),
+                        mode="constant",
+                        constant_values=fill_value_default,
+                    )
 
                 bands_arrs.append(data)
 
@@ -180,10 +279,14 @@ class ProbaV:
         else:
             img = np.stack(bands_arrs, axis=0)
 
-        return geotensor.GeoTensor(img, transform=transform, crs=self.crs,
-                                   fill_value_default=fill_value_default)
+        return geotensor.GeoTensor(
+            img,
+            transform=transform,
+            crs=self.crs,
+            fill_value_default=fill_value_default,
+        )
 
-    def save_bands(self, img:np.ndarray):
+    def save_bands(self, img: np.ndarray):
         """
 
         Args:
@@ -192,8 +295,12 @@ class ProbaV:
         Returns:
 
         """
-        assert img.shape[0] == 4, "Unexpected number of channels expected 4 found {}".format(img.shape)
-        assert img.shape[1:] == self.real_shape, f"Unexpected shape expected {self.real_shape} found {img.shape[1:]}"
+        assert (
+            img.shape[0] == 4
+        ), "Unexpected number of channels expected 4 found {}".format(img.shape)
+        assert (
+            img.shape[1:] == self.real_shape
+        ), f"Unexpected shape expected {self.real_shape} found {img.shape[1:]}"
 
         # TODO save only window_focus?
 
@@ -210,17 +317,24 @@ class ProbaV:
                 band_to_save[mask_band_2_save] = -1
                 input_f[band_name][...] = band_to_save
 
-    def load_radiometry(self, indexes:Optional[List[int]]=None, boundless:bool=True) -> geotensor.GeoTensor:
+    def load_radiometry(
+        self, indexes: Optional[List[int]] = None, boundless: bool = True
+    ) -> geotensor.GeoTensor:
         if indexes is None:
             indexes = (0, 1, 2, 3)
-        bands_names = [f"{self.level_name}/RADIOMETRY/{BAND_NAMES[i]}/{self.toatoc}" for i in indexes]
-        return self._load_bands(bands_names, boundless=boundless,fill_value_default=-1/2000.)
+        bands_names = [
+            f"{self.level_name}/RADIOMETRY/{BAND_NAMES[i]}/{self.toatoc}"
+            for i in indexes
+        ]
+        return self._load_bands(
+            bands_names, boundless=boundless, fill_value_default=-1 / 2000.0
+        )
 
-    def load_sm(self, boundless:bool=True) -> geotensor.GeoTensor:
+    def load_sm(self, boundless: bool = True) -> geotensor.GeoTensor:
         """
-        ## Reference of values in `SM` flags.
+        Reference of values in `SM` flags.
 
-        From user manual http://www.vito-eodata.be/PDF/image/PROBAV-Products_User_Manual.pdf pag 67
+        From [user manual](http://www.vito-eodata.be/PDF/image/PROBAV-Products_User_Manual.pdf) pag 67
         * Clear  ->    000
         * Shadow ->    001
         * Undefined -> 010
@@ -236,9 +350,11 @@ class ProbaV:
         * `2**10` coverage red
         * `2**11` coverage blue
         """
-        return self._load_bands(f'{self.level_name}/QUALITY/SM', boundless=boundless, fill_value_default=0)
+        return self._load_bands(
+            f"{self.level_name}/QUALITY/SM", boundless=boundless, fill_value_default=0
+        )
 
-    def load_mask(self,boundless:bool=True) -> geotensor.GeoTensor:
+    def load_mask(self, boundless: bool = True) -> geotensor.GeoTensor:
         """
         Returns the valid mask (False if the pixel is out of swath or is invalid). This function loads the SM band
 
@@ -252,14 +368,20 @@ class ProbaV:
         valids.values = ~mask_only_sm(valids.values)
         valids.fill_value_default = False
         return valids
-    
-    def load_sm_cloud_mask(self, mask_undefined:bool=False, boundless:bool=True) -> geotensor.GeoTensor:
+
+    def load_sm_cloud_mask(
+        self, mask_undefined: bool = False, boundless: bool = True
+    ) -> geotensor.GeoTensor:
         sm = self.load_sm(boundless=boundless)
         cloud_mask = sm_cloud_mask(sm.values, mask_undefined=mask_undefined)
-        return geotensor.GeoTensor(cloud_mask, transform=self.transform, crs=self.crs, fill_value_default=0)
+        return geotensor.GeoTensor(
+            cloud_mask, transform=self.transform, crs=self.crs, fill_value_default=0
+        )
 
     def is_recompressed_and_chunked(self) -> bool:
-        original_bands = [f"{self.level_name}/RADIOMETRY/{b}/{self.toatoc}" for b in BAND_NAMES]
+        original_bands = [
+            f"{self.level_name}/RADIOMETRY/{b}/{self.toatoc}" for b in BAND_NAMES
+        ]
         original_bands.append(f"{self.level_name}/QUALITY/SM")
         with h5py.File(self.hdf5_file, "r") as input_:
             for b in original_bands:
@@ -270,14 +392,24 @@ class ProbaV:
         return True
 
     def assert_can_be_read(self):
-        original_bands = [f"{self.level_name}/RADIOMETRY/{b}/{self.toatoc}" for b in BAND_NAMES] + [
-            f"{self.level_name}/QUALITY/SM"]
+        original_bands = [
+            f"{self.level_name}/RADIOMETRY/{b}/{self.toatoc}" for b in BAND_NAMES
+        ] + [f"{self.level_name}/QUALITY/SM"]
         with h5py.File(self.hdf5_file, "a") as input_:
             for name in original_bands:
-                assert is_compression_available(input_[name]), f"Band {name} cannot be read. Compression: {input_[name].compression}"
+                assert is_compression_available(
+                    input_[name]
+                ), f"Band {name} cannot be read. Compression: {input_[name].compression}"
 
-    def recompress_bands(self, chunks:Tuple[int,int]=(512, 512), replace:bool=True, compression_dest:str="gzip"):
-        original_bands = {b: f"{self.level_name}/RADIOMETRY/{b}/{self.toatoc}" for b in BAND_NAMES}
+    def recompress_bands(
+        self,
+        chunks: Tuple[int, int] = (512, 512),
+        replace: bool = True,
+        compression_dest: str = "gzip",
+    ):
+        original_bands = {
+            b: f"{self.level_name}/RADIOMETRY/{b}/{self.toatoc}" for b in BAND_NAMES
+        }
         original_bands.update({"SM": f"{self.level_name}/QUALITY/SM"})
         copy_bands = {k: v + "_NEW" for (k, v) in original_bands.items()}
         with h5py.File(self.hdf5_file, "a") as input_:
@@ -287,10 +419,12 @@ class ProbaV:
                 if copy_bands[b] in input_:
                     del input_[copy_bands[b]]
 
-                ds = input_.create_dataset(copy_bands[b],
-                                           data=data,
-                                           chunks=chunks,
-                                           compression=compression_dest)
+                ds = input_.create_dataset(
+                    copy_bands[b],
+                    data=data,
+                    chunks=chunks,
+                    compression=compression_dest,
+                )
 
                 attrs_copy = input_[original_bands[b]].attrs
                 for k, v in attrs_copy.items():
@@ -321,27 +455,41 @@ class ProbaV:
     def bounds(self) -> Tuple[float, float, float, float]:
         return window_utils.window_bounds(self.window_focus, self.real_transform)
 
-    def set_window(self, window:rasterio.windows.Window, relative:bool=True, boundless:bool=True):
+    def set_window(
+        self,
+        window: rasterio.windows.Window,
+        relative: bool = True,
+        boundless: bool = True,
+    ):
         if relative:
-            self.window_focus = rasterio.windows.Window(col_off=window.col_off + self.window_focus.col_off,
-                                                        row_off=window.row_off + self.window_focus.row_off,
-                                                        height=window.height, width=window.width)
+            self.window_focus = rasterio.windows.Window(
+                col_off=window.col_off + self.window_focus.col_off,
+                row_off=window.row_off + self.window_focus.row_off,
+                height=window.height,
+                width=window.width,
+            )
         else:
             self.window_focus = window
 
         if not boundless:
-            self.window_focus = rasterio.windows.intersection(self.window_data, self.window_focus)
+            self.window_focus = rasterio.windows.intersection(
+                self.window_data, self.window_focus
+            )
 
-    def __copy__(self) -> '__class__':
-        return ProbaV(self.hdf5_file, window=self.window_focus, level_name=self.level_name)
+    def __copy__(self) -> "__class__":
+        return ProbaV(
+            self.hdf5_file, window=self.window_focus, level_name=self.level_name
+        )
 
-    def read_from_window(self, window:Optional[rasterio.windows.Window]=None, boundless:bool=True) -> '__class__':
+    def read_from_window(
+        self, window: Optional[rasterio.windows.Window] = None, boundless: bool = True
+    ) -> "__class__":
         copy = self.__copy__()
         copy.set_window(window=window, boundless=boundless)
 
         return copy
 
-    def __repr__(self)->str:
+    def __repr__(self) -> str:
         return f""" 
          File: {self.hdf5_file}
          Transform: {self.transform}
@@ -354,10 +502,47 @@ class ProbaV:
          Resolution name : {self.res_name}
         """
 
+
 # Class to interface with read functions
 class ProbaVRadiometry(ProbaV):
-    def __init__(self, hdf5_file:str,  window:Optional[rasterio.windows.Window]=None,
-                 level_name:str="LEVEL2A", indexes:Optional[List[int]] = None):
+    """
+    A specialized ProbaV reader class focused on radiometry data.
+
+    This class extends the base ProbaV class to provide a simplified interface
+    for working with radiometry bands from Proba-V products.
+
+    Args:
+        hdf5_file (str): Path to the HDF5 file containing the Proba-V product.
+        window (Optional[rasterio.windows.Window]): Optional window to focus on a specific
+            region of the image. Defaults to None (entire image).
+        level_name (str): Processing level of the product. Defaults to "LEVEL2A".
+        indexes (Optional[List[int]]): Optional list of band indices to load. If None,
+            all four bands (0=BLUE, 1=RED, 2=NIR, 3=SWIR) will be loaded. Defaults to None.
+
+    Attributes:
+        dims (Tuple[str]): Names of the dimensions ("band", "y", "x").
+        indexes (List[int]): List of band indices to load.
+        dtype: Data type of the radiometry data.
+        count (int): Number of bands to be loaded.
+        shape (Tuple[int, int, int]): Shape of the data (bands, height, width).
+        values (np.ndarray): The radiometry data values.
+
+    Examples:
+        >>> # Initialize the ProbaVRadiometry reader with a data path
+        >>> probav_rad = ProbaVRadiometry('/path/to/probav_product.HDF5')
+        >>> # Load only RED and NIR bands
+        >>> probav_rad_rn = ProbaVRadiometry('/path/to/probav_product.HDF5', indexes=[1, 2])
+        >>> # Get the data as a GeoTensor
+        >>> geotensor_data = probav_rad.load()
+    """
+
+    def __init__(
+        self,
+        hdf5_file: str,
+        window: Optional[rasterio.windows.Window] = None,
+        level_name: str = "LEVEL2A",
+        indexes: Optional[List[int]] = None,
+    ):
         super().__init__(hdf5_file=hdf5_file, window=window, level_name=level_name)
         self.dims = ("band", "y", "x")
 
@@ -373,26 +558,70 @@ class ProbaVRadiometry(ProbaV):
     def count(self):
         return len(self.indexes)
 
-    def load(self, boundless:bool=True)->geotensor.GeoTensor:
+    def load(self, boundless: bool = True) -> geotensor.GeoTensor:
         return self.load_radiometry(boundless=boundless, indexes=self.indexes)
 
     @property
     def shape(self) -> Tuple:
-        return  self.count, self.window_focus.height, self.window_focus.width
+        return self.count, self.window_focus.height, self.window_focus.width
+
+    @property
+    def width(self) -> int:
+        return self.window_focus.width
+    
+    @property
+    def height(self) -> int:
+        return self.window_focus.height
 
     @property
     def values(self) -> np.ndarray:
         return self.load_radiometry(boundless=True, indexes=self.indexes).values
 
-    def __copy__(self) -> '__class__':
-        return ProbaVRadiometry(self.hdf5_file, window=self.window_focus, level_name=self.level_name,
-                                indexes=self.indexes)
+    def __copy__(self) -> "__class__":
+        return ProbaVRadiometry(
+            self.hdf5_file,
+            window=self.window_focus,
+            level_name=self.level_name,
+            indexes=self.indexes,
+        )
 
 
 # Class to interface with read functions
 class ProbaVSM(ProbaV):
-    def __init__(self, hdf5_file: str, window: Optional[rasterio.windows.Window] = None,
-                 level_name: str = "LEVEL2A"):
+    """
+    A specialized ProbaV reader class focused on Status Map (SM) data.
+
+    This class extends the base ProbaV class to provide a simplified interface
+    for working with the status map band from Proba-V products. The SM band
+    contains information about the pixel quality, cloud status, etc.
+
+    Args:
+        hdf5_file (str): Path to the HDF5 file containing the Proba-V product.
+        window (Optional[rasterio.windows.Window]): Optional window to focus on a specific
+            region of the image. Defaults to None (entire image).
+        level_name (str): Processing level of the product. Defaults to "LEVEL2A".
+
+    Attributes:
+        dims (Tuple[str]): Names of the dimensions ("y", "x").
+        dtype: Data type of the SM data.
+        shape (Tuple[int, int]): Shape of the SM data (height, width).
+        values (np.ndarray): The SM data values.
+
+    Examples:
+        >>> # Initialize the ProbaVSM reader with a data path
+        >>> probav_sm = ProbaVSM('/path/to/probav_product.HDF5')
+        >>> # Get the SM data as a GeoTensor
+        >>> sm_data = probav_sm.load()
+        >>> # Extract cloud information
+        >>> cloud_mask = sm_cloud_mask(sm_data.values)
+    """
+
+    def __init__(
+        self,
+        hdf5_file: str,
+        window: Optional[rasterio.windows.Window] = None,
+        level_name: str = "LEVEL2A",
+    ):
         super().__init__(hdf5_file=hdf5_file, window=window, level_name=level_name)
         self.dims = ("y", "x")
         self.dtype = self.dtype_sm
@@ -405,14 +634,24 @@ class ProbaVSM(ProbaV):
         return self.window_focus.height, self.window_focus.width
 
     @property
+    def width(self) -> int:
+        return self.window_focus.width
+    
+    @property
+    def height(self) -> int:
+        return self.window_focus.height
+
+    @property
     def values(self) -> np.ndarray:
         return self.load_sm(boundless=True).values
 
-    def __copy__(self) -> '__class__':
-        return ProbaVSM(self.hdf5_file, window=self.window_focus, level_name=self.level_name)
+    def __copy__(self) -> "__class__":
+        return ProbaVSM(
+            self.hdf5_file, window=self.window_focus, level_name=self.level_name
+        )
 
 
-def sm_cloud_mask(sm:np.ndarray, mask_undefined:bool=False) -> np.ndarray:
+def sm_cloud_mask(sm: np.ndarray, mask_undefined: bool = False) -> np.ndarray:
     """
     Returns a binary cloud mask: 2 if cloud, 1 if clear, 0 if invalid
 
@@ -431,7 +670,7 @@ def sm_cloud_mask(sm:np.ndarray, mask_undefined:bool=False) -> np.ndarray:
     if mask_undefined:
         undefined_mask = ((sm & 1) == 0) & ((sm & 2**1) != 0) & ((sm & 2**2) == 0)
         cloud_mask |= undefined_mask
-    
+
     cloud_mask += 1
     invalids = mask_only_sm(sm)
     cloud_mask[invalids] = 0
@@ -439,7 +678,7 @@ def sm_cloud_mask(sm:np.ndarray, mask_undefined:bool=False) -> np.ndarray:
     return cloud_mask
 
 
-def mask_only_sm(sm:np.ndarray) -> np.ndarray:
+def mask_only_sm(sm: np.ndarray) -> np.ndarray:
     """
     Returns a invalid mask: True if the pixel is out of swath
 
@@ -457,9 +696,6 @@ def mask_only_sm(sm:np.ndarray) -> np.ndarray:
     """
     mascara = np.zeros(sm.shape, dtype=bool)
     for i in range(4):
-        mascara |= ((sm & (2 ** (i + 8))) == 0)
+        mascara |= (sm & (2 ** (i + 8))) == 0
 
     return mascara
-
-
-

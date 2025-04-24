@@ -1,8 +1,17 @@
-# Geospatial Data Readers
+# Satellite Data Readers
 
-This module provides specialized readers for various optical satellite sensors. All these readers implement the [GeoData protocol](../modules/read_module.md), which means they provide a consistent interface for spatial operations, data access, and manipulation.
+This module provides specialized readers for various optical satellite missions. All these readers implement the [GeoData protocol](../modules/read_module.md), which means they provide a consistent interface for spatial operations, data access, and manipulation.
 
 These readers make it easy to work with official data formats from different Earth observation missions, and they can be used with all the functions available in the `georeader.read` module.
+
+Readers available:
+
+* [Sentinel-2](#sentinel-2-reader)
+* [Proba-V](#proba-v-reader)
+* [SpotVGT](#spot-vgt-reader)
+* [EMIT](#emit-reader)
+* [PRISMA](#prisma-reader)
+* [EnMAP](#enmap-reader)
 
 ## Sentinel-2 Reader
 
@@ -14,6 +23,7 @@ The Sentinel-2 reader provides functionality for reading Sentinel-2 L1C and L2A 
 - Access to metadata, including viewing geometry and solar angles
 
 **Tutorial examples:**
+
 - [Reading from the public Google bucket](../read_S2_SAFE_from_bucket.ipynb)
 - [Exploring image metadata](../Sentinel-2/explore_metadata_s2.ipynb)
 - [Creating mosaics from multiple images](../Sentinel-2/query_mosaic_s2_images.ipynb)
@@ -28,8 +38,6 @@ The Sentinel-2 reader provides functionality for reading Sentinel-2 L1C and L2A 
         - S2ImageL1C
         - S2ImageL2A
         - s2loader
-        - s2_load_from_feature_element84
-        - s2_load_from_feature_planetary_microsoft
         - s2_public_bucket_path
         - read_srf
 
@@ -42,6 +50,7 @@ The Proba-V reader enables access to Proba-V Level 2A and Level 3 products. It h
 - Extraction of metadata and acquisition parameters
 
 **Tutorial example:**
+
 - [Reading overlapping Proba-V and Sentinel-2 images](../read_overlapping_probav_and_sentinel2.ipynb)
 
 ### API Reference
@@ -85,6 +94,7 @@ Key features:
 - Access to satellite and solar geometry information for radiometric calculations
 
 **Tutorial examples:**
+
 - [Reading overlapping PRISMA and EMIT images](../simultaneous_prisma_emit.ipynb)
 - [Cloud detection in PRISMA images](../prisma_with_cloudsen12.ipynb)
 
@@ -112,6 +122,7 @@ Key features:
 - Automatic detection and use of appropriate UTM projection
 
 **Tutorial example:**
+
 - [Working with EMIT images](../emit_explore.ipynb)
 
 ### API Reference
@@ -142,6 +153,7 @@ Key features:
 - Support for quality masks
 
 **Tutorial example:**
+
 - [Working with EnMAP and CloudSEN12](../enmap_with_cloudsen12.ipynb)
 
 ### API Reference
