@@ -35,7 +35,7 @@ The library provides the following implementations of the `GeoData` protocol:
 
 1. **[GeoTensor](../modules/geotensor_module.md)**: A numpy-based implementation for in-memory operations.
 2. **[RasterioReader](../modules/rasterio_reader.md)**: An implementation for lazy-loading with `rasterio`.
-3. **[readers.*](../modules/readers_module.md)**: Custom readers for official data formats of several satellite missions ([Sentinel-2](../modules/readers_module.md#sentinel-2-reader), [Proba-V](../modules/readers_module.md#proba-v-reader), [SpotVGT](../modules/readers_module.md#spotvgt-reader), [EMIT](../modules/readers_module.md#emit-reader), [PRISMA](../modules/readers_module.md#prisma-reader) or [EnMAP](../modules/readers_module.md#enmap-reader)).
+3. **[readers.*](../modules/readers_module.md)**: Custom readers for official data formats of several satellite missions ([Sentinel-2](../modules/readers_module.md#sentinel-2-reader), [Proba-V](../modules/readers_module.md#proba-v-reader), [SpotVGT](../modules/readers_module.md#spot-vgt-reader), [EMIT](../modules/readers_module.md#emit-reader), [PRISMA](../modules/readers_module.md#prisma-reader) or [EnMAP](../modules/readers_module.md#enmap-reader)).
 
 ## Window and Read Methods
 
