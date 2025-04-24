@@ -505,6 +505,27 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modules/readers_module/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    readers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1174,7 +1195,10 @@
 <div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
 <h2 id="read-sentinel-2-files-from-public-bucket">Read Sentinel-2 files from public bucket<a class="headerlink" href="#read-sentinel-2-files-from-public-bucket" title="Permanent link">&para;</a></h2>
-<p>Set the env variables to be able to read from the Google bucket. This is needed to cover reading costs</p>
+<ul>
+<li>Author: Gonzalo Mateo-García</li>
+</ul>
+<p>This notebook shows how to read a Sentinel-2 SAFE file from the public Google bucket and reading a subset of it.</p>
 </div>
 </div>
 </div>
@@ -1322,58 +1346,6 @@ Wall time: 2.44 s
          CRS: EPSG:32649
          fill_value_default: 0
         </code>
-</pre>
-</div>
-</div>
-</div>
-</div>
-</div>
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-
-<div class="highlight"><pre><span></span><code><span class="n">s2obj</span><span class="o">.</span><span class="n">radio_add_offsets</span><span class="p">()</span>
-</code></pre></div>
-
-</div>
-<div class="output_wrapper">
-<div class="output">
-<div class="output_area">
-<div class="output_text output_subarea output_execute_result">
-<pre>
-<code>{'B01': -1000,
- 'B02': -1000,
- 'B03': -1000,
- 'B04': -1000,
- 'B05': -1000,
- 'B06': -1000,
- 'B07': -1000,
- 'B08': -1000,
- 'B8A': -1000,
- 'B09': -1000,
- 'B10': -1000,
- 'B11': -1000,
- 'B12': -1000}</code>
-</pre>
-</div>
-</div>
-</div>
-</div>
-</div>
-<div class="cell border-box-sizing code_cell rendered">
-<div class="input">
-
-<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="n">cosa</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1001</span><span class="p">,</span><span class="mi">10002</span><span class="p">,</span><span class="mi">1000</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint16</span><span class="p">)</span>
-<span class="n">cosa</span> <span class="o">-</span> <span class="mi">1006</span>
-</code></pre></div>
-
-</div>
-<div class="output_wrapper">
-<div class="output">
-<div class="output_area">
-<div class="output_text output_subarea output_execute_result">
-<pre>
-<code>array([65531,  8996, 65530], dtype=uint16)</code>
 </pre>
 </div>
 </div>
