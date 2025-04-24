@@ -11,7 +11,7 @@ import itertools
 from georeader.geotensor import GeoTensor
 from georeader import window_utils
 from georeader.window_utils import PIXEL_PRECISION, pad_window, round_outer_window, _is_exact_round
-from georeader.abstract_reader import GeoData
+from georeader.abstract_reader import GeoData, GeoDataBase
 from itertools import product
 from shapely.geometry import Polygon, MultiPolygon
 import mercantile
@@ -38,7 +38,7 @@ def _transform_from_crs(center_coords:Tuple[float, float], crs_input:Union[Dict[
     return coords_transformed[0][0], coords_transformed[1][0]
 
 
-def window_from_polygon(data_in: Union[GeoData, rasterio.DatasetReader],
+def window_from_polygon(data_in: Union[GeoDataBase, rasterio.DatasetReader],
                         polygon:Union[Polygon, MultiPolygon], crs_polygon:Optional[str]=None,
                         window_surrounding:bool=False) -> rasterio.windows.Window:
     """
@@ -75,7 +75,7 @@ def window_from_polygon(data_in: Union[GeoData, rasterio.DatasetReader],
                                    width=col_max-col_off,
                                    height=row_max-row_off)
 
-def window_from_bounds(data_in: Union[GeoData, rasterio.DatasetReader], 
+def window_from_bounds(data_in: Union[GeoDataBase, rasterio.DatasetReader], 
                        bounds:Tuple[float, float, float, float],
                        crs_bounds:Optional[str]=None) -> rasterio.windows.Window:
     """
@@ -103,7 +103,7 @@ def window_from_bounds(data_in: Union[GeoData, rasterio.DatasetReader],
     return window_in
 
 
-def window_from_center_coords(data_in: Union[GeoData, rasterio.DatasetReader], 
+def window_from_center_coords(data_in: Union[GeoDataBase, rasterio.DatasetReader], 
                               center_coords:Tuple[float, float],
                               shape:Tuple[int,int], crs_center_coords:Optional[Any]=None) -> rasterio.windows.Window:
     """
@@ -141,7 +141,7 @@ def window_from_center_coords(data_in: Union[GeoData, rasterio.DatasetReader],
     return window
 
 
-def window_from_tile(data_in: Union[GeoData, rasterio.DatasetReader],
+def window_from_tile(data_in: Union[GeoDataBase, rasterio.DatasetReader],
                      x:int, y:int, z:int) -> rasterio.windows.Window:
     """
     Returns the window corresponding to the x,y,z tile in the data_in.
