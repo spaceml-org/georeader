@@ -51,6 +51,22 @@ docs-publish: ## Build and publish the documentation to GitHub Pages
 	@poetry run mkdocs build
 	@poetry run ghp-import -n -p -f site
 
+.PHONY: docs-publish-alpha
+docs-publish-alpha: ## Build and publish alpha docs to GitHub Pages under /alpha
+	@echo "🚀 Building alpha documentation into site/alpha"
+	@poetry run mkdocs build --site-dir site/alpha
+	@echo "🚀 Publishing alpha documentation to GitHub Pages under /alpha"
+	@cp -r site/alpha site_alpha_tmp
+	@git fetch origin gh-pages:gh-pages || true
+	@git checkout gh-pages || git checkout --orphan gh-pages
+	@rm -rf alpha
+	@cp -r site_alpha_tmp alpha
+	@rm -rf site_alpha_tmp
+	@git add alpha
+	@git commit -m "Update alpha docs" || true
+	@git push origin gh-pages
+	@git checkout -
+
 .PHONY: help
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
