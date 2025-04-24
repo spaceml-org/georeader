@@ -31,10 +31,11 @@ This extends the `GeoDataBase` protocol with methods for data access and manipul
 
 ## Implementations
 
-The library provides two main implementations of these protocols:
+The library provides the following implementations of the `GeoData` protocol:
 
-1. **[GeoTensor](../modules/geotensor_module.md)**: A numpy-based implementation optimized for in-memory operations
+1. **[GeoTensor](../modules/geotensor_module.md)**: A numpy-based implementation for in-memory operations.
 2. **[RasterioReader](../modules/rasterio_reader.md)**: An implementation for lazy-loading with `rasterio`.
+3. **[readers.*](../modules/readers_module.md)**: Custom readers for official data formats of several satellite missions (Sentinel-2, Proba-V, SpotVGT, EMIT, PRISMA or EnMAP).
 
 ## Window and Read Methods
 
