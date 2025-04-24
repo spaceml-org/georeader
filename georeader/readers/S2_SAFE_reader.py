@@ -4,6 +4,7 @@ Sentinel-2 reader inherited from https://github.com/IPL-UV/DL-L8S2-UV.
 Authors: Gonzalo Mateo-García, Dan Lopez-Puigdollers
 
 It has several enhancements:
+
 * Support for S2L2A images
 * It can read directly images from a GCP bucket (for example data from  [here](https://cloud.google.com/storage/docs/public-datasets/sentinel-2))
 * Windowed read and read and reproject in the same function (see `load_bands_bbox`)
@@ -12,9 +13,10 @@ It has several enhancements:
 * It can read from the pyramid if available.
 
 
-https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/document-library
+[Sentinel-2 docs](https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/document-library)
 
 """
+
 from shapely.geometry import Polygon
 import xml.etree.ElementTree as ET
 import datetime
@@ -23,7 +25,7 @@ import numpy as np
 import os
 import re
 from typing import List, Tuple, Union, Optional, Dict, Any
-from georeader.rasterio_reader import  RasterioReader
+from georeader.rasterio_reader import RasterioReader
 from georeader import read
 from georeader import window_utils
 from georeader.geotensor import GeoTensor
@@ -35,8 +37,21 @@ from georeader.save import save_cog, save_tiled_geotiff
 import pandas as pd
 
 
-BANDS_S2 = ["B01", "B02","B03", "B04", "B05", "B06",
-            "B07", "B08", "B8A", "B09", "B10", "B11", "B12"]
+BANDS_S2 = [
+    "B01",
+    "B02",
+    "B03",
+    "B04",
+    "B05",
+    "B06",
+    "B07",
+    "B08",
+    "B8A",
+    "B09",
+    "B10",
+    "B11",
+    "B12",
+]
 
 PUBLIC_BUCKET_SENTINEL_2 = "gcp-public-data-sentinel-2"
 FULL_PATH_PUBLIC_BUCKET_SENTINEL_2 = f"gs://{PUBLIC_BUCKET_SENTINEL_2}/"
@@ -45,22 +60,44 @@ FULL_PATH_PUBLIC_BUCKET_SENTINEL_2 = f"gs://{PUBLIC_BUCKET_SENTINEL_2}/"
 BANDS_S2_L1C = list(BANDS_S2)
 
 # TODO ADD SLC band? AOT? WP?
-BANDS_S2_L2A = ["B01", "B02","B03", "B04", "B05", "B06",
-                "B07", "B08", "B8A", "B09", "B11", "B12"]
+BANDS_S2_L2A = [
+    "B01",
+    "B02",
+    "B03",
+    "B04",
+    "B05",
+    "B06",
+    "B07",
+    "B08",
+    "B8A",
+    "B09",
+    "B11",
+    "B12",
+]
 
-BANDS_RESOLUTION = OrderedDict({"B01": 60, "B02": 10,
-                                "B03": 10, "B04": 10,
-                                "B05": 20, "B06": 20,
-                                "B07": 20, "B08": 10,
-                                "B8A": 20, "B09": 60,
-                                "B10": 60, "B11": 20,
-                                "B12": 20})
+BANDS_RESOLUTION = OrderedDict(
+    {
+        "B01": 60,
+        "B02": 10,
+        "B03": 10,
+        "B04": 10,
+        "B05": 20,
+        "B06": 20,
+        "B07": 20,
+        "B08": 10,
+        "B8A": 20,
+        "B09": 60,
+        "B10": 60,
+        "B11": 20,
+        "B12": 20,
+    }
+)
 
 DEFAULT_REQUESTER_PAYS = False
 
 
-def normalize_band_names(bands:List[str]) -> List[str]:
-    """ Adds zero before band name for reading """
+def normalize_band_names(bands: List[str]) -> List[str]:
+    """Adds zero before band name for reading"""
     bands_out = []
     for b in bands:
         lb = len(b)
@@ -69,28 +106,33 @@ def normalize_band_names(bands:List[str]) -> List[str]:
         elif lb == 3:
             bands_out.append(b)
         else:
-            raise NotImplementedError(f"Unknown band {b} with different number of expected characters")
+            raise NotImplementedError(
+                f"Unknown band {b} with different number of expected characters"
+            )
 
     return bands_out
 
 
-def islocalpath(path:str) -> bool:
+def islocalpath(path: str) -> bool:
     return path.startswith("file://") or ("://" not in path)
 
+
 def get_filesystem(path: str, requester_pays: Optional[bool] = None):
-    """Get the filesystem from a path """
+    """Get the filesystem from a path"""
     try:
         import fsspec
         import gcsfs
     except ImportError:
         raise ImportError("Please install fsspec with 'pip install fsspec gcsfs'")
-    
+
     if path.startswith(FULL_PATH_PUBLIC_BUCKET_SENTINEL_2):
-        return gcsfs.GCSFileSystem(token='anon', access="read_only", default_location="EUROPE-WEST1")
-    
+        return gcsfs.GCSFileSystem(
+            token="anon", access="read_only", default_location="EUROPE-WEST1"
+        )
+
     if requester_pays is None:
         requester_pays = DEFAULT_REQUESTER_PAYS
-    
+
     path = str(path)
     if islocalpath(path):
         return fsspec.filesystem("file")
@@ -101,25 +143,85 @@ def get_filesystem(path: str, requester_pays: Optional[bool] = None):
             return fsspec.filesystem(mode, requester_pays=requester_pays)
         return fsspec.filesystem(mode)
 
+
 def _get_info_granules_metadata(folder) -> Optional[Dict[str, Any]]:
     granules_path = os.path.join(folder, "granules.json").replace("\\", "/")
     info_granules_metadata = None
     if islocalpath(granules_path) and os.path.exists(granules_path):
         with open(granules_path, "r") as fh:
             info_granules_metadata = json.load(fh)
-        info_granules_metadata["granules"] = {k:os.path.join(folder,g) for k,g in info_granules_metadata["granules"].items()}
-        info_granules_metadata["metadata_msi"] = os.path.join(folder, info_granules_metadata["metadata_msi"])
-        info_granules_metadata["metadata_tl"] = os.path.join(folder, info_granules_metadata["metadata_tl"])
+        info_granules_metadata["granules"] = {
+            k: os.path.join(folder, g)
+            for k, g in info_granules_metadata["granules"].items()
+        }
+        info_granules_metadata["metadata_msi"] = os.path.join(
+            folder, info_granules_metadata["metadata_msi"]
+        )
+        info_granules_metadata["metadata_tl"] = os.path.join(
+            folder, info_granules_metadata["metadata_tl"]
+        )
     return info_granules_metadata
 
+
 class S2Image:
-    def __init__(self, s2folder:str,
-                 polygon:Optional[Polygon]=None,
-                 granules: Optional[Dict[str, str]]=None,
-                 out_res: int = 10,
-                 window_focus:Optional[rasterio.windows.Window]=None,
-                 bands:Optional[List[str]]=None,
-                 metadata_msi:Optional[str]=None):
+    """
+    Base Sentinel-2 image reader for handling Sentinel-2 satellite products.
+    Do Not use this class directly, use S2ImageL1C or S2ImageL2A instead.
+
+    This class provides functionality to read and manipulate Sentinel-2 satellite imagery.
+    It handles the specific format and metadata of Sentinel-2 products, supporting operations
+    like loading bands, masks, and converting digital numbers to radiance.
+
+    Args:
+        s2folder (str): Path to the Sentinel-2 SAFE product folder.
+        polygon (Optional[Polygon]): Polygon defining the area of interest in EPSG:4326.
+            Defaults to None (entire image).
+        granules (Optional[Dict[str, str]]): Dictionary mapping band names to file paths.
+            Defaults to None (automatically discovered).
+        out_res (int): Output resolution in meters. Must be one of 10, 20, or 60. Defaults to 10.
+        window_focus (Optional[rasterio.windows.Window]): Window to focus on a specific
+            region of the image. Defaults to None (entire image).
+        bands (Optional[List[str]]): List of bands to read. If None, all available bands
+            will be loaded based on the product type.
+        metadata_msi (Optional[str]): Path to metadata file. If None, it is assumed to be
+            in the SAFE folder.
+
+    Attributes:
+        mission (str): Mission identifier (e.g., 'S2A', 'S2B').
+        producttype (str): Product type identifier (e.g., 'MSIL1C', 'MSIL2A').
+        pdgs (str): PDGS Processing Baseline number.
+        relorbitnum (str): Relative Orbit number.
+        tile_number_field (str): Tile Number field.
+        product_discriminator (str): Product Discriminator.
+        name (str): Base name of the product.
+        folder (str): Path to the product folder.
+        datetime (datetime): Acquisition datetime.
+        metadata_msi (str): Path to the MSI metadata file.
+        out_res (int): Output resolution in meters.
+        bands (List[str]): List of bands to read.
+        dims (Tuple[str]): Names of the dimensions ("band", "y", "x").
+        fill_value_default (int): Default fill value (typically 0).
+        band_check (str): Band used as template for reading.
+        granule_readers (Dict[str, RasterioReader]): Dictionary of readers for each band.
+        window_focus (rasterio.windows.Window): Current window focus.
+        transform: Affine transform for the window.
+        crs: Coordinate reference system.
+        shape: Shape of the data (bands, height, width).
+        bounds: Bounds of the window.
+        res: Resolution of the data.
+    
+    """
+
+    def __init__(
+        self,
+        s2folder: str,
+        polygon: Optional[Polygon] = None,
+        granules: Optional[Dict[str, str]] = None,
+        out_res: int = 10,
+        window_focus: Optional[rasterio.windows.Window] = None,
+        bands: Optional[List[str]] = None,
+        metadata_msi: Optional[str] = None,
+    ):
         """
         Sentinel-2 image reader class.
 
@@ -131,18 +233,30 @@ class S2Image:
             window_focus: rasterio window to read. All reads will be based on this window
             bands: list of bands to read. If None all bands are read.
             metadata_msi: path to metadata file. If None it is assumed to be in the SAFE folder
-        
+
         """
-        self.mission, self.producttype, sensing_date_str, self.pdgs, self.relorbitnum, self.tile_number_field, self.product_discriminator = s2_name_split(
-            s2folder)
+        (
+            self.mission,
+            self.producttype,
+            sensing_date_str,
+            self.pdgs,
+            self.relorbitnum,
+            self.tile_number_field,
+            self.product_discriminator,
+        ) = s2_name_split(s2folder)
 
         # Remove last trailing slash
-        s2folder = s2folder[:-1] if (s2folder.endswith("/") or s2folder.endswith("\\")) else s2folder
+        s2folder = (
+            s2folder[:-1]
+            if (s2folder.endswith("/") or s2folder.endswith("\\"))
+            else s2folder
+        )
         self.name = os.path.basename(os.path.splitext(s2folder)[0])
 
         self.folder = s2folder
-        self.datetime = datetime.datetime.strptime(sensing_date_str, "%Y%m%dT%H%M%S").replace(
-            tzinfo=datetime.timezone.utc)
+        self.datetime = datetime.datetime.strptime(
+            sensing_date_str, "%Y%m%dT%H%M%S"
+        ).replace(tzinfo=datetime.timezone.utc)
 
         info_granules_metadata = None
 
@@ -153,7 +267,9 @@ class S2Image:
                 if "metadata_tl" in info_granules_metadata:
                     self.metadata_tl = info_granules_metadata["metadata_tl"]
             else:
-                self.metadata_msi = os.path.join(self.folder, f"MTD_{self.producttype}.xml").replace("\\", "/")
+                self.metadata_msi = os.path.join(
+                    self.folder, f"MTD_{self.producttype}.xml"
+                ).replace("\\", "/")
 
         else:
             self.metadata_msi = metadata_msi
@@ -186,7 +302,9 @@ class S2Image:
                 self.band_check = band
                 break
 
-        assert self.band_check is not None, f"Not band found of resolution {self.out_res} in {self.bands}"
+        assert (
+            self.band_check is not None
+        ), f"Not band found of resolution {self.out_res} in {self.bands}"
 
         # This dict will be filled by the _get_reader function
         self.granule_readers: Dict[str, RasterioReader] = {}
@@ -209,22 +327,33 @@ class S2Image:
             else:
                 self.load_metadata_msi()
                 bands_elms = self.root_metadata_msi.findall(".//IMAGE_FILE")
-                all_granules = [os.path.join(self.folder, b.text + ".jp2").replace("\\", "/")  for b in bands_elms]
+                all_granules = [
+                    os.path.join(self.folder, b.text + ".jp2").replace("\\", "/")
+                    for b in bands_elms
+                ]
                 if self.producttype == "MSIL2A":
                     self.granules = {j.split("_")[-2]: j for j in all_granules}
                 else:
-                    self.granules = {j.split("_")[-1].replace(".jp2", ""): j for j in all_granules}
+                    self.granules = {
+                        j.split("_")[-1].replace(".jp2", ""): j for j in all_granules
+                    }
         else:
             self.granules = granules
 
         self._pol = polygon
         if self._pol is not None:
-            self._pol_crs = window_utils.polygon_to_crs(self._pol, "EPSG:4326", self.crs)
+            self._pol_crs = window_utils.polygon_to_crs(
+                self._pol, "EPSG:4326", self.crs
+            )
         else:
             self._pol_crs = None
 
-    def cache_product_to_local_dir(self, path_dest:Optional[str]=None, print_progress:bool=True,
-                                   format_bands:Optional[str]=None) -> '__class__':
+    def cache_product_to_local_dir(
+        self,
+        path_dest: Optional[str] = None,
+        print_progress: bool = True,
+        format_bands: Optional[str] = None,
+    ) -> "__class__":
         """
         Copy the product to a local directory and return a new instance of the class with the new path
 
@@ -232,15 +361,18 @@ class S2Image:
             path_dest: path to the destination folder. If None, the current folder ()".") is used
             print_progress: print progress bar. Default True
             format_bands: format of the bands. Default None (keep original format). Options: "COG", "GeoTIFF"
-        
+
         Returns:
             A new instance of the class pointing to the new path
         """
         if path_dest is None:
             path_dest = "."
-        
+
         if format_bands is not None:
-            assert format_bands in {"COG", "GeoTIFF"}, "Not valid format_bands. Choose 'COG' or 'GeoTIFF'"
+            assert format_bands in {
+                "COG",
+                "GeoTIFF",
+            }, "Not valid format_bands. Choose 'COG' or 'GeoTIFF'"
 
         name_with_safe = f"{self.name}.SAFE"
         dest_folder = os.path.join(path_dest, name_with_safe)
@@ -263,7 +395,7 @@ class S2Image:
             granules_name_metadata = {b.text.split("_")[-1]: b.text for b in bands_elms}
 
         new_granules = {}
-        with tqdm(total=len(self.bands),disable=not print_progress) as pbar:
+        with tqdm(total=len(self.bands), disable=not print_progress) as pbar:
             for b in self.bands:
                 granule = self.granules[b]
                 ext_origin = os.path.splitext(granule)[1]
@@ -273,18 +405,22 @@ class S2Image:
                         convert = False
                     else:
                         convert = True
-                    
+
                     ext_dst = ".tif"
                 else:
                     convert = False
                     ext_dst = ext_origin
-                
+
                 namefile = os.path.splitext(granules_name_metadata[b])[0]
-                new_granules[b] = namefile+ext_dst
+                new_granules[b] = namefile + ext_dst
                 new_granules_path = os.path.join(dest_folder, new_granules[b])
                 if not os.path.exists(new_granules_path):
-                    new_granules_path_tmp = os.path.join(dest_folder, namefile+ext_origin)
-                    pbar.set_description(f"Donwloading band {b} from {granule} to {new_granules_path}")
+                    new_granules_path_tmp = os.path.join(
+                        dest_folder, namefile + ext_origin
+                    )
+                    pbar.set_description(
+                        f"Donwloading band {b} from {granule} to {new_granules_path}"
+                    )
                     dir_granules_path = os.path.dirname(new_granules_path)
                     os.makedirs(dir_granules_path, exist_ok=True)
                     get_file(granule, new_granules_path_tmp)
@@ -293,28 +429,40 @@ class S2Image:
                         if format_bands == "COG":
                             save_cog(image, new_granules_path, descriptions=[b])
                         elif format_bands == "GeoTIFF":
-                            save_tiled_geotiff(image, new_granules_path, descriptions=[b])
+                            save_tiled_geotiff(
+                                image, new_granules_path, descriptions=[b]
+                            )
                         else:
                             raise NotImplementedError(f"Not implemented {format_bands}")
                         os.remove(new_granules_path_tmp)
-            
+
                 pbar.update(1)
 
         # Save granules for fast reading
         granules_path = os.path.join(dest_folder, "granules.json").replace("\\", "/")
         if not os.path.exists(granules_path):
             with open(granules_path, "w") as fh:
-                json.dump({"granules": new_granules, "metadata_msi": metadata_filename}, fh)
+                json.dump(
+                    {"granules": new_granules, "metadata_msi": metadata_filename}, fh
+                )
 
-        new_granules_full_path = {k: os.path.join(dest_folder,v) for k, v in new_granules.items()}
+        new_granules_full_path = {
+            k: os.path.join(dest_folder, v) for k, v in new_granules.items()
+        }
 
-        obj = s2loader(s2folder=dest_folder, out_res=self.out_res, window_focus=self.window_focus,
-                       bands=self.bands, granules=new_granules_full_path, polygon=self._pol,
-                       metadata_msi=metadata_output_path)
+        obj = s2loader(
+            s2folder=dest_folder,
+            out_res=self.out_res,
+            window_focus=self.window_focus,
+            bands=self.bands,
+            granules=new_granules_full_path,
+            polygon=self._pol,
+            metadata_msi=metadata_output_path,
+        )
         obj.root_metadata_msi = root_metadata_msi
         return obj
 
-    def DN_to_radiance(self, dn_data:Optional[GeoTensor]=None) -> GeoTensor:
+    def DN_to_radiance(self, dn_data: Optional[GeoTensor] = None) -> GeoTensor:
         return DN_to_radiance(self, dn_data)
 
     def load_metadata_msi(self) -> ET.Element:
@@ -322,16 +470,24 @@ class S2Image:
             self.root_metadata_msi = read_xml(self.metadata_msi)
         return self.root_metadata_msi
 
-    def footprint(self, crs:Optional[str]=None) -> Polygon:
+    def footprint(self, crs: Optional[str] = None) -> Polygon:
         if self._pol_crs is None:
             self.load_metadata_msi()
             footprint_txt = self.root_metadata_msi.findall(".//EXT_POS_LIST")[0].text
             coords_split = footprint_txt.split(" ")[:-1]
             self._pol = Polygon(
-                [(float(lngstr), float(latstr)) for latstr, lngstr in zip(coords_split[::2], coords_split[1::2])])
-            self._pol_crs = window_utils.polygon_to_crs(self._pol, "EPSG:4326", self.crs)
+                [
+                    (float(lngstr), float(latstr))
+                    for latstr, lngstr in zip(coords_split[::2], coords_split[1::2])
+                ]
+            )
+            self._pol_crs = window_utils.polygon_to_crs(
+                self._pol, "EPSG:4326", self.crs
+            )
 
-        pol_window = window_utils.window_polygon(self._get_reader().window_focus, self.transform)
+        pol_window = window_utils.window_polygon(
+            self._get_reader().window_focus, self.transform
+        )
 
         pol = self._pol_crs.intersection(pol_window)
 
@@ -340,14 +496,17 @@ class S2Image:
 
         return window_utils.polygon_to_crs(pol, self.crs, crs)
 
-    def radio_add_offsets(self) ->Dict[str,float]:
+    def radio_add_offsets(self) -> Dict[str, float]:
         if self._radio_add_offsets is None:
             self.load_metadata_msi()
             radio_add_offsets = self.root_metadata_msi.findall(".//RADIO_ADD_OFFSET")
             if len(radio_add_offsets) == 0:
-                self._radio_add_offsets = {b : 0 for b in BANDS_S2}
+                self._radio_add_offsets = {b: 0 for b in BANDS_S2}
             else:
-                self._radio_add_offsets = {BANDS_S2[int(r.attrib["band_id"])]: int(r.text) for r in radio_add_offsets}
+                self._radio_add_offsets = {
+                    BANDS_S2[int(r.attrib["band_id"])]: int(r.text)
+                    for r in radio_add_offsets
+                }
 
         return self._radio_add_offsets
 
@@ -361,7 +520,9 @@ class S2Image:
         if self._solar_irradiance is None:
             self.load_metadata_msi()
             sr = self.root_metadata_msi.findall(".//SOLAR_IRRADIANCE")
-            self._solar_irradiance = {BANDS_S2[int(r.attrib["bandId"])]: float(r.text)/1_000 for r in sr}
+            self._solar_irradiance = {
+                BANDS_S2[int(r.attrib["bandId"])]: float(r.text) / 1_000 for r in sr
+            }
 
         return self._solar_irradiance
 
@@ -373,14 +534,18 @@ class S2Image:
         return self._scale_factor_U
 
     def quantification_value(self) -> int:
-        """ Returns the quantification value stored in the metadata msi file (this is always: 10_000) """
+        """Returns the quantification value stored in the metadata msi file (this is always: 10_000)"""
         if self._quantification_value is None:
             self.load_metadata_msi()
-            self._quantification_value = int(self.root_metadata_msi.find(".//QUANTIFICATION_VALUE").text)
+            self._quantification_value = int(
+                self.root_metadata_msi.find(".//QUANTIFICATION_VALUE").text
+            )
 
         return self._quantification_value
 
-    def get_reader(self, band_names: Union[str,List[str]], overview_level:Optional[int]=None) -> RasterioReader:
+    def get_reader(
+        self, band_names: Union[str, List[str]], overview_level: Optional[int] = None
+    ) -> RasterioReader:
         """
         Provides a RasterioReader object to read all the bands at the same resolution
 
@@ -392,23 +557,28 @@ class S2Image:
             RasterioReader
 
         """
-        if isinstance(band_names,str):
+        if isinstance(band_names, str):
             band_names = [band_names]
 
         band_names = normalize_band_names(band_names)
 
-        assert  all(BANDS_RESOLUTION[band_names[0]]==BANDS_RESOLUTION[b] for b in band_names), f"Bands: {band_names} have different resolution"
+        assert all(
+            BANDS_RESOLUTION[band_names[0]] == BANDS_RESOLUTION[b] for b in band_names
+        ), f"Bands: {band_names} have different resolution"
 
-        reader = RasterioReader([self.granules[band_name] for band_name in band_names],
-                                window_focus=None, stack=False,
-                                fill_value_default=self.fill_value_default,
-                                overview_level=overview_level)
+        reader = RasterioReader(
+            [self.granules[band_name] for band_name in band_names],
+            window_focus=None,
+            stack=False,
+            fill_value_default=self.fill_value_default,
+            overview_level=overview_level,
+        )
         window_in = read.window_from_bounds(reader, self.bounds)
         window_in_rounded = read.round_outer_window(window_in)
         reader.set_window(window_in_rounded)
         return reader
 
-    def _get_reader(self, band_name:Optional[str]=None) -> RasterioReader:
+    def _get_reader(self, band_name: Optional[str] = None) -> RasterioReader:
         if band_name is None:
             band_name = self.band_check
 
@@ -417,7 +587,7 @@ class S2Image:
             if self.out_res == BANDS_RESOLUTION[band_name]:
                 overview_level = None
                 has_out_res = True
-            elif self.out_res == BANDS_RESOLUTION[band_name]*2:
+            elif self.out_res == BANDS_RESOLUTION[band_name] * 2:
                 # out_res == 20 and BANDS_RESOLUTION[band_name]==10 -> read from first overview
                 overview_level = 0
                 has_out_res = True
@@ -441,12 +611,16 @@ class S2Image:
                 set_window_after = True
                 window_focus = None
 
-            self.granule_readers[band_name] = RasterioReader(self.granules[band_name],
-                                                             window_focus=window_focus,
-                                                             fill_value_default=self.fill_value_default,
-                                                             overview_level=overview_level)
+            self.granule_readers[band_name] = RasterioReader(
+                self.granules[band_name],
+                window_focus=window_focus,
+                fill_value_default=self.fill_value_default,
+                overview_level=overview_level,
+            )
             if set_window_after:
-                window_in = read.window_from_bounds(self.granule_readers[band_name], self.bounds)
+                window_in = read.window_from_bounds(
+                    self.granule_readers[band_name], self.bounds
+                )
                 window_in_rounded = read.round_outer_window(window_in)
                 self.granule_readers[band_name].set_window(window_in_rounded)
 
@@ -486,7 +660,7 @@ class S2Image:
     def __str__(self):
         return self.folder
 
-    def __repr__(self)->str:
+    def __repr__(self) -> str:
         return f""" 
          {self.folder}
          Transform: {self.transform}
@@ -498,32 +672,46 @@ class S2Image:
          fill_value_default: {self.fill_value_default}
         """
 
-    def read_from_band_names(self, band_names:List[str]) -> '__class__':
+    def read_from_band_names(self, band_names: List[str]) -> "__class__":
         """
         Read from band names
 
         Args:
             band_names: List of band names
-        
+
         Returns:
             Copy of current object with band names set to band_names
         """
-        s2obj =  s2loader(s2folder=self.folder, out_res=self.out_res, 
-                          window_focus=self.window_focus,
-                           bands=band_names, granules=self.granules, polygon=self._pol,
-                           metadata_msi=self.metadata_msi)
+        s2obj = s2loader(
+            s2folder=self.folder,
+            out_res=self.out_res,
+            window_focus=self.window_focus,
+            bands=band_names,
+            granules=self.granules,
+            polygon=self._pol,
+            metadata_msi=self.metadata_msi,
+        )
         s2obj.root_metadata_msi = self.root_metadata_msi
         return s2obj
 
-    def read_from_window(self, window:rasterio.windows.Window, boundless:bool=True) -> '__class__':
+    def read_from_window(
+        self, window: rasterio.windows.Window, boundless: bool = True
+    ) -> "__class__":
         # return GeoTensor(values=self.values, transform=self.transform, crs=self.crs)
 
         reader_ref = self._get_reader()
-        rasterio_reader_ref = reader_ref.read_from_window(window=window, boundless=boundless)
-        s2obj =  s2loader(s2folder=self.folder, out_res=self.out_res, 
-                          window_focus=rasterio_reader_ref.window_focus,
-                           bands=self.bands, granules=self.granules, polygon=self._pol,
-                           metadata_msi=self.metadata_msi)
+        rasterio_reader_ref = reader_ref.read_from_window(
+            window=window, boundless=boundless
+        )
+        s2obj = s2loader(
+            s2folder=self.folder,
+            out_res=self.out_res,
+            window_focus=rasterio_reader_ref.window_focus,
+            bands=self.bands,
+            granules=self.granules,
+            polygon=self._pol,
+            metadata_msi=self.metadata_msi,
+        )
         # Set band check to avoid re-reading
         s2obj.granule_readers[self.band_check] = rasterio_reader_ref
         s2obj.band_check = self.band_check
@@ -532,16 +720,18 @@ class S2Image:
 
         return s2obj
 
-    def load(self, boundless:bool=True)-> GeoTensor:
+    def load(self, boundless: bool = True) -> GeoTensor:
         reader_ref = self._get_reader()
         geotensor_ref = reader_ref.load(boundless=boundless)
 
-        array_out = np.full((len(self.bands),) + geotensor_ref.shape[-2:],
-                            fill_value=geotensor_ref.fill_value_default,
-                            dtype=np.int32)
+        array_out = np.full(
+            (len(self.bands),) + geotensor_ref.shape[-2:],
+            fill_value=geotensor_ref.fill_value_default,
+            dtype=np.int32,
+        )
 
         # Deal with NODATA values
-        invalids = (geotensor_ref.values == 0) | (geotensor_ref.values == (2 ** 16) - 1)
+        invalids = (geotensor_ref.values == 0) | (geotensor_ref.values == (2**16) - 1)
 
         radio_add = self.radio_add_offsets()
         for idx, b in enumerate(self.bands):
@@ -554,11 +744,17 @@ class S2Image:
                 geotensor_iter = geotensor_ref
             else:
                 reader_iter = self._get_reader(b)
-                if np.mean(np.abs(np.array(reader_iter.res)-np.array(geotensor_ref.res))) < 1e-6:
+                if (
+                    np.mean(
+                        np.abs(np.array(reader_iter.res) - np.array(geotensor_ref.res))
+                    )
+                    < 1e-6
+                ):
                     geotensor_iter = reader_iter.load(boundless=boundless)
                 else:
-                    geotensor_iter = read.read_reproject_like(reader_iter, geotensor_ref)
-
+                    geotensor_iter = read.read_reproject_like(
+                        reader_iter, geotensor_ref
+                    )
 
             # Important: Adds radio correction! otherwise images after 2022-01-25 shifted (PROCESSING_BASELINE '04.00' or above)
             array_out[idx] = geotensor_iter.values[0].astype(np.int32) + radio_add[b]
@@ -567,12 +763,15 @@ class S2Image:
 
         if np.any(array_out < 0):
             raise ValueError("Negative values found in the image")
-        
+
         array_out = array_out.astype(np.uint16)
 
-        return GeoTensor(values=array_out, 
-                         transform=geotensor_ref.transform,crs=geotensor_ref.crs,
-                         fill_value_default=self.fill_value_default)
+        return GeoTensor(
+            values=array_out,
+            transform=geotensor_ref.transform,
+            crs=geotensor_ref.crs,
+            fill_value_default=self.fill_value_default,
+        )
 
     @property
     def values(self) -> np.ndarray:
@@ -581,25 +780,84 @@ class S2Image:
     def load_mask(self) -> GeoTensor:
         reader_ref = self._get_reader()
         geotensor_ref = reader_ref.load(boundless=True)
-        geotensor_ref.values = (geotensor_ref.values == 0) | (geotensor_ref.values == (2**16)-1)
+        geotensor_ref.values = (geotensor_ref.values == 0) | (
+            geotensor_ref.values == (2**16) - 1
+        )
         return geotensor_ref
 
 
 class S2ImageL2A(S2Image):
-    def __init__(self, s2folder:str, granules: Dict[str, str],
-                 polygon:Polygon, out_res:int=10,
-                 window_focus:Optional[rasterio.windows.Window]=None,
-                 bands:Optional[List[str]]=None,
-                 metadata_msi:Optional[str]=None):
+    """
+    Sentinel-2 Level 2A (surface reflectance) image reader.
+
+    This class extends the base S2Image class to handle Sentinel-2 Level 2A products,
+    which provide surface reflectance data with atmospheric corrections applied.
+
+    Args:
+        s2folder (str): Path to the Sentinel-2 SAFE product folder.
+        granules (Dict[str, str]): Dictionary mapping band names to file paths.
+        polygon (Polygon): Polygon defining the area of interest in EPSG:4326.
+        out_res (int): Output resolution in meters. Must be one of 10, 20, or 60. Defaults to 10.
+        window_focus (Optional[rasterio.windows.Window]): Window to focus on a specific
+            region of the image. Defaults to None (entire image).
+        bands (Optional[List[str]]): List of bands to read. If None, the default L2A bands
+            (excluding B10) will be loaded.
+        metadata_msi (Optional[str]): Path to metadata file. If None, it is assumed to be
+            in the SAFE folder.
+
+    Attributes:
+        mission (str): Mission identifier (e.g., 'S2A', 'S2B').
+        producttype (str): Product type identifier (e.g., 'MSIL2A').
+        pdgs (str): PDGS Processing Baseline number.
+        relorbitnum (str): Relative Orbit number.
+        tile_number_field (str): Tile Number field.
+        product_discriminator (str): Product Discriminator.
+        name (str): Base name of the product.
+        folder (str): Path to the product folder.
+        datetime (datetime): Acquisition datetime.
+        metadata_msi (str): Path to the MSI metadata file.
+        out_res (int): Output resolution in meters.
+        bands (List[str]): List of bands to read.
+        dims (Tuple[str]): Names of the dimensions ("band", "y", "x").
+        fill_value_default (int): Default fill value (typically 0).
+        band_check (str): Band used as template for reading.
+        granule_readers (Dict[str, RasterioReader]): Dictionary of readers for each band.
+        window_focus (rasterio.windows.Window): Current window focus.
+
+    Examples:
+        >>> # Initialize the S2ImageL2A reader with a data path
+        >>> s2_l2a = S2ImageL2A('/path/to/S2A_MSIL2A_20170717T235959_N0205_R072_T01WCP_20170718T000256.SAFE',
+        ...                     granules=granules_dict, polygon=aoi_polygon)
+        >>> # Load all bands
+        >>> l2a_data = s2_l2a.load()
+    """
+
+    def __init__(
+        self,
+        s2folder: str,
+        granules: Dict[str, str],
+        polygon: Polygon,
+        out_res: int = 10,
+        window_focus: Optional[rasterio.windows.Window] = None,
+        bands: Optional[List[str]] = None,
+        metadata_msi: Optional[str] = None,
+    ):
         if bands is None:
             bands = BANDS_S2_L2A
 
-        super(S2ImageL2A, self).__init__(s2folder=s2folder, granules=granules, polygon=polygon,
-                                         out_res=out_res, bands=bands,
-                                         window_focus=window_focus,
-                                         metadata_msi=metadata_msi)
+        super(S2ImageL2A, self).__init__(
+            s2folder=s2folder,
+            granules=granules,
+            polygon=polygon,
+            out_res=out_res,
+            bands=bands,
+            window_focus=window_focus,
+            metadata_msi=metadata_msi,
+        )
 
-        assert self.producttype == "MSIL2A", f"Unexpected product type {self.producttype} in image {self.folder}"
+        assert (
+            self.producttype == "MSIL2A"
+        ), f"Unexpected product type {self.producttype} in image {self.folder}"
 
         # see https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_SR#bands for a description of the granules data
 
@@ -610,48 +868,137 @@ class S2ImageL2A(S2Image):
         # self.slc_granule = granules_match[0]
 
 
-
 class S2ImageL1C(S2Image):
-    def __init__(self, s2folder, granules: Dict[str, str],
-                 polygon:Polygon, out_res:int=10,
-                 window_focus:Optional[rasterio.windows.Window]=None,
-                 bands:Optional[List[str]]=None,
-                 metadata_msi:Optional[str]=None):
-        super(S2ImageL1C,self).__init__(s2folder=s2folder, granules=granules, polygon=polygon,
-                                         out_res=out_res, bands=bands,
-                                         window_focus=window_focus,
-                                        metadata_msi=metadata_msi)
+    """
+    Sentinel-2 Level 1C (top of atmosphere reflectance) image reader.
 
-        assert self.producttype == "MSIL1C", f"Unexpected product type {self.producttype} in image {self.folder}"
+    This class extends the base S2Image class to handle Sentinel-2 Level 1C products,
+    which provide calibrated and orthorectified top of atmosphere reflectance data.
+    It also provides methods to access viewing and solar angle information.
+
+    Args:
+        s2folder (str): Path to the Sentinel-2 SAFE product folder.
+        granules (Dict[str, str]): Dictionary mapping band names to file paths.
+        polygon (Polygon): Polygon defining the area of interest in EPSG:4326.
+        out_res (int): Output resolution in meters. Must be one of 10, 20, or 60. Defaults to 10.
+        window_focus (Optional[rasterio.windows.Window]): Window to focus on a specific
+            region of the image. Defaults to None (entire image).
+        bands (Optional[List[str]]): List of bands to read. If None, all available bands will be loaded.
+        metadata_msi (Optional[str]): Path to metadata file. If None, it is assumed to be
+            in the SAFE folder.
+
+    Attributes:
+        Additional to S2Image attributes:
+        granule_folder (str): Path to the granule folder.
+        msk_clouds_file (str): Path to the cloud mask file.
+        metadata_tl (str): Path to the TL metadata file.
+        root_metadata_tl: Root element of the TL metadata XML.
+        tileId (str): Tile identifier.
+        satId (str): Satellite identifier.
+        procLevel (str): Processing level.
+        dimsByRes (Dict): Dimensions by resolution.
+        ulxyByRes (Dict): Upper-left coordinates by resolution.
+        tileAnglesNode: Tile angles node from metadata.
+        mean_sza (float): Mean solar zenith angle.
+        mean_saa (float): Mean solar azimuth angle.
+        mean_vza (Dict[str, float]): Mean viewing zenith angle per band.
+        mean_vaa (Dict[str, float]): Mean viewing azimuth angle per band.
+        vaa (Dict[str, GeoTensor]): Viewing azimuth angle as GeoTensor per band.
+        vza (Dict[str, GeoTensor]): Viewing zenith angle as GeoTensor per band.
+        saa (GeoTensor): Solar azimuth angle as GeoTensor.
+        sza (GeoTensor): Solar zenith angle as GeoTensor.
+        anglesULXY (Tuple[float, float]): Upper-left coordinates of the angle grids.
+
+    Examples:
+        >>> # Initialize the S2ImageL1C reader with a data path
+        >>> s2_l1c = S2ImageL1C('/path/to/S2A_MSIL1C_20170717T235959_N0205_R072_T01WCP_20170718T000256.SAFE',
+        ...                     granules=granules_dict, polygon=aoi_polygon)
+        >>> # Load all bands
+        >>> l1c_data = s2_l1c.load()
+        >>> # Read angle information
+        >>> s2_l1c.read_metadata_tl()
+        >>> solar_zenith = s2_l1c.sza
+        >>> # Convert to radiance
+        >>> radiance_data = s2_l1c.DN_to_radiance()
+    """
+
+    def __init__(
+        self,
+        s2folder,
+        granules: Dict[str, str],
+        polygon: Polygon,
+        out_res: int = 10,
+        window_focus: Optional[rasterio.windows.Window] = None,
+        bands: Optional[List[str]] = None,
+        metadata_msi: Optional[str] = None,
+    ):
+        super(S2ImageL1C, self).__init__(
+            s2folder=s2folder,
+            granules=granules,
+            polygon=polygon,
+            out_res=out_res,
+            bands=bands,
+            window_focus=window_focus,
+            metadata_msi=metadata_msi,
+        )
+
+        assert (
+            self.producttype == "MSIL1C"
+        ), f"Unexpected product type {self.producttype} in image {self.folder}"
 
         first_granule = self.granules[list(self.granules.keys())[0]]
         self.granule_folder = os.path.dirname(os.path.dirname(first_granule))
-        self.msk_clouds_file = os.path.join(self.granule_folder, "MSK_CLOUDS_B00.gml").replace("\\","/")
+        self.msk_clouds_file = os.path.join(
+            self.granule_folder, "MSK_CLOUDS_B00.gml"
+        ).replace("\\", "/")
         if not hasattr(self, "metadata_tl"):
-            self.metadata_tl = os.path.join(self.granule_folder, "MTD_TL.xml").replace("\\","/")
-        
+            self.metadata_tl = os.path.join(self.granule_folder, "MTD_TL.xml").replace(
+                "\\", "/"
+            )
+
         self.root_metadata_tl = None
 
         # Granule in L1C does not include TCI
         # Assert bands in self.granule are ordered as in BANDS_S2
         # assert all(granule[-7:-4] == bname for bname, granule in zip(BANDS_S2, self.granule)), f"some granules are not in the expected order {self.granule}"
 
-    def read_from_window(self, window:rasterio.windows.Window, boundless:bool=True) -> '__class__':
+    def read_from_window(
+        self, window: rasterio.windows.Window, boundless: bool = True
+    ) -> "__class__":
         out = super().read_from_window(window, boundless=boundless)
 
         if self.root_metadata_tl is None:
             return out
-        
+
         # copy all metadata from the original image
-        for atribute in ["tileId","root_metadata_tl", "satId", "procLevel", "dimsByRes", "ulxyByRes", "tileAnglesNode", 
-                         "mean_sza", "mean_saa", "mean_vza", "mean_vaa", "vaa", "vza", "saa", "sza", 
-                         "anglesULXY"]:
+        for atribute in [
+            "tileId",
+            "root_metadata_tl",
+            "satId",
+            "procLevel",
+            "dimsByRes",
+            "ulxyByRes",
+            "tileAnglesNode",
+            "mean_sza",
+            "mean_saa",
+            "mean_vza",
+            "mean_vaa",
+            "vaa",
+            "vza",
+            "saa",
+            "sza",
+            "anglesULXY",
+        ]:
             setattr(out, atribute, getattr(self, atribute))
-        
+
         return out
 
-    def cache_product_to_local_dir(self, path_dest:Optional[str]=None, print_progress:bool=True,
-                                   format_bands:Optional[str]=None) -> '__class__':
+    def cache_product_to_local_dir(
+        self,
+        path_dest: Optional[str] = None,
+        print_progress: bool = True,
+        format_bands: Optional[str] = None,
+    ) -> "__class__":
         """
         Overrides the parent method to copy the MTD_TL.xml file
 
@@ -662,8 +1009,11 @@ class S2ImageL1C(S2Image):
         Returns:
             __class__: the cached object
         """
-        new_obj = super().cache_product_to_local_dir(path_dest=path_dest, print_progress=print_progress,
-                                                     format_bands=format_bands)
+        new_obj = super().cache_product_to_local_dir(
+            path_dest=path_dest,
+            print_progress=print_progress,
+            format_bands=format_bands,
+        )
 
         if os.path.exists(new_obj.metadata_tl):
             # the cached product already exists. returns
@@ -673,64 +1023,109 @@ class S2ImageL1C(S2Image):
             new_obj.root_metadata_tl = self.root_metadata_tl
             ET.ElementTree(new_obj.metadata_tl).write(new_obj.metadata_tl)
             # copy all metadata from the original image
-            for atribute in ["tileId","root_metadata_tl", "satId", "procLevel", "dimsByRes", "ulxyByRes", "tileAnglesNode", 
-                            "mean_sza", "mean_saa", "mean_vza", "mean_vaa", "vaa", "vza", "saa", "sza", 
-                            "anglesULXY"]:
+            for atribute in [
+                "tileId",
+                "root_metadata_tl",
+                "satId",
+                "procLevel",
+                "dimsByRes",
+                "ulxyByRes",
+                "tileAnglesNode",
+                "mean_sza",
+                "mean_saa",
+                "mean_vza",
+                "mean_vaa",
+                "vaa",
+                "vza",
+                "saa",
+                "sza",
+                "anglesULXY",
+            ]:
                 if hasattr(self, atribute):
                     setattr(new_obj, atribute, getattr(self, atribute))
         else:
             get_file(self.metadata_tl, new_obj.metadata_tl)
-        
-        granule_folder_rel = new_obj.granule_folder.replace("\\", "/").replace(new_obj.folder.replace("\\","/")+"/", "")
+
+        granule_folder_rel = new_obj.granule_folder.replace("\\", "/").replace(
+            new_obj.folder.replace("\\", "/") + "/", ""
+        )
         # Add metadata_tl to granules.json
         granules_path = os.path.join(new_obj.folder, "granules.json").replace("\\", "/")
         with open(granules_path, "r") as fh:
             info_granules_metadata = json.load(fh)
-        info_granules_metadata["metadata_tl"] = os.path.join(granule_folder_rel, "MTD_TL.xml").replace("\\","/")
+        info_granules_metadata["metadata_tl"] = os.path.join(
+            granule_folder_rel, "MTD_TL.xml"
+        ).replace("\\", "/")
         with open(granules_path, "w") as f:
             json.dump(info_granules_metadata, f)
-        
+
         return new_obj
 
     def read_metadata_tl(self):
-        '''
-        Read metadata TILE to parse information about the acquisition and properties of GRANULE bands
-        '''
+        """
+        Read metadata TILE to parse information about the acquisition and properties of GRANULE bands.
+
+        It populates the following attributes:
+            - mean_sza
+            - mean_saa
+            - mean_vza
+            - mean_vaa
+            - vaa
+            - vza
+            - saa
+            - sza
+            - anglesULXY
+            - tileId
+            - satId
+            - procLevel
+            - epsg_code
+            - dimsByRes
+            - ulxyByRes
+            - tileAnglesNode
+            - root_metadata_tl
+        
+        """
         if self.root_metadata_tl is not None:
             return
 
         self.root_metadata_tl = read_xml(self.metadata_tl)
 
         # Stoopid XML namespace prefix
-        nsPrefix = self.root_metadata_tl.tag[:self.root_metadata_tl.tag.index('}') + 1]
-        nsDict = {'n1': nsPrefix[1:-1]}
+        nsPrefix = self.root_metadata_tl.tag[: self.root_metadata_tl.tag.index("}") + 1]
+        nsDict = {"n1": nsPrefix[1:-1]}
 
-        self.mean_sza = float(self.root_metadata_tl.find(".//Mean_Sun_Angle/ZENITH_ANGLE").text)
-        self.mean_saa = float(self.root_metadata_tl.find(".//Mean_Sun_Angle/AZIMUTH_ANGLE").text)
+        self.mean_sza = float(
+            self.root_metadata_tl.find(".//Mean_Sun_Angle/ZENITH_ANGLE").text
+        )
+        self.mean_saa = float(
+            self.root_metadata_tl.find(".//Mean_Sun_Angle/AZIMUTH_ANGLE").text
+        )
 
-        generalInfoNode = self.root_metadata_tl.find('n1:General_Info', nsDict)
+        generalInfoNode = self.root_metadata_tl.find("n1:General_Info", nsDict)
         # N.B. I am still not entirely convinced that this SENSING_TIME is really
         # the acquisition time, but the documentation is rubbish.
-        sensingTimeNode = generalInfoNode.find('SENSING_TIME')
+        sensingTimeNode = generalInfoNode.find("SENSING_TIME")
         sensingTimeStr = sensingTimeNode.text.strip()
         # self.datetime = datetime.datetime.strptime(sensingTimeStr, "%Y-%m-%dT%H:%M:%S.%fZ")
-        tileIdNode = generalInfoNode.find('TILE_ID')
+        tileIdNode = generalInfoNode.find("TILE_ID")
         tileIdFullStr = tileIdNode.text.strip()
-        self.tileId = tileIdFullStr.split('_')[-2]
+        self.tileId = tileIdFullStr.split("_")[-2]
         self.satId = tileIdFullStr[:3]
-        self.procLevel = tileIdFullStr[13:16]  # Not sure whether to use absolute pos or split by '_'....
+        self.procLevel = tileIdFullStr[
+            13:16
+        ]  # Not sure whether to use absolute pos or split by '_'....
 
-        geomInfoNode = self.root_metadata_tl.find('n1:Geometric_Info', nsDict)
-        geocodingNode = geomInfoNode.find('Tile_Geocoding')
-        self.epsg_code = geocodingNode.find('HORIZONTAL_CS_CODE').text
+        geomInfoNode = self.root_metadata_tl.find("n1:Geometric_Info", nsDict)
+        geocodingNode = geomInfoNode.find("Tile_Geocoding")
+        self.epsg_code = geocodingNode.find("HORIZONTAL_CS_CODE").text
 
         # Dimensions of images at different resolutions.
         self.dimsByRes = {}
-        sizeNodeList = geocodingNode.findall('Size')
+        sizeNodeList = geocodingNode.findall("Size")
         for sizeNode in sizeNodeList:
-            res = sizeNode.attrib['resolution']
-            nrows = int(sizeNode.find('NROWS').text)
-            ncols = int(sizeNode.find('NCOLS').text)
+            res = sizeNode.attrib["resolution"]
+            nrows = int(sizeNode.find("NROWS").text)
+            ncols = int(sizeNode.find("NCOLS").text)
             self.dimsByRes[res] = (nrows, ncols)
 
         # Upper-left corners of images at different resolutions. As far as I can
@@ -738,45 +1133,53 @@ class S2ImageL1C(S2Image):
         # pixel, i.e. equivalent to GDAL's convention. This also means that they
         # are the same for the different resolutions, which is nice.
         self.ulxyByRes = {}
-        posNodeList = geocodingNode.findall('Geoposition')
+        posNodeList = geocodingNode.findall("Geoposition")
         for posNode in posNodeList:
-            res = posNode.attrib['resolution']
-            ulx = float(posNode.find('ULX').text)
-            uly = float(posNode.find('ULY').text)
+            res = posNode.attrib["resolution"]
+            ulx = float(posNode.find("ULX").text)
+            uly = float(posNode.find("ULY").text)
             self.ulxyByRes[res] = (ulx, uly)
 
         # Sun and satellite angles.
         # Zenith
-        self.tileAnglesNode = geomInfoNode.find('Tile_Angles')
-        sunZenithNode = self.tileAnglesNode.find('Sun_Angles_Grid').find('Zenith')
+        self.tileAnglesNode = geomInfoNode.find("Tile_Angles")
+        sunZenithNode = self.tileAnglesNode.find("Sun_Angles_Grid").find("Zenith")
         # <Zenith>
         #  <COL_STEP unit="m">5000</COL_STEP>
         #  <ROW_STEP unit="m">5000</ROW_STEP>
-        angleGridXres = float(sunZenithNode.find('COL_STEP').text)
-        angleGridYres = float(sunZenithNode.find('ROW_STEP').text)
-        sza = self.makeValueArray(sunZenithNode.find('Values_List'))
+        angleGridXres = float(sunZenithNode.find("COL_STEP").text)
+        angleGridYres = float(sunZenithNode.find("ROW_STEP").text)
+        sza = self._makeValueArray(sunZenithNode.find("Values_List"))
         mask_nans = np.isnan(sza)
         if np.any(mask_nans):
             from skimage.restoration import inpaint_biharmonic
+
             sza = inpaint_biharmonic(sza, mask_nans)
-        transform_zenith = rasterio.transform.from_origin(self.ulxyByRes[str(self.out_res)][0],
-                                                          self.ulxyByRes[str(self.out_res)][1],
-                                                          angleGridXres, angleGridYres)
-        
+        transform_zenith = rasterio.transform.from_origin(
+            self.ulxyByRes[str(self.out_res)][0],
+            self.ulxyByRes[str(self.out_res)][1],
+            angleGridXres,
+            angleGridYres,
+        )
+
         self.sza = GeoTensor(sza, transform=transform_zenith, crs=self.epsg_code)
-        
+
         # Azimuth
-        sunAzimuthNode = self.tileAnglesNode.find('Sun_Angles_Grid').find('Azimuth')
-        angleGridXres = float(sunAzimuthNode.find('COL_STEP').text)
-        angleGridYres = float(sunAzimuthNode.find('ROW_STEP').text)
-        saa = self.makeValueArray(sunAzimuthNode.find('Values_List'))
+        sunAzimuthNode = self.tileAnglesNode.find("Sun_Angles_Grid").find("Azimuth")
+        angleGridXres = float(sunAzimuthNode.find("COL_STEP").text)
+        angleGridYres = float(sunAzimuthNode.find("ROW_STEP").text)
+        saa = self._makeValueArray(sunAzimuthNode.find("Values_List"))
         mask_nans = np.isnan(saa)
         if np.any(mask_nans):
             from skimage.restoration import inpaint_biharmonic
+
             saa = inpaint_biharmonic(saa, mask_nans)
-        transform_azimuth = rasterio.transform.from_origin(self.ulxyByRes[str(self.out_res)][0],
-                                                            self.ulxyByRes[str(self.out_res)][1],
-                                                            angleGridXres, angleGridYres)
+        transform_azimuth = rasterio.transform.from_origin(
+            self.ulxyByRes[str(self.out_res)][0],
+            self.ulxyByRes[str(self.out_res)][1],
+            angleGridXres,
+            angleGridYres,
+        )
         self.saa = GeoTensor(saa, transform=transform_azimuth, crs=self.epsg_code)
 
         # Now build up the viewing angle per grid cell, from the separate layers
@@ -785,26 +1188,34 @@ class S2ImageL1C(S2Image):
         # The names of things in the XML suggest that these are view angles,
         # but the numbers suggest that they are angles as seen from the pixel's
         # frame of reference on the ground, i.e. they are in fact what we ultimately want.
-        viewingAngleNodeList = self.tileAnglesNode.findall('Viewing_Incidence_Angles_Grids')       
-        vza = self.buildViewAngleArr(viewingAngleNodeList, 'Zenith')
-        vaa = self.buildViewAngleArr(viewingAngleNodeList, 'Azimuth')
+        viewingAngleNodeList = self.tileAnglesNode.findall(
+            "Viewing_Incidence_Angles_Grids"
+        )
+        vza = self._buildViewAngleArr(viewingAngleNodeList, "Zenith")
+        vaa = self._buildViewAngleArr(viewingAngleNodeList, "Azimuth")
 
         self.vaa = {}
-        for k, varr in vaa.items():            
+        for k, varr in vaa.items():
             mask_nans = np.isnan(varr)
             if np.any(mask_nans):
                 from skimage.restoration import inpaint_biharmonic
+
                 varr = inpaint_biharmonic(varr, mask_nans)
-            
-            self.vaa[k] = GeoTensor(varr, transform=transform_azimuth, crs=self.epsg_code)
-        
+
+            self.vaa[k] = GeoTensor(
+                varr, transform=transform_azimuth, crs=self.epsg_code
+            )
+
         self.vza = {}
         for k, varr in vza.items():
             mask_nans = np.isnan(varr)
             if np.any(mask_nans):
                 from skimage.restoration import inpaint_biharmonic
+
                 varr = inpaint_biharmonic(varr, mask_nans)
-            self.vza[k] = GeoTensor(varr, transform=transform_zenith, crs=self.epsg_code)
+            self.vza[k] = GeoTensor(
+                varr, transform=transform_zenith, crs=self.epsg_code
+            )
 
         # Make a guess at the coordinates of the angle grids. These are not given
         # explicitly in the XML, and don't line up exactly with the other grids, so I am
@@ -824,7 +1235,7 @@ class S2ImageL1C(S2Image):
             self.mean_vza[band_name] = viewing_zenith_angle
             self.mean_vaa[band_name] = viewing_azimuth_angle
 
-    def buildViewAngleArr(self, viewingAngleNodeList, angleName):
+    def _buildViewAngleArr(self, viewingAngleNodeList, angleName):
         """
         Build up the named viewing angle array from the various detector strips given as
         separate arrays. I don't really understand this, and may need to re-write it once
@@ -835,127 +1246,26 @@ class S2ImageL1C(S2Image):
         """
         angleArrDict = {}
         for viewingAngleNode in viewingAngleNodeList:
-            band_name = BANDS_S2[int(viewingAngleNode.attrib['bandId'])]
-            detectorId = viewingAngleNode.attrib['detectorId']
-            
+            band_name = BANDS_S2[int(viewingAngleNode.attrib["bandId"])]
+            detectorId = viewingAngleNode.attrib["detectorId"]
+
             angleNode = viewingAngleNode.find(angleName)
-            angleArr = self.makeValueArray(angleNode.find('Values_List'))
+            angleArr = self._makeValueArray(angleNode.find("Values_List"))
             if band_name not in angleArrDict:
                 angleArrDict[band_name] = angleArr
             else:
-                mask = (~np.isnan(angleArr))
+                mask = ~np.isnan(angleArr)
                 angleArrDict[band_name][mask] = angleArr[mask]
         return angleArrDict
 
-    # def get_polygons_bqa(self):
-    #     def polygon_from_coords(coords, fix_geom=False, swap=True, dims=2):
-    #         """
-    #         Return Shapely Polygon from coordinates.
-    #         - coords: list of alterating latitude / longitude coordinates
-    #         - fix_geom: automatically fix geometry
-    #         """
-    #         assert len(coords) % dims == 0
-    #         number_of_points = int(len(coords) / dims)
-    #         coords_as_array = np.array(coords)
-    #         reshaped = coords_as_array.reshape(number_of_points, dims)
-    #         points = [(float(i[1]), float(i[0])) if swap else ((float(i[0]), float(i[1]))) for i in reshaped.tolist()]
-    #         polygon = Polygon(points).buffer(0)
-    #         try:
-    #             assert polygon.is_valid
-    #             return polygon
-    #         except AssertionError:
-    #             if fix_geom:
-    #                 return polygon.buffer(0)
-    #             else:
-    #                 raise RuntimeError("Geometry is not valid.")
-    #
-    #
-    #     exterior_str = str("eop:extentOf/gml:Polygon/gml:exterior/gml:LinearRing/gml:posList")
-    #     interior_str = str("eop:extentOf/gml:Polygon/gml:interior/gml:LinearRing/gml:posList")
-    #     root = read_xml(self.msk_clouds_file)
-    #     nsmap = {k: v for k, v in root.nsmap.items() if k}
-    #     try:
-    #         for mask_member in root.iterfind("eop:maskMembers", namespaces=nsmap):
-    #             for feature in mask_member:
-    #                 type = feature.findtext("eop:maskType", namespaces=nsmap)
-    #
-    #                 ext_elem = feature.find(exterior_str, nsmap)
-    #                 dims = int(ext_elem.attrib.get('srsDimension', '2'))
-    #                 ext_pts = ext_elem.text.split()
-    #                 exterior = polygon_from_coords(ext_pts, fix_geom=True, swap=False, dims=dims)
-    #                 try:
-    #                     interiors = [polygon_from_coords(int_pts.text.split(), fix_geom=True, swap=False, dims=dims)
-    #                                  for int_pts in feature.findall(interior_str, nsmap)]
-    #                 except AttributeError:
-    #                     interiors = []
-    #
-    #                 yield dict(geometry=Polygon(exterior, interiors).buffer(0),
-    #                            attributes=dict(maskType=type),
-    #                            interiors=interiors)
-    #
-    #     except StopIteration:
-    #         yield dict(geometry=Polygon(),
-    #                    attributes=dict(maskType=None),
-    #                    interiors=[])
-    #         raise StopIteration()
-
-    # def load_clouds_bqa(self, window=None):
-    #     mask_types = ["OPAQUE", "CIRRUS"]
-    #     poly_list = list(self.get_polygons_bqa())
-    #
-    #     nrows, ncols = self.shape
-    #     transform_ = self.transform
-    #
-    #     def get_mask(mask_type=mask_types[0]):
-    #         assert mask_type in mask_types, "mask type must be OPAQUE or CIRRUS"
-    #         fill_value = {m: i+1 for i, m in enumerate(mask_types)}
-    #         n_polys = np.sum([poly["attributes"]["maskType"] == mask_type for poly in poly_list])
-    #         msk = np.zeros(shape=(nrows, ncols), dtype=np.float32)
-    #         if n_polys > 0:
-    #             # n_interiors = np.sum([len(poly) for poly in poly_list if poly["interiors"]])
-    #             multi_polygon = MultiPolygon([poly["geometry"]
-    #                                           for poly in poly_list
-    #                                           if poly["attributes"]["maskType"] == mask_type]).buffer(0)
-    #             bounds = multi_polygon.bounds
-    #             bbox2read = coords.BoundingBox(*bounds)
-    #             window_read = windows.from_bounds(*bbox2read, transform_)
-    #             slice_read = tuple(slice(int(round(s.start)), int(round(s.stop))) for s in window_read.toslices())
-    #             out_shape = tuple([s.stop - s.start for s in slice_read])
-    #             transform_slice = windows.transform(window_read, transform_)
-    #
-    #             shapes = [({"type": "Polygon",
-    #                         "coordinates": [np.stack([
-    #                             p_elem["geometry"].exterior.xy[0],
-    #                             p_elem["geometry"].exterior.xy[1]], axis=1).tolist()]}, fill_value[mask_type])
-    #                       for p_elem in poly_list if p_elem["attributes"]['maskType'] == mask_type]
-    #             sub_msk = features.rasterize(shapes=shapes, fill=0,
-    #                                          out_shape=out_shape, dtype=np.float32,
-    #                                          transform=transform_slice)
-    #             msk[slice_read] = sub_msk
-    #
-    #         return msk
-    #
-    #     if window is None:
-    #         shape = self.shape
-    #         window = rasterio.windows.Window(col_off=0, row_off=0,
-    #                                          width=shape[1], height=shape[0])
-    #
-    #     mask = self.load_mask(window=window)
-    #
-    #     slice_ = window.toslices()
-    #
-    #     msk_op_cirr = [np.ma.MaskedArray(get_mask(mask_type=m)[slice_], mask=mask) for m in mask_types]
-    #     msk_clouds = np.ma.MaskedArray(np.clip(np.sum(msk_op_cirr, axis=0), 0, 1), mask=mask)
-    #     return msk_clouds
-
     @staticmethod
-    def makeValueArray(valuesListNode):
+    def _makeValueArray(valuesListNode):
         """
         Take a <Values_List> node from the XML, and return an array of the values contained
         within it. This will be a 2-d numpy array of float32 values (should I pass the dtype in??)
 
         """
-        valuesList = valuesListNode.findall('VALUES')
+        valuesList = valuesListNode.findall("VALUES")
         vals = []
         for valNode in valuesList:
             text = valNode.text
@@ -969,13 +1279,13 @@ SRF_S2 = {}
 SRF_FILE_DEFAULT = "https://sentiwiki.copernicus.eu/__attachments/1692737/COPE-GSEG-EOPG-TN-15-0007%20-%20Sentinel-2%20Spectral%20Response%20Functions%202024%20-%204.0.xlsx"
 
 
-def read_srf(satellite:str, 
-            srf_file:str=SRF_FILE_DEFAULT,
-            cache:bool=True) -> pd.DataFrame:
+def read_srf(
+    satellite: str, srf_file: str = SRF_FILE_DEFAULT, cache: bool = True
+) -> pd.DataFrame:
     """
     Process the spectral response function file. If the file is not provided
     it downloads it from https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/document-library/-/asset_publisher/Wk0TKajiISaR/content/sentinel-2a-spectral-responses
-    
+
     This function requires the fsspec package and pandas and openpyxl for reading excel files.
 
     Args:
@@ -995,25 +1305,26 @@ def read_srf(satellite:str,
 
     if srf_file == SRF_FILE_DEFAULT:
         # home_dir = os.path.join(os.path.expanduser('~'),".georeader")
-        home_dir = os.path.join(os.path.expanduser('~'),".georeader")
+        home_dir = os.path.join(os.path.expanduser("~"), ".georeader")
         os.makedirs(home_dir, exist_ok=True)
         srf_filename = os.path.basename(srf_file)
 
         # Decode the url to get the filename. Also, replace spaces with underscores
         import urllib.parse
+
         srf_filename = urllib.parse.unquote(srf_filename).replace(" ", "_")
-        
+
         srf_file_local = os.path.join(home_dir, srf_filename)
         if not os.path.exists(srf_file_local):
             import fsspec
+
             with fsspec.open(srf_file, "rb") as f:
                 with open(srf_file_local, "wb") as f2:
                     f2.write(f.read())
         srf_file = srf_file_local
 
-    srf_s2 = pd.read_excel(srf_file,
-                           sheet_name=f"Spectral Responses ({satellite})")
-    
+    srf_s2 = pd.read_excel(srf_file, sheet_name=f"Spectral Responses ({satellite})")
+
     srf_s2 = srf_s2.set_index("SR_WL")
 
     # remove rows with all values zero
@@ -1021,7 +1332,7 @@ def read_srf(satellite:str,
     srf_s2 = srf_s2.loc[any_not_cero]
 
     # remove the satellite name from the columns
-    srf_s2.columns = [c.replace(f"{satellite}_SR_AV_","") for c in srf_s2.columns]
+    srf_s2.columns = [c.replace(f"{satellite}_SR_AV_", "") for c in srf_s2.columns]
     srf_s2.columns = normalize_band_names(srf_s2.columns)
 
     if cache:
@@ -1029,19 +1340,23 @@ def read_srf(satellite:str,
 
     return srf_s2
 
-def get_file(remote_path:str, local_path:str):
+
+def get_file(remote_path: str, local_path: str):
     if remote_path.startswith(FULL_PATH_PUBLIC_BUCKET_SENTINEL_2):
         from google.cloud import storage
         from google.cloud.storage.retry import DEFAULT_RETRY
+
         modified_retry = DEFAULT_RETRY.with_timeout(900.0)
-        modified_retry = modified_retry.with_delay(initial=1.5, multiplier=1.5, maximum=600)
+        modified_retry = modified_retry.with_delay(
+            initial=1.5, multiplier=1.5, maximum=600
+        )
 
         storage_client = storage.Client.create_anonymous_client()
         bucket = storage_client.bucket(PUBLIC_BUCKET_SENTINEL_2)
         blob_name = remote_path.replace(FULL_PATH_PUBLIC_BUCKET_SENTINEL_2, "")
         blob = bucket.blob(blob_name)
         blob.download_to_filename(local_path, retry=modified_retry)
-    
+
     elif "://" in remote_path:
         fs = get_filesystem(remote_path)
         fs.get(remote_path, local_path)
@@ -1049,34 +1364,37 @@ def get_file(remote_path:str, local_path:str):
         raise ValueError(f"Unknown remote path {remote_path}")
 
 
-def read_xml(xml_file:str) -> ET.Element:
+def read_xml(xml_file: str) -> ET.Element:
     """
     Reads xml with xml package. If the file is in the public bucket it uses the `google_cloud_storage` package.
-    If the file is in a remote location it uses the `fsspec` package. 
+    If the file is in a remote location it uses the `fsspec` package.
 
     Args:
         xml_file (str): path to the xml file
-    
+
     Returns:
         ET.Element: root element of the xml
     """
-    
+
     if xml_file.startswith(FULL_PATH_PUBLIC_BUCKET_SENTINEL_2):
         from google.cloud import storage
         from google.cloud.storage.retry import DEFAULT_RETRY
 
         modified_retry = DEFAULT_RETRY.with_timeout(900.0)
-        modified_retry = modified_retry.with_delay(initial=1.5, multiplier=1.5, maximum=600)
+        modified_retry = modified_retry.with_delay(
+            initial=1.5, multiplier=1.5, maximum=600
+        )
 
         storage_client = storage.Client.create_anonymous_client()
         bucket = storage_client.bucket(PUBLIC_BUCKET_SENTINEL_2)
         blob_name = xml_file.replace(FULL_PATH_PUBLIC_BUCKET_SENTINEL_2, "")
         # print(f"Reading {xml_file} {blob_name} from {FULL_PATH_PUBLIC_BUCKET_SENTINEL_2}")
-        blob = bucket.blob(blob_name)        
+        blob = bucket.blob(blob_name)
         root = ET.fromstring(blob.download_as_string(retry=modified_retry))
-        
+
     elif "://" in xml_file:
         import fsspec
+
         with fsspec.open(xml_file, "rb") as file_obj:
             root = ET.fromstring(file_obj.read())
     else:
@@ -1084,7 +1402,7 @@ def read_xml(xml_file:str) -> ET.Element:
     return root
 
 
-def DN_to_radiance(s2obj: S2ImageL1C, dn_data:Optional[GeoTensor]=None) -> GeoTensor:
+def DN_to_radiance(s2obj: S2ImageL1C, dn_data: Optional[GeoTensor] = None) -> GeoTensor:
     """
     Function to convert Digital numbers (DN) to radiance.
 
@@ -1103,10 +1421,10 @@ def DN_to_radiance(s2obj: S2ImageL1C, dn_data:Optional[GeoTensor]=None) -> GeoTe
 
      U is:
         U = 1. / d^2
-    
+
     Where d is the Earth-Sun distance correction factor given by:
         d = 1-0.01673*cos(0.0172*(t-4))
-    
+
      0.0172 = 360/365.256363 * np.pi/180.
      t = datenum(Y,M,D) - datenum(Y,1,1) + 1;
      0.01673 is the Earth eccentricity
@@ -1122,6 +1440,7 @@ def DN_to_radiance(s2obj: S2ImageL1C, dn_data:Optional[GeoTensor]=None) -> GeoTe
         geotensor with radiances in W/m²/nm/sr
     """
     from georeader import reflectance
+
     if dn_data is None:
         dn_data = s2obj.load()
 
@@ -1131,10 +1450,12 @@ def DN_to_radiance(s2obj: S2ImageL1C, dn_data:Optional[GeoTensor]=None) -> GeoTe
     U = s2obj.scale_factor_U()
 
     # obfactor = (pi * d^2) / cos(solarzenithangle/180*pi)
-    obs_date_correction_factor = np.pi / (np.cos(s2obj.mean_sza/180*np.pi) * U)
-    radiance_values = reflectance.reflectance_to_radiance(reflectance_values,
-                                                          solar_irradiance=[solar_irr[b] for b in s2obj.bands],
-                                                          observation_date_corr_factor=obs_date_correction_factor)
+    obs_date_correction_factor = np.pi / (np.cos(s2obj.mean_sza / 180 * np.pi) * U)
+    radiance_values = reflectance.reflectance_to_radiance(
+        reflectance_values,
+        solar_irradiance=[solar_irr[b] for b in s2obj.bands],
+        observation_date_corr_factor=obs_date_correction_factor,
+    )
 
     # for i,b in enumerate(s2obj.bands):
     #     mask = dn_data.values[i] == dn_data.fill_value_default
@@ -1142,17 +1463,23 @@ def DN_to_radiance(s2obj: S2ImageL1C, dn_data:Optional[GeoTensor]=None) -> GeoTe
     #     data_values_new[i] = data_values_new[i] / obs_date_correction_factor * solar_irr[b]
     #     data_values_new[i][mask] = dn_data.fill_value_default
 
-    return GeoTensor(radiance_values, transform=dn_data.transform, 
-                     crs=dn_data.crs,
-                     fill_value_default=dn_data.fill_value_default)
+    return GeoTensor(
+        radiance_values,
+        transform=dn_data.transform,
+        crs=dn_data.crs,
+        fill_value_default=dn_data.fill_value_default,
+    )
 
 
-def s2loader(s2folder:str, out_res:int=10,
-             bands:Optional[List[str]] = None,
-             window_focus:Optional[rasterio.windows.Window]=None,
-             granules:Optional[Dict[str,str]]=None,
-             polygon:Optional[Polygon]=None,
-             metadata_msi:Optional[str]=None) -> Union[S2ImageL2A, S2ImageL1C]:
+def s2loader(
+    s2folder: str,
+    out_res: int = 10,
+    bands: Optional[List[str]] = None,
+    window_focus: Optional[rasterio.windows.Window] = None,
+    granules: Optional[Dict[str, str]] = None,
+    polygon: Optional[Polygon] = None,
+    metadata_msi: Optional[str] = None,
+) -> Union[S2ImageL2A, S2ImageL1C]:
     """
     Loads a S2ImageL2A or S2ImageL1C depending on the product type
 
@@ -1172,16 +1499,32 @@ def s2loader(s2folder:str, out_res:int=10,
     _, producttype_nos2, _, _, _, _, _ = s2_name_split(s2folder)
 
     if producttype_nos2 == "MSIL2A":
-        return S2ImageL2A(s2folder, granules=granules, polygon=polygon, out_res=out_res,
-                          bands=bands, window_focus=window_focus, metadata_msi=metadata_msi)
+        return S2ImageL2A(
+            s2folder,
+            granules=granules,
+            polygon=polygon,
+            out_res=out_res,
+            bands=bands,
+            window_focus=window_focus,
+            metadata_msi=metadata_msi,
+        )
     elif producttype_nos2 == "MSIL1C":
-        return S2ImageL1C(s2folder, granules=granules, polygon=polygon, out_res=out_res, bands=bands,
-                          window_focus=window_focus, metadata_msi=metadata_msi)
+        return S2ImageL1C(
+            s2folder,
+            granules=granules,
+            polygon=polygon,
+            out_res=out_res,
+            bands=bands,
+            window_focus=window_focus,
+            metadata_msi=metadata_msi,
+        )
 
     raise NotImplementedError(f"Don't know how to load {producttype_nos2} products")
 
 
-def s2_load_from_feature_element84(feature:Dict[str, Any], bands:Optional[List[str]]=None) -> Union[S2ImageL2A, S2ImageL1C]:
+def s2_load_from_feature_element84(
+    feature: Dict[str, Any], bands: Optional[List[str]] = None
+) -> Union[S2ImageL2A, S2ImageL1C]:
     """
     Loads a S2 image from an element feature returned by sat-search
     (see `https://github.com/spaceml-org/georeader/blob/main/notebooks/Sentinel-2/read_s2_safe_element84_cloud.ipynb`)
@@ -1204,10 +1547,18 @@ def s2_load_from_feature_element84(feature:Dict[str, Any], bands:Optional[List[s
     metadata_msi = feature["assets"]["metadata"]["href"]
     s2folder = feature["properties"]["sentinel:product_id"] + ".SAFE"
 
-    return s2loader(s2folder=s2folder, granules=granules, polygon=polygon, metadata_msi=metadata_msi,
-                    bands=bands)
+    return s2loader(
+        s2folder=s2folder,
+        granules=granules,
+        polygon=polygon,
+        metadata_msi=metadata_msi,
+        bands=bands,
+    )
 
-def s2_load_from_feature_planetary_microsoft(item:Any, bands:Optional[List[str]]=None) -> Union[S2ImageL2A, S2ImageL1C]:
+
+def s2_load_from_feature_planetary_microsoft(
+    item: Any, bands: Optional[List[str]] = None
+) -> Union[S2ImageL2A, S2ImageL1C]:
     """
     Loads a S2 image from an element feature returned by Microsoft Planetary Computer
     (see [example](https://github.com/microsoft/PlanetaryComputerExamples/blob/main/datasets/sentinel-2-l2a/sentinel-2-l2a-example.ipynb`))
@@ -1221,33 +1572,64 @@ def s2_load_from_feature_planetary_microsoft(item:Any, bands:Optional[List[str]]
 
     """
 
-    metadata_msi = item.assets['product-metadata'].href
-    s2_folder = item.properties['s2:product_uri']
+    metadata_msi = item.assets["product-metadata"].href
+    s2_folder = item.properties["s2:product_uri"]
     polygon = shape(item.geometry)
 
-    bands_available = ['AOT', 'B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08', 'B09', 'B11', 'B12', 'B8A', 'SCL', 'WVP'] 
+    bands_available = [
+        "AOT",
+        "B01",
+        "B02",
+        "B03",
+        "B04",
+        "B05",
+        "B06",
+        "B07",
+        "B08",
+        "B09",
+        "B11",
+        "B12",
+        "B8A",
+        "SCL",
+        "WVP",
+    ]
     granules = {}
     for k, v in item.assets.items():
         if k in bands_available:
             granules[k] = v.href
-    return s2loader(s2folder=s2_folder, granules=granules, polygon=polygon, metadata_msi=metadata_msi,
-                    bands=bands)
+    return s2loader(
+        s2folder=s2_folder,
+        granules=granules,
+        polygon=polygon,
+        metadata_msi=metadata_msi,
+        bands=bands,
+    )
 
 
-def s2_public_bucket_path(s2file:str, check_exists:bool=False, mode:str="gcp") -> str:
+def s2_public_bucket_path(
+    s2file: str, check_exists: bool = False, mode: str = "gcp"
+) -> str:
     """
     Returns the expected patch in the public bucket of the S2 file
 
     Args:
         s2file: safe file (e.g.  S2B_MSIL1C_20220527T030539_N0400_R075_T49SGV_20220527T051042.SAFE)
-        check_exists: check if the file exists in the bucket, This will not work if GOOGLE_APPLICATION_CREDENTIALS and/or GS_USER_PROJECT 
+        check_exists: check if the file exists in the bucket, This will not work if GOOGLE_APPLICATION_CREDENTIALS and/or GS_USER_PROJECT
             env variables are not set. Default to False
         mode: "gcp" or "rest"
 
     Returns:
         full path to the file (e.g. gs://gcp-public-data-sentinel-2/tiles/49/S/GV/S2B_MSIL1C_20220527T030539_N0400_R075_T49SGV_20220527T051042.SAFE)
     """
-    mission, producttype, sensing_date_str, pdgs, relorbitnum, tile_number_field, product_discriminator = s2_name_split(s2file)
+    (
+        mission,
+        producttype,
+        sensing_date_str,
+        pdgs,
+        relorbitnum,
+        tile_number_field,
+        product_discriminator,
+    ) = s2_name_split(s2file)
     s2file = s2file[:-1] if s2file.endswith("/") else s2file
 
     if not s2file.endswith(".SAFE"):
@@ -1274,7 +1656,7 @@ NEW_FORMAT = r"(S2\w{1})_(MSIL\w{2})_(\d{4}\d{2}\d{2}T\d{2}\d{2}\d{2})_(\w{5})_(
 OLD_FORMAT = r"(S2\w{1})_(\w{4})_(\w{3}_\w{6})_(\w{4})_(\d{8}T\d{6})_(\w{4})_V(\d{4}\d{2}\d{2}T\d{6})_(\d{4}\d{2}\d{2}T\d{6})"
 
 
-def s2_name_split(s2file:str) -> Optional[Tuple[str, str, str, str, str, str, str]]:
+def s2_name_split(s2file: str) -> Optional[Tuple[str, str, str, str, str, str, str]]:
     """
     https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/naming-convention
 
@@ -1308,7 +1690,9 @@ def s2_name_split(s2file:str) -> Optional[Tuple[str, str, str, str, str, str, st
         return matches.groups()
 
 
-def s2_old_format_name_split(s2file:str) -> Optional[Tuple[str, str, str, str, str, str, str, str]]:
+def s2_old_format_name_split(
+    s2file: str,
+) -> Optional[Tuple[str, str, str, str, str, str, str, str]]:
     """
     https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/naming-convention
 

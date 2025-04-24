@@ -6,7 +6,7 @@ The `georeader` package uses two main protocols to define interfaces for geospat
 
 ### GeoDataBase Protocol
 
-This is the minimal interface required for geospatial operations. Any class implementing this protocol provides basic spatial information:
+This is the minimal interface required for geospatial operations. [Window methods](#window-methods) require objects implementing this protocol as input. Any class implementing this protocol provides basic spatial information:
 
 - `transform`: A rasterio.Affine object defining the spatial transform
 - `crs`: Coordinate reference system
@@ -16,7 +16,7 @@ This is the minimal interface required for geospatial operations. Any class impl
 
 ### GeoData Protocol
 
-This extends the `GeoDataBase` protocol with methods for data access and manipulation:
+This extends the `GeoDataBase` protocol with methods for data access. [Read methods](#read-methods) require objects implementing this protocol as inputs. Classes implementing the `GeoData` protocol must have the following methods and properties:
 
 - All properties from `GeoDataBase`
 - `load(boundless: bool = True) -> GeoTensor`: Loads data into memory
@@ -31,10 +31,11 @@ This extends the `GeoDataBase` protocol with methods for data access and manipul
 
 ## Implementations
 
-The library provides two main implementations of these protocols:
+The library provides the following implementations of the `GeoData` protocol:
 
 1. **[GeoTensor](../modules/geotensor_module.md)**: A numpy-based implementation for in-memory operations.
 2. **[RasterioReader](../modules/rasterio_reader.md)**: An implementation for lazy-loading with `rasterio`.
+3. **[readers.*](../modules/readers_module.md)**: Custom readers for official data formats of several satellite missions ([Sentinel-2](../modules/readers_module.md#sentinel-2-reader), [Proba-V](../modules/readers_module.md#proba-v-reader), [SpotVGT](../modules/readers_module.md#spot-vgt-reader), [EMIT](../modules/readers_module.md#emit-reader), [PRISMA](../modules/readers_module.md#prisma-reader) or [EnMAP](../modules/readers_module.md#enmap-reader)).
 
 ## Window and Read Methods
 
@@ -97,3 +98,9 @@ These methods require objects implementing the `GeoData` protocol. They load and
         - window_from_center_coords
         - window_from_polygon
         - window_from_tile
+
+::: georeader.mosaic
+    options:
+      members:
+        - spatial_mosaic
+    
