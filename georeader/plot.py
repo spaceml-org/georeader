@@ -119,10 +119,20 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
                 # Convert np_data to RGBA using mask as alpha channel.
                 np_data = np.concatenate([np_data, ~mask[..., None]], axis=-1)
 
-    xmin, ymin, xmax, ymax = data.bounds
+    # TODO pass explicit extent if transform is not rectilinear (or if the sign of the transform is not the standard one)
+    # https://matplotlib.org/stable/users/explain/artists/imshow_extent.html
+
+    # if data.transform.is_rectilinear and data.transform.a > 0 and data.transform.e < 0:
+    #     xmin, ymin, xmax, ymax = data.bounds
+    #     # kwargs['extent'] = (bounds.left, bounds.right, bounds.bottom, bounds.top)
+    #     # xmin, ymin, xmax, ymax
+    #     kwargs['extent'] = (xmin, xmax, ymin, ymax)
+    # else:
+    
+    ul_x, ul_y = data.transform * (0, 0)
+    lr_x, lr_y = data.transform * (data.shape[-2], data.shape[-1])
     # kwargs['extent'] = (bounds.left, bounds.right, bounds.bottom, bounds.top)
-    # xmin, ymin, xmax, ymax
-    kwargs['extent'] = (xmin, xmax, ymin, ymax)
+    kwargs['extent'] = (ul_x, lr_x, lr_y, ul_y)
 
     if not data.transform.is_rectilinear:
         warnings.warn("The transform is not rectilinear. The x and y ticks and the scale bar are not going to be correct."
@@ -158,19 +168,17 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
     if bounds_in_latlng:
         from matplotlib.ticker import FuncFormatter
 
-        xmin, ymin, xmax, ymax = data.bounds
-
         @FuncFormatter
         def x_formatter(x, pos):
             # transform x,ymin to latlng
-            longs, lats = rasterio.warp.transform(data.crs, "epsg:4326", [x], [ymin])
+            longs, lats = rasterio.warp.transform(data.crs, "epsg:4326", [x], [lr_y])
             return f"{longs[0]:.2f}"
         
 
         @FuncFormatter
         def y_formatter(y, pos):
             # transform xmin,y to latlng
-            longs, lats = rasterio.warp.transform(data.crs, "epsg:4326", [xmin], [y])
+            longs, lats = rasterio.warp.transform(data.crs, "epsg:4326", [ul_x], [y])
             return f"{lats[0]:.2f}"
 
         ax.xaxis.set_major_formatter(x_formatter)

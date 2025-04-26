@@ -10,6 +10,7 @@ from shapely.geometry import Polygon, MultiPolygon
 import numbers
 from numpy.typing import NDArray
 from typing_extensions import Self
+from rasterio import Affine
 
 
 Tensor = NDArray
@@ -965,6 +966,18 @@ class GeoTensor(np.ndarray):
             window_current, transform=self.transform
         )
 
+        # Scale the spatial transform if the step of the slices > 1
+        step_rows = slices_window[0].step
+        step_cols = slices_window[1].step
+        if step_rows is None:
+            step_rows = 1
+        
+        if step_cols is None:
+            step_cols = 1
+
+        if (step_rows != 1) or (step_cols != 1):
+            transform_current = transform_current * Affine.scale(step_cols, step_rows)
+        
         return GeoTensor(
             self.values[slice_tuple],
             transform_current,
