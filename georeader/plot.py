@@ -119,18 +119,18 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
                 # Convert np_data to RGBA using mask as alpha channel.
                 np_data = np.concatenate([np_data, ~mask[..., None]], axis=-1)
 
-    # TODO pass explicit extent if transform is not rectilinear (or if the sign of the transform is not the standard one)
     # https://matplotlib.org/stable/users/explain/artists/imshow_extent.html
-
-    # if data.transform.is_rectilinear and data.transform.a > 0 and data.transform.e < 0:
-    #     xmin, ymin, xmax, ymax = data.bounds
-    #     # kwargs['extent'] = (bounds.left, bounds.right, bounds.bottom, bounds.top)
-    #     # xmin, ymin, xmax, ymax
-    #     kwargs['extent'] = (xmin, xmax, ymin, ymax)
-    # else:
+    if data.transform.is_rectilinear:
+        ul_x, ul_y = data.transform * (0, 0)
+        lr_x, lr_y = data.transform * (data.shape[-2], data.shape[-1])
+    else:
+        # bounds takes the minimum and maximum of the 4 corners of the image
+        xmin, ymin, xmax, ymax = data.bounds
+        ul_x = xmin
+        ul_y = ymax
+        lr_x = xmax
+        lr_y = ymin 
     
-    ul_x, ul_y = data.transform * (0, 0)
-    lr_x, lr_y = data.transform * (data.shape[-2], data.shape[-1])
     # kwargs['extent'] = (bounds.left, bounds.right, bounds.bottom, bounds.top)
     kwargs['extent'] = (ul_x, lr_x, lr_y, ul_y)
 
