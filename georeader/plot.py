@@ -130,13 +130,12 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
         ul_y = ymax
         lr_x = xmax
         lr_y = ymin 
+        warnings.warn("The transform is not rectilinear. The x and y ticks and the scale bar are not going to be correct."
+                      " To discard this warning use: warnings.filterwarnings('ignore', message='The transform is not rectilinear.')")
     
     # kwargs['extent'] = (bounds.left, bounds.right, bounds.bottom, bounds.top)
     kwargs['extent'] = (ul_x, lr_x, lr_y, ul_y)
 
-    if not data.transform.is_rectilinear:
-        warnings.warn("The transform is not rectilinear. The x and y ticks and the scale bar are not going to be correct."
-                      " To discard this warning use: warnings.filterwarnings('ignore', message='The transform is not rectilinear.')")
     
     title = None
     if "title" in kwargs:
