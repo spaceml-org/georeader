@@ -201,7 +201,10 @@ class PRISMA:
 
             dset = f["/KDP_AUX/Fwhm_" + swir_lab + "_Matrix"]
             fwhm_mat_ini = dset[:, :]
-
+            
+            wvl_cntr = f.attrs["List_Cw_" + swir_lab]
+            wvl_flag = f.attrs["List_Cw_" + swir_lab + "_Flags"]
+            
             sc_fac = f.attrs["ScaleFactor_" + swir_lab]
 
             of_fac = f.attrs["Offset_" + swir_lab]
@@ -227,13 +230,17 @@ class PRISMA:
             if B_tot == len(wl_center_ini):
                 ltoa_img = np.flip(ltoa_img, axis=2)
             else:
-                ltoa_img = np.flip(ltoa_img[:, :, :-2], axis=2)
+                # ltoa_img = np.flip(ltoa_img[:, :, :-2], axis=2)
+                non0_bands = np.where(wvl_flag == 1)[0]
+                ltoa_img = np.flip(ltoa_img[:, :, non0_bands], axis=2)
 
         else:
             if B_tot == len(wl_center_ini):
                 ltoa_img = np.flip(ltoa_img, axis=2)
             else:
-                ltoa_img = np.flip(ltoa_img[:, :, 3:], axis=2)  # Revisar esto(not sure)
+                # ltoa_img = np.flip(ltoa_img[:, :, 3:], axis=2)  # Revisar esto(not sure)
+                non0_bands = np.where(wvl_flag == 1)[0]
+                ltoa_img = np.flip(ltoa_img[:, :, non0_bands], axis=2)
 
         ltoa_img = np.transpose(ltoa_img, (1, 0, 2))
         if swir_flag:
