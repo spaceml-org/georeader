@@ -249,6 +249,8 @@ def plot_segmentation_mask(mask:GeoData, color_array:Optional[NDArray]=None,
                            legend:bool=True, ax:Optional[plt.Axes]=None,
                            add_scalebar:bool=False,
                            kwargs_scalebar:Optional[dict]=None,
+                           min_val_mask:Optional[int]=None,
+                           max_val_mask:Optional[int]=None,
                            bounds_in_latlng:bool=True) -> plt.Axes:
     """
     Plots a discrete segmentation mask with a legend.
@@ -273,13 +275,22 @@ def plot_segmentation_mask(mask:GeoData, color_array:Optional[NDArray]=None,
             nlabels = len(interpretation_array)
         else:
             nlabels = len(np.unique(mask))
+            min_val_mask = np.min(mask)
+            max_val_mask = np.max(mask) + 1
         
         color_array = plt.cm.tab20.colors[:nlabels]
 
     cmap_categorical = colors.ListedColormap(color_array)
     color_array = np.array(color_array)
-    norm_categorical = colors.Normalize(vmin=-.5,
-                                        vmax=color_array.shape[0] - .5)
+    if min_val_mask is None:
+        min_val_mask = 0
+    if max_val_mask is None:
+        max_val_mask = color_array.shape[0]
+    
+    assert (max_val_mask - min_val_mask) == color_array.shape[0], f"max_val_mask - min_val_mask must be equal to the number of colors {max_val_mask} - {min_val_mask} != {color_array.shape[0]}"
+
+    norm_categorical = colors.Normalize(vmin=min_val_mask -.5,
+                                        vmax=max_val_mask - .5)
 
     
     if interpretation_array is not None:
