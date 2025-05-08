@@ -65,8 +65,9 @@ These methods require objects implementing the `GeoData` protocol. They load and
 - [`read_rpcs`](#georeader.read.read_rpcs): Georeferences data using rational polynomial coefficients.
 - [`spatial_mosaic`](#georeader.mosaic.spatial_mosaic): Creates a spatial mosaic by combining spatially multiple GeoData objects.
 
-
 ## API Reference
+
+### Read Methods
 
 ::: georeader.read
     options:
@@ -81,6 +82,18 @@ These methods require objects implementing the `GeoData` protocol. They load and
         - resize
         - read_reproject
         - read_rpcs
+
+::: georeader.mosaic
+    options:
+      members:
+        - spatial_mosaic
+
+### Window Methods
+
+::: georeader.read
+    options:
+      members:
+        - read_from_center_coords
         - window_from_bounds
         - window_from_center_coords
         - window_from_polygon

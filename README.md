@@ -4,7 +4,7 @@
 
 **georeader** is a package to process raster data from different satellite missions. **georeader** makes easy to [read specific areas of your image](https://github.com/spaceml-org/georeader/blob/main/docs/read_S2_SAFE_from_bucket.ipynb), to [reproject images from different satellites to a common grid](https://github.com/spaceml-org/georeader/blob/main/docs/reading_overlapping_sentinel2_aviris.ipynb)  ([`georeader.read`](https://spaceml-org.github.io/georeader/modules/read_module/)), to go from vector to raster formats ([`georeader.vectorize`](https://spaceml-org.github.io/georeader/modules/vectorize_module/) and [`georeader.rasterize`](https://spaceml-org.github.io/georeader/modules/rasterize_module/)) or to do [radiance to reflectance conversions](https://spaceml-org.github.io/georeader/enmap_with_cloudsen12/) ([`georeader.reflectance`](https://spaceml-org.github.io/georeader/modules/reflectance_module/)). 
 
-**georeader** is mainly used to process satellite data for scientific usage, to create ML-ready datasets and to implement *end-to-end* operational inference pipelines ([e.g. the Kherson Dam Break floodmap](https://spaceml-org.github.io/ml4floods/content/ml4ops/HOWTO_postprocess_inference.html)). 
+**georeader** is mainly used to process satellite data for scientific usage, to create ML-ready datasets and to implement *end-to-end* operational inference pipelines ([e.g. the Kherson Dam Break floodmap](https://spaceml-org.github.io/ml4floods/content/ml4ops/HOWTO_postprocess_inference.html)). See [**georeader** concepts and protocols for basic concepts and API](https://spaceml-org.github.io/georeader/modules/read_module/).
 
 ## Install
 
@@ -16,55 +16,48 @@ pip install georeader-spaceml
 
 ## Getting started
 
-> Read from a Sentinel-2 image a fixed size subimage on an specific `lon,lat` location (directly from the [S2 public Google Cloud bucket](https://cloud.google.com/storage/docs/public-datasets/sentinel-2?hl=es-419)):
+> Read from a Sentinel-2 image a fixed size subimage on an specific `lon,lat` location:
  
 ```python
-# This snippet requires:
-# pip install fsspec gcsfs google-cloud-storage
-import os
-os.environ["GS_NO_SIGN_REQUEST"] = "YES"
-
-from georeader.readers import S2_SAFE_reader
+from georeader.rasterio_reader import RasterioReader
 from georeader import read
 
-cords_read = (-104.394, 32.026) # long, lat
-crs_cords = "EPSG:4326"
-s2_safe_path = S2_SAFE_reader.s2_public_bucket_path("S2B_MSIL1C_20191008T173219_N0208_R055_T13SER_20191008T204555.SAFE")
-s2obj = S2_SAFE_reader.s2loader(s2_safe_path, 
-                                out_res=10, bands=["B04","B03","B02"])
+# S2 image from WorldFloodsv2 dataset
+s2url = "https://huggingface.co/datasets/isp-uv-es/WorldFloodsv2/resolve/main/test/S2/EMSR264_18MIANDRIVAZODETAIL_DEL_v2.tif"
+rst = RasterioReader(s2url)
 
-# copy to local avoids http errors specially when not using a Google Cloud project.
-# This will only copy the bands set up above B04, B03 and B02
-s2obj = s2obj.cache_product_to_local_dir(".")
+# lazy loading bands
+rst_rgb = rst.isel({"band": [3, 2, 1]}) # 1-based list as in rasterio
+
+cords_read = (45.43, -19.53) # long, lat
+crs_cords = "EPSG:4326"
 
 # See also read.read_from_bounds, read.read_from_polygon for different ways of croping an image
-data = read.read_from_center_coords(s2obj,cords_read, shape=(2040, 4040),
+data = read.read_from_center_coords(rst_rgb,
+                                    cords_read, shape=(504, 1040),
                                     crs_center_coords=crs_cords)
 
 data_memory = data.load() # this loads the data to memory
 
 data_memory # GeoTensor object
-
 ```
 ```
->>  Transform: | 10.00, 0.00, 537020.00|
-| 0.00,-10.00, 3553680.00|
+>>  Transform: | 10.00, 0.00, 539910.00|
+| 0.00,-10.00, 7842990.00|
 | 0.00, 0.00, 1.00|
-         Shape: (3, 2040, 4040)
+         Shape: (3, 504, 1040)
          Resolution: (10.0, 10.0)
-         Bounds: (537020.0, 3533280.0, 577420.0, 3553680.0)
-         CRS: EPSG:32613
+         Bounds: (539910.0, 7837950.0, 550310.0, 7842990.0)
+         CRS: EPSG:32738
          fill_value_default: 0
 ```
 
-In the `.values` attribute we have the plain numpy array that we can plot with `show`:
-
 ```python
-from rasterio.plot import show
-show(data_memory.values/3500, transform=data_memory.transform)
+from georeader import plot
+plot.show((data_memory / 3_500).clip(0, 1))
 
 ```
-<img src="https://raw.githubusercontent.com/spaceml-org/georeader/main/notebooks/images/sample_read.png" alt="awesome georeader" width="50%">
+<img src="https://raw.githubusercontent.com/spaceml-org/georeader/main/docs/modules/pngs/sample_read.png" alt="awesome georeader" width="50%">
 
 
 Saving the `GeoTensor` as a COG GeoTIFF: 
@@ -72,8 +65,8 @@ Saving the `GeoTensor` as a COG GeoTIFF:
 ```python
 from georeader.save import save_cog
 
-# Supports writing in bucket location (e.g. gs://bucket-name/s2_crop.tif)
-save_cog(data_memory, "s2_crop.tif", descriptions=s2obj.bands)
+# Supports writing in remote location (e.g. gs://bucket-name/s2_crop.tif)
+save_cog(data_memory, "s2_crop.tif", descriptions=["B4","B3", "B2"])
 ```
 
 ## Tutorials

@@ -24,10 +24,10 @@ def get_polygons(binary_mask: Union[np.ndarray, GeoData], min_area:float=25.5,
 
     """
 
-    if isinstance(binary_mask, np.ndarray):
+    if not hasattr(binary_mask, "transform"):
         binary_mask_np = binary_mask
     else:
-        binary_mask_np = binary_mask.values
+        binary_mask_np = np.array(binary_mask)
 
         assert transform is None, "transform only must be used if input is np.ndarray"
         transform = binary_mask.transform

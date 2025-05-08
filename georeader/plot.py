@@ -79,7 +79,7 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
         add_colorbar_next_to (bool, optional): Defaults to False. Add a colorbar next to the plot
         add_scalebar (bool, optional): Defaults to False. Add a scalebar to the plot
         kwargs_scalebar (Optional[dict], optional): Defaults to None. Keyword arguments for the scalebar. 
-        See https://github.com/ppinard/matplotlib-scalebar. (install with pip install matplotlib-scalebar)
+            See https://github.com/ppinard/matplotlib-scalebar. (install with `pip install matplotlib-scalebar`)
         mask (Union[bool,np.array], optional): Defaults to False. Mask to apply to the data. 
             If True, the fill_value_default of the GeoData is used.
         bounds_in_latlng (bool, optional): Defaults to True. If True, the x and y ticks are shown in latlng.
@@ -119,14 +119,23 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
                 # Convert np_data to RGBA using mask as alpha channel.
                 np_data = np.concatenate([np_data, ~mask[..., None]], axis=-1)
 
-    xmin, ymin, xmax, ymax = data.bounds
-    # kwargs['extent'] = (bounds.left, bounds.right, bounds.bottom, bounds.top)
-    # xmin, ymin, xmax, ymax
-    kwargs['extent'] = (xmin, xmax, ymin, ymax)
-
-    if not data.transform.is_rectilinear:
+    # https://matplotlib.org/stable/users/explain/artists/imshow_extent.html
+    if data.transform.is_rectilinear:
+        ul_x, ul_y = data.transform * (0, 0)
+        lr_x, lr_y = data.transform * (data.shape[-1], data.shape[-2])
+    else:
+        # bounds takes the minimum and maximum of the 4 corners of the image
+        xmin, ymin, xmax, ymax = data.bounds
+        ul_x = xmin
+        ul_y = ymax
+        lr_x = xmax
+        lr_y = ymin 
         warnings.warn("The transform is not rectilinear. The x and y ticks and the scale bar are not going to be correct."
                       " To discard this warning use: warnings.filterwarnings('ignore', message='The transform is not rectilinear.')")
+    
+    # kwargs['extent'] = (bounds.left, bounds.right, bounds.bottom, bounds.top)
+    kwargs['extent'] = (ul_x, lr_x, lr_y, ul_y)
+
     
     title = None
     if "title" in kwargs:
@@ -158,19 +167,17 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
     if bounds_in_latlng:
         from matplotlib.ticker import FuncFormatter
 
-        xmin, ymin, xmax, ymax = data.bounds
-
         @FuncFormatter
         def x_formatter(x, pos):
             # transform x,ymin to latlng
-            longs, lats = rasterio.warp.transform(data.crs, "epsg:4326", [x], [ymin])
+            longs, lats = rasterio.warp.transform(data.crs, "epsg:4326", [x], [lr_y])
             return f"{longs[0]:.2f}"
         
 
         @FuncFormatter
         def y_formatter(y, pos):
             # transform xmin,y to latlng
-            longs, lats = rasterio.warp.transform(data.crs, "epsg:4326", [xmin], [y])
+            longs, lats = rasterio.warp.transform(data.crs, "epsg:4326", [ul_x], [y])
             return f"{lats[0]:.2f}"
 
         ax.xaxis.set_major_formatter(x_formatter)
@@ -242,6 +249,8 @@ def plot_segmentation_mask(mask:GeoData, color_array:Optional[NDArray]=None,
                            legend:bool=True, ax:Optional[plt.Axes]=None,
                            add_scalebar:bool=False,
                            kwargs_scalebar:Optional[dict]=None,
+                           min_val_mask:Optional[int]=None,
+                           max_val_mask:Optional[int]=None,
                            bounds_in_latlng:bool=True) -> plt.Axes:
     """
     Plots a discrete segmentation mask with a legend.
@@ -254,7 +263,7 @@ def plot_segmentation_mask(mask:GeoData, color_array:Optional[NDArray]=None,
         ax: plt.Axes to plot
         add_scalebar (bool, optional): Defaults to False. Add a scalebar to the plot
         kwargs_scalebar (Optional[dict], optional): Defaults to None. Keyword arguments for the scalebar. 
-        See https://github.com/ppinard/matplotlib-scalebar. (install with pip install matplotlib-scalebar)
+            See https://github.com/ppinard/matplotlib-scalebar. (install with `pip install matplotlib-scalebar`)
         bounds_in_latlng (bool, optional): Defaults to True. If True, the x and y ticks are shown in latlng.
     
     Returns:
@@ -266,13 +275,22 @@ def plot_segmentation_mask(mask:GeoData, color_array:Optional[NDArray]=None,
             nlabels = len(interpretation_array)
         else:
             nlabels = len(np.unique(mask))
+            min_val_mask = np.min(mask)
+            max_val_mask = np.max(mask) + 1
         
         color_array = plt.cm.tab20.colors[:nlabels]
 
     cmap_categorical = colors.ListedColormap(color_array)
     color_array = np.array(color_array)
-    norm_categorical = colors.Normalize(vmin=-.5,
-                                        vmax=color_array.shape[0] - .5)
+    if min_val_mask is None:
+        min_val_mask = 0
+    if max_val_mask is None:
+        max_val_mask = color_array.shape[0]
+    
+    assert (max_val_mask - min_val_mask) == color_array.shape[0], f"max_val_mask - min_val_mask must be equal to the number of colors {max_val_mask} - {min_val_mask} != {color_array.shape[0]}"
+
+    norm_categorical = colors.Normalize(vmin=min_val_mask -.5,
+                                        vmax=max_val_mask - .5)
 
     
     if interpretation_array is not None:
