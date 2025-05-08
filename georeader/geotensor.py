@@ -10,6 +10,7 @@ from itertools import product
 from shapely.geometry import Polygon, MultiPolygon
 import numbers
 from numpy.typing import NDArray
+import warnings
 
 try:
     import torch
@@ -35,7 +36,39 @@ RIO_ENV_OPTIONS_DEFAULT = dict(
     GDAL_HTTP_MULTIPLEX="YES"
 )
 
+def _vsi_path(path:str)->str:
+    """
+    Function to convert a path to a VSI path. We use this function to try re-reading the image 
+    disabling the VSI cache. This fixes the error when the remote file is modified from another
+    program.
 
+    Args:
+        - path: path to convert to VSI path
+    
+    Returns:
+        VSI path
+    """
+    if not "://" in path:
+        return path
+    
+    protocol, remainder_path = path.split("://")
+    
+    if path.startswith("http"):
+        return f"/vsicurl/{path}"
+    elif protocol in ["s3", "gs", "az", "oss"]:
+        return f"/vsi{protocol}/{remainder_path}"
+    else:
+        warnings.warn(f"Protocol {protocol} not recognized. Returning the original path")
+        return path
+
+
+def get_rio_options_path(options:dict, path:str) -> Dict[str, str]:
+    if "read_with_CPL_VSIL_CURL_NON_CACHED" in options:
+        options = options.copy()
+        if options["read_with_CPL_VSIL_CURL_NON_CACHED"]:
+            options["CPL_VSIL_CURL_NON_CACHED"] = _vsi_path(path)
+        del options["read_with_CPL_VSIL_CURL_NON_CACHED"]
+    return options
 
 class GeoTensor:
     """
@@ -671,7 +704,7 @@ class GeoTensor:
         tags = None
         descriptions = None
         rio_env_options = RIO_ENV_OPTIONS_DEFAULT if rio_env_options is None else rio_env_options
-        with rasterio.Env(**rio_env_options):
+        with rasterio.Env(**get_rio_options_path(rio_env_options, path)):
             with rasterio.open(path) as src:                
                 data = src.read()
                 transform = src.transform
