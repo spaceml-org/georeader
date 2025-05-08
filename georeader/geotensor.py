@@ -9,11 +9,9 @@ from itertools import product
 from shapely.geometry import Polygon, MultiPolygon
 import numbers
 from numpy.typing import NDArray
+import warnings
 from typing_extensions import Self
 from rasterio import Affine
-
-
-Tensor = NDArray
 
 ORDERS = {
     "nearest": 0,
@@ -31,7 +29,44 @@ RIO_ENV_OPTIONS_DEFAULT = dict(
 )
 
 
-class GeoTensor(np.ndarray):
+def _vsi_path(path: str) -> str:
+    """
+    Function to convert a path to a VSI path. We use this function to try re-reading the image
+    disabling the VSI cache. This fixes the error when the remote file is modified from another
+    program.
+
+    Args:
+        - path: path to convert to VSI path
+
+    Returns:
+        VSI path
+    """
+    if not "://" in path:
+        return path
+
+    protocol, remainder_path = path.split("://")
+
+    if path.startswith("http"):
+        return f"/vsicurl/{path}"
+    elif protocol in ["s3", "gs", "az", "oss"]:
+        return f"/vsi{protocol}/{remainder_path}"
+    else:
+        warnings.warn(
+            f"Protocol {protocol} not recognized. Returning the original path"
+        )
+        return path
+
+
+def get_rio_options_path(options: dict, path: str) -> Dict[str, str]:
+    if "read_with_CPL_VSIL_CURL_NON_CACHED" in options:
+        options = options.copy()
+        if options["read_with_CPL_VSIL_CURL_NON_CACHED"]:
+            options["CPL_VSIL_CURL_NON_CACHED"] = _vsi_path(path)
+        del options["read_with_CPL_VSIL_CURL_NON_CACHED"]
+    return options
+
+
+class GeoTensor:
     """
     This class is a wrapper around a numpy tensor with geospatial information.
     It can store 2D, 3D or 4D tensors. The last two dimensions are the spatial dimensions.
@@ -126,7 +161,7 @@ class GeoTensor(np.ndarray):
         if hasattr(obj, "attrs"):
             self.attrs = getattr(obj, "attrs", None)
 
-    def  __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         """
         Handle NumPy universal functions applied to this GeoTensor.
 
@@ -149,43 +184,50 @@ class GeoTensor(np.ndarray):
             x.view(np.ndarray) if isinstance(x, GeoTensor) else x for x in inputs
         )
         # Handle 'out' argument if present
-        out = kwargs.pop('out', None)
+        out = kwargs.pop("out", None)
         out_arrays = None
-        
+
         if out:
             # Convert GeoTensor outputs to regular arrays
             if isinstance(out, tuple):
                 out_arrays = tuple(
-                    o.view(np.ndarray) if isinstance(o, GeoTensor) else o 
-                    for o in out
+                    o.view(np.ndarray) if isinstance(o, GeoTensor) else o for o in out
                 )
             else:
-                out_arrays = (out.view(np.ndarray),) if isinstance(out, GeoTensor) else (out,)
-            kwargs['out'] = out_arrays
-        
+                out_arrays = (
+                    (out.view(np.ndarray),) if isinstance(out, GeoTensor) else (out,)
+                )
+            kwargs["out"] = out_arrays
+
         # Delegate to numpy's implementation
         result = super().__array_ufunc__(ufunc, method, *inputs_arr, **kwargs)
-        
+
         cast_to_geotensor = self._preserved_spatial(method, **kwargs)
-        
+
         # Propagate metadata to output arrays
         if out_arrays:
-            for o_orig, o_new in zip(out if isinstance(out, tuple) else [out], out_arrays):
-                if cast_to_geotensor and isinstance(o_orig, GeoTensor) and isinstance(o_new, np.ndarray):
+            for o_orig, o_new in zip(
+                out if isinstance(out, tuple) else [out], out_arrays
+            ):
+                if (
+                    cast_to_geotensor
+                    and isinstance(o_orig, GeoTensor)
+                    and isinstance(o_new, np.ndarray)
+                ):
                     o_new = o_orig.array_as_geotensor(o_new)
 
         # Normal ufunc processing for other cases
         if cast_to_geotensor:
             return self.array_as_geotensor(result)
-        
+
         return result
 
-    def _preserved_spatial(self, method:str,  **kwargs) -> bool:
+    def _preserved_spatial(self, method: str, **kwargs) -> bool:
         """Special handling for reduction operations (sum, mean, max, etc.)"""
         # Extract reduction axis (default is flattening)
         if method != "reduce":
             return True  # No reduction, preserve spatial dims
-        
+
         axis = kwargs.get("axis", None)
 
         # Check if reduction preserves spatial structure (last 2 dims untouched)
@@ -202,8 +244,11 @@ class GeoTensor(np.ndarray):
         # For full reductions or spatial dim reductions, return plain array/scalar
         return preserve_spatial
 
-    def array_as_geotensor(self, result: Union[np.ndarray, Self], 
-                           fill_value_default:Optional[numbers.Number]=None) -> Self:
+    def array_as_geotensor(
+        self,
+        result: Union[np.ndarray, Self],
+        fill_value_default: Optional[numbers.Number] = None,
+    ) -> Self:
         """
         Convert a NumPy array result back to a GeoTensor.
 
@@ -222,7 +267,7 @@ class GeoTensor(np.ndarray):
 
             if fill_value_default is None:
                 fill_value_default = self.fill_value_default
-            
+
             result = GeoTensor(
                 result,
                 transform=self.transform,
@@ -911,14 +956,18 @@ class GeoTensor(np.ndarray):
         """
         if not isinstance(key, tuple):
             key = (key,)
-        
+
         sel_dict = {}
         for i, k in enumerate(self.dims):
             if i < len(key):
                 if key[i] is None:
-                    raise NotImplementedError(f"Adding axis is not permitted to GeoTensors. Use `expand_dims`")
+                    raise NotImplementedError(
+                        f"Adding axis is not permitted to GeoTensors. Use `expand_dims`"
+                    )
                 elif isinstance(key[i], type(...)):
-                    raise NotImplementedError(f"Using elipsis is not permitted with GeoTensors. Use `values` attribute")
+                    raise NotImplementedError(
+                        f"Using elipsis is not permitted with GeoTensors. Use `values` attribute"
+                    )
                 sel_dict[k] = key[i]
             else:
                 sel_dict[k] = slice(None)
@@ -971,13 +1020,13 @@ class GeoTensor(np.ndarray):
         step_cols = slices_window[1].step
         if step_rows is None:
             step_rows = 1
-        
+
         if step_cols is None:
             step_cols = 1
 
         if (step_rows != 1) or (step_cols != 1):
             transform_current = transform_current * Affine.scale(step_cols, step_rows)
-        
+
         return GeoTensor(
             self.values[slice_tuple],
             transform_current,
@@ -1130,7 +1179,9 @@ class GeoTensor(np.ndarray):
         """
         if constant_values is None and mode == "constant":
             if self.fill_value_default is None:
-                raise ValueError(f"Mode constant either requires constant_values passed or fill_value_default not None in current GeoTensor")
+                raise ValueError(
+                    f"Mode constant either requires constant_values passed or fill_value_default not None in current GeoTensor"
+                )
             constant_values = self.fill_value_default
 
         pad_list_np = []
@@ -1294,43 +1345,43 @@ class GeoTensor(np.ndarray):
             fill_value_default=self.fill_value_default,
             attrs=self.attrs,
         )
-    
+
     def transpose(self, axes=None) -> Self:
         """
         Permute the dimensions of the GeoTensor while keeping the spatial dimensions at the end.
-        
+
         Args:
             axes (tuple, optional): If specified, it must be a tuple or list of axes. The last two
                 values must be the original spatial dimensions indices (ndim-2, ndim-1).
                 If None, the non-spatial dimensions are reversed while spatial dimensions remain at the end.
-        
+
         Returns:
             GeoTensor: A view of the array with dimensions transposed.
-        
+
         Raises:
             ValueError: If the spatial dimensions are moved from their last positions.
-            
+
         Examples:
             >>> gt = GeoTensor(np.random.rand(3, 4, 100, 200), transform, crs)
             >>> # Shape is (3, 4, 100, 200)
             >>> gt_t = gt.transpose()
             >>> # Shape is now (4, 3, 100, 200)
-            >>> 
+            >>>
             >>> # You can also specify axes explicitly:
             >>> gt_t = gt.transpose((1, 0, 2, 3))  # Valid: spatial dims remain at end
             >>> # But this would raise an error:
             >>> # gt.transpose((0, 2, 1, 3))  # Invalid: spatial dims must stay at end
         """
         ndim = len(self.shape)
-        
+
         if ndim <= 2:
             # Nothing meaningful to transpose for arrays with only spatial dimensions
             return self.copy()
-        
+
         # Original spatial dimensions indices
         y_dim = ndim - 2
         x_dim = ndim - 1
-        
+
         if axes is None:
             # Reverse all dimensions except the spatial ones which stay at the end
             non_spatial_axes = list(range(ndim - 2))
@@ -1339,21 +1390,23 @@ class GeoTensor(np.ndarray):
         else:
             # Convert to tuple if necessary
             axes = tuple(axes)
-            
+
             # Check if axes has the right length
             if len(axes) != ndim:
-                raise ValueError(f"axes should contain {ndim} dimensions, got {len(axes)}")
-                
+                raise ValueError(
+                    f"axes should contain {ndim} dimensions, got {len(axes)}"
+                )
+
             # Check if the last two values in axes are the spatial dimensions
             if axes[-2:] != (y_dim, x_dim):
                 raise ValueError(
                     "Cannot change the position of spatial dimensions. "
                     f"The last two axes must be {y_dim} and {x_dim}."
                 )
-        
+
         # Perform the transpose
         transposed_values = np.transpose(self.values, axes)
-        
+
         return GeoTensor(
             transposed_values,
             transform=self.transform,
@@ -1361,7 +1414,7 @@ class GeoTensor(np.ndarray):
             fill_value_default=self.fill_value_default,
             attrs=self.attrs,
         )
-    
+
     def validmask(self) -> Self:
         """
         Returns a mask of the valid values of the GeoTensor. The mask is a boolean array
@@ -1378,16 +1431,16 @@ class GeoTensor(np.ndarray):
                 transform=self.transform,
                 crs=self.crs,
                 fill_value_default=self.fill_value_default,
-                attrs=self.attrs
+                attrs=self.attrs,
             )
         return GeoTensor(
             values=self.values != self.fill_value_default,
             transform=self.transform,
             crs=self.crs,
             fill_value_default=False,
-            attrs=self.attrs
+            attrs=self.attrs,
         )
-    
+
     def invalidmask(self) -> Self:
         """
         Returns a mask of the invalid values of the GeoTensor. The mask is a boolean array
@@ -1410,7 +1463,7 @@ class GeoTensor(np.ndarray):
             transform=self.transform,
             crs=self.crs,
             fill_value_default=False,
-            attrs=self.attrs
+            attrs=self.attrs,
         )
 
     @classmethod
@@ -1459,7 +1512,7 @@ class GeoTensor(np.ndarray):
         rio_env_options = (
             RIO_ENV_OPTIONS_DEFAULT if rio_env_options is None else rio_env_options
         )
-        with rasterio.Env(**rio_env_options):
+        with rasterio.Env(**get_rio_options_path(rio_env_options, path)):
             with rasterio.open(path) as src:
                 data = src.read()
                 transform = src.transform

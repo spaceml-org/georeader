@@ -22,30 +22,6 @@ from numpy.typing import NDArray
 # VSICurlClearCache()
 # https://github.com/rasterio/rasterio/blob/main/rasterio/_path.py
 
-def _vsi_path(path:str)->str:
-    """
-    Function to convert a path to a VSI path. We use this function to try re-reading the image 
-    disabling the VSI cache. This fixes the error when the remote file is modified from another
-    program.
-
-    Args:
-        - path: path to convert to VSI path
-    
-    Returns:
-        VSI path
-    """
-    if not "://" in path:
-        return path
-    
-    protocol, remainder_path = path.split("://")
-    
-    if path.startswith("http"):
-        return f"/vsicurl/{path}"
-    elif protocol in ["s3", "gs", "az", "oss"]:
-        return f"/vsi{protocol}/{remainder_path}"
-    else:
-        warnings.warn(f"Protocol {protocol} not recognized. Returning the original path")
-        return path
 
 RIO_ENV_OPTIONS_DEFAULT = geotensor.RIO_ENV_OPTIONS_DEFAULT
 
@@ -334,12 +310,7 @@ class RasterioReader:
 
     def _get_rio_options_path(self, path:str) -> Dict[str, str]:
         options = self.rio_env_options
-        if "read_with_CPL_VSIL_CURL_NON_CACHED" in options:
-            options = options.copy()
-            if options["read_with_CPL_VSIL_CURL_NON_CACHED"]:
-                options["CPL_VSIL_CURL_NON_CACHED"] = _vsi_path(path)
-            del options["read_with_CPL_VSIL_CURL_NON_CACHED"]
-        return options
+        return geotensor.get_rio_options_path(options=options, path=path)
     
     # This function does not work for e.g. returning the descriptions of the bands
     # @contextmanager
