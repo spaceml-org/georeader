@@ -13,6 +13,8 @@ import warnings
 from typing_extensions import Self
 from rasterio import Affine
 
+Tensor = np.ndarray
+
 ORDERS = {
     "nearest": 0,
     "bilinear": 1,
@@ -66,7 +68,7 @@ def get_rio_options_path(options: dict, path: str) -> Dict[str, str]:
     return options
 
 
-class GeoTensor:
+class GeoTensor(np.ndarray):
     """
     This class is a wrapper around a numpy tensor with geospatial information.
     It can store 2D, 3D or 4D tensors. The last two dimensions are the spatial dimensions.
@@ -1585,7 +1587,7 @@ class GeoTensor:
             data, transform, crs, fill_value_default=fill_value_default, attrs=attrs
         )
 
-    def write_from_window(self, data: Tensor, window: rasterio.windows.Window):
+    def write_from_window(self, data: np.ndarray, window: rasterio.windows.Window):
         """
         Writes array to GeoTensor values object at the given window position. If window surpasses the bounds of this
         object it crops the data to fit the object.

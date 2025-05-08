@@ -122,7 +122,7 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
     # https://matplotlib.org/stable/users/explain/artists/imshow_extent.html
     if data.transform.is_rectilinear:
         ul_x, ul_y = data.transform * (0, 0)
-        lr_x, lr_y = data.transform * (data.shape[-2], data.shape[-1])
+        lr_x, lr_y = data.transform * (data.shape[-1], data.shape[-2])
     else:
         # bounds takes the minimum and maximum of the 4 corners of the image
         xmin, ymin, xmax, ymax = data.bounds
