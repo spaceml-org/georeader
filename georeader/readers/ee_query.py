@@ -81,14 +81,14 @@ def query_s1(area:Union[MultiPolygon,Polygon],
     return geodf
 
 def figure_out_collection_landsat(tile:str) -> str:
-    if tile.startswith("LC08") or tile.startswith("LO08"):
+    if tile.startswith("LC08") or tile.startswith("LO08") or tile.startswith("LT08"):
         if tile.endswith("T1_RT") or tile.endswith("T1") or tile.endswith("RT"):
             return "LANDSAT/LC08/C02/T1_RT_TOA"
         elif tile.endswith("T2"):
             return "LANDSAT/LC08/C02/T2_TOA"
         else:
             raise ValueError(f"Tile of Landsat-8 {tile} not recognized")
-    elif tile.startswith("LC09") or tile.startswith("LO09"):
+    elif tile.startswith("LC09") or tile.startswith("LO09") or tile.startswith("LT09"):
         if tile.endswith("T1"):
             return "LANDSAT/LC09/C02/T1_TOA"
         elif tile.endswith("T2"):
@@ -145,8 +145,10 @@ def query(area:Union[MultiPolygon,Polygon],
         geodataframe with available products in the given area and time range
         if `return_collection` is True it also returns the `ee.ImageCollection` of available images
     """
-
-    pol = ee.Geometry(mapping(area))
+    if area is not None:
+        pol = ee.Geometry(mapping(area))
+    else:
+        pol = None
 
     if date_start.tzinfo is not None:
         tz = date_start.tzinfo
@@ -182,25 +184,24 @@ def query(area:Union[MultiPolygon,Polygon],
         raise NotImplementedError(f"Unknown product type {producttype}")
 
     img_col = ee.ImageCollection(image_collection_name).filterDate(date_start.replace(tzinfo=None),
-                                                                   date_end.replace(tzinfo=None)).filterBounds(
-        pol)
+                                                                   date_end.replace(tzinfo=None))
     if "T1" in image_collection_name:
         # Add tier 2 data to the query
         image_collection_name_t2 = image_collection_name.replace("T1_RT", "T2").replace("T1", "T2")
         img_col_t1 = ee.ImageCollection(image_collection_name_t2).filterDate(date_start.replace(tzinfo=None),
-                                                                     date_end.replace(tzinfo=None)).filterBounds(
-            pol)
+                                                                     date_end.replace(tzinfo=None))
         img_col = img_col.merge(img_col_t1)
     
     if (producttype == "Landsat") or (producttype == "both"):
         img_col_l9 = ee.ImageCollection("LANDSAT/LC09/C02/T1_TOA").filterDate(date_start.replace(tzinfo=None),
-                                                                   date_end.replace(tzinfo=None)).filterBounds(
-        pol)
+                                                                   date_end.replace(tzinfo=None))
         img_col = img_col.merge(img_col_l9)
         img_col_l9_t2 = ee.ImageCollection("LANDSAT/LC09/C02/T2_TOA").filterDate(date_start.replace(tzinfo=None),
-                                                                   date_end.replace(tzinfo=None)).filterBounds(
-        pol)
+                                                                   date_end.replace(tzinfo=None))
         img_col = img_col.merge(img_col_l9_t2)
+    
+    if pol is not None:
+        img_col = img_col.filterBounds(pol)
 
     if extra_metadata_keys is None:
         extra_metadata_keys = []
@@ -228,8 +229,9 @@ def query(area:Union[MultiPolygon,Polygon],
     if producttype == "both":
         img_col_s2 = ee.ImageCollection("COPERNICUS/S2_HARMONIZED").filterDate(date_start.replace(tzinfo=None),
                                                                               date_end.replace(
-                                                                                  tzinfo=None)).filterBounds(
-            pol)
+                                                                                  tzinfo=None))
+        if pol is not None:
+            img_col_s2 = img_col_s2.filterBounds(pol)
         keys_query_s2 = {"PRODUCT_ID": "title", 'CLOUDY_PIXEL_PERCENTAGE': "cloudcoverpercentage"}
         geodf_s2 = img_collection_to_feature_collection(img_col_s2,
                                                         ["system:time_start"] + list(keys_query_s2.keys()) + extra_metadata_keys,
@@ -256,8 +258,9 @@ def query(area:Union[MultiPolygon,Polygon],
         indexes_s2 = geodf.gee_id[values_s2_idx].tolist()
         img_col_cloudprob = ee.ImageCollection("COPERNICUS/S2_CLOUD_PROBABILITY").filterDate(date_start.replace(tzinfo=None),
                                                                               date_end.replace(
-                                                                                  tzinfo=None)).filterBounds(
-            pol)
+                                                                                  tzinfo=None))
+        if pol is not None:
+            img_col_cloudprob = img_col_cloudprob.filterBounds(pol)
         img_col_cloudprob = img_col_cloudprob.filter(ee.Filter.inList("system:index", ee.List(indexes_s2)))
         geodf_cloudprob = img_collection_to_feature_collection(img_col_cloudprob,
                                                                ["system:time_start"],
@@ -317,7 +320,10 @@ def query_landsat_457(area:Union[MultiPolygon,Polygon],
         Union[gpd.GeoDataFrame, Tuple[gpd.GeoDataFrame, ee.ImageCollection]]: geodataframe with available products in the given area and time range
     """
     
-    pol = ee.Geometry(mapping(area))
+    if area is not None:
+        pol = ee.Geometry(mapping(area))
+    else:
+        pol = None
 
     if date_start.tzinfo is not None:
         tz = date_start.tzinfo
@@ -345,33 +351,30 @@ def query_landsat_457(area:Union[MultiPolygon,Polygon],
     
     keys_query = {"LANDSAT_PRODUCT_ID": "title", 'CLOUD_COVER': "cloudcoverpercentage"}
     img_col = ee.ImageCollection(image_collection_name).filterDate(date_start.replace(tzinfo=None),
-                                                                   date_end.replace(tzinfo=None)).filterBounds(
-        pol)
+                                                                   date_end.replace(tzinfo=None))
     # Merge T2 collection
     img_col_t2 = ee.ImageCollection(image_collection_name.replace("T1", "T2")).filterDate(date_start.replace(tzinfo=None),
-                                                                   date_end.replace(tzinfo=None)).filterBounds(
-        pol)
+                                                                   date_end.replace(tzinfo=None))
     img_col = img_col.merge(img_col_t2)
 
     if producttype == "all":
         img_col_l4 = ee.ImageCollection("LANDSAT/LT04/C02/T1_TOA").filterDate(date_start.replace(tzinfo=None),
-                                                                   date_end.replace(tzinfo=None)).filterBounds(
-        pol)
+                                                                   date_end.replace(tzinfo=None))
         img_col_l4_t2 = ee.ImageCollection("LANDSAT/LT04/C02/T2_TOA").filterDate(date_start.replace(tzinfo=None),
-                                                                     date_end.replace(tzinfo=None)).filterBounds(
-            pol)
+                                                                     date_end.replace(tzinfo=None))
         img_col_l4 = img_col_l4.merge(img_col_l4_t2)
         img_col = img_col.merge(img_col_l4)
 
         # Add L7 T1 and T2
         img_col_l7 = ee.ImageCollection("LANDSAT/LE07/C02/T1_TOA").filterDate(date_start.replace(tzinfo=None),
-                                                                   date_end.replace(tzinfo=None)).filterBounds(
-        pol)
+                                                                   date_end.replace(tzinfo=None))
         img_col_l7_t2 = ee.ImageCollection("LANDSAT/LE07/C02/T2_TOA").filterDate(date_start.replace(tzinfo=None),
-                                                                        date_end.replace(tzinfo=None)).filterBounds(
-                pol)
+                                                                        date_end.replace(tzinfo=None))
         img_col_l7 = img_col_l7.merge(img_col_l7_t2)
         img_col = img_col.merge(img_col_l7)
+    
+    if pol is not None:
+        img_col = img_col.filterBounds(pol)
 
     geodf = img_collection_to_feature_collection(img_col,
                                                  ["system:time_start"] + list(keys_query.keys()) + extra_metadata_keys,
@@ -436,7 +439,7 @@ def _add_stuff(geodf, area, tz):
 
     return geodf
 
-def overlappercentage_safe(geom:Polygon, area:Polygon) -> float:
+def overlappercentage_safe(geom:Polygon, area:Polygon | None) -> float:
     """
     Calculates the overlap percentage of a geometry with an area.
     If the geometry is empty, it returns 0.0 to avoid division by zero.
@@ -450,7 +453,7 @@ def overlappercentage_safe(geom:Polygon, area:Polygon) -> float:
     """
     if geom.is_empty:
         return 0.0
-    if area.is_empty:
+    if area is None or area.is_empty:
         return 0.0
     try:
         intersection = geom.intersection(area)
@@ -479,12 +482,51 @@ def img_collection_to_feature_collection(img_col:ee.ImageCollection,
 
     feature_collection = ee.FeatureCollection(img_col.map(extractFeatures))
     if as_geopandas:
-        featcol_info = feature_collection.getInfo()
-        if len(featcol_info["features"]) == 0:
-            geodf = gpd.GeoDataFrame(geometry=[])
-        else:
-            geodf = gpd.GeoDataFrame.from_features(featcol_info, crs="EPSG:4326")
-
-        return geodf
+        return get_feature_collection_as_geodataframe(feature_collection)
 
     return feature_collection
+
+def get_feature_collection_as_geodataframe(feature_collection:ee.FeatureCollection) -> gpd.GeoDataFrame:
+    """
+    Converts an Earth Engine FeatureCollection to a GeoPandas GeoDataFrame,
+    handling collections with more than 5000 features through pagination.
+    
+    Args:
+        feature_collection (ee.FeatureCollection): The feature collection to convert
+        
+    Returns:
+        gpd.GeoDataFrame: The converted GeoDataFrame
+    """
+    try:
+        # Try regular approach first (faster for small collections)
+        featcol_info = feature_collection.getInfo()
+        if len(featcol_info["features"]) == 0:
+            return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+        else:
+            return gpd.GeoDataFrame.from_features(featcol_info, crs="EPSG:4326")
+    
+    except ee.ee_exception.EEException as e:
+        if "Collection query aborted after accumulating" not in str(e):
+            # Re-raise if it's a different error
+            raise e
+        
+        # Handle large collections with pagination
+        collection_size = feature_collection.size().getInfo()
+        chunk_size = 4_999
+        all_features = []
+        
+        for i in range(0, collection_size, chunk_size):
+            chunk_fc = ee.FeatureCollection(feature_collection.toList(chunk_size, i))
+            chunk_info = chunk_fc.getInfo()
+            
+            if 'features' in chunk_info:
+                all_features.extend(chunk_info['features'])
+        
+        if len(all_features) == 0:
+            return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+        else:
+            feature_collection_dict = {
+                "type": "FeatureCollection",
+                "features": all_features
+            }
+            return gpd.GeoDataFrame.from_features(feature_collection_dict, crs="EPSG:4326")
