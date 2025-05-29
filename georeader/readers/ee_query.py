@@ -424,7 +424,7 @@ def images_by_query_grid(images_available_gee:gpd.GeoDataFrame, grid:gpd.GeoData
 
 def _add_stuff(geodf, area, tz):
     geodf["utcdatetime"] = pd.to_datetime(geodf["system:time_start"], unit='ms', utc=True)
-    geodf["overlappercentage"] = geodf.geometry.apply(lambda x: x.intersection(area).area / area.area * 100)
+    geodf["overlappercentage"] = geodf.geometry.apply(lambda x: overlappercentage_safe(x, area))
     geodf["solardatetime"] = geodf.apply(lambda x: query_utils.solar_datetime(x.geometry, x.utcdatetime), axis=1)
 
     geodf["solarday"] = geodf["solardatetime"].apply(lambda x: x.strftime("%Y-%m-%d"))
@@ -436,6 +436,28 @@ def _add_stuff(geodf, area, tz):
 
     return geodf
 
+def overlappercentage_safe(geom:Polygon, area:Polygon) -> float:
+    """
+    Calculates the overlap percentage of a geometry with an area.
+    If the geometry is empty, it returns 0.0 to avoid division by zero.
+
+    Args:
+        geom (Polygon): The geometry to calculate the overlap percentage for.
+        area (Polygon): The area to calculate the overlap percentage against.
+
+    Returns:
+        float: The overlap percentage of the geometry with the area.
+    """
+    if geom.is_empty:
+        return 0.0
+    if area.is_empty:
+        return 0.0
+    try:
+        intersection = geom.intersection(area)
+    except Exception as e:
+        warnings.warn(f"Error calculating intersection: {e}. Returning 0.0 for overlap percentage.")
+        return 0.0
+    return intersection.area / area.area * 100
 
 def img_collection_to_feature_collection(img_col:ee.ImageCollection,
                                          properties:List[str],
