@@ -6,7 +6,7 @@ from georeader.abstract_reader import GeoData
 from georeader import read
 import numpy as np
 import pandas as pd
-import pkg_resources
+import os
 from numpy.typing import ArrayLike, NDArray
 import numbers
 
@@ -237,7 +237,7 @@ def load_thuillier_irradiance() -> pd.DataFrame:
     global THUILLIER_RADIANCE
     
     if THUILLIER_RADIANCE is None:
-        THUILLIER_RADIANCE = pd.read_csv(pkg_resources.resource_filename("georeader","SolarIrradiance_Thuillier.csv"))
+        THUILLIER_RADIANCE = pd.read_csv(os.path.join(os.path.dirname(__file__), "SolarIrradiance_Thuillier.csv"))
 
     return THUILLIER_RADIANCE
 
