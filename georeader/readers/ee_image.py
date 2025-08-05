@@ -92,6 +92,9 @@ def export_image(image_or_asset_id:Union[str, ee.Image],
     else:
         raise ValueError(f"image_or_asset_id must be a string or ee.Image object found {type(image_or_asset_id)}")
 
+    if not isinstance(geometry, (Polygon, MultiPolygon)):
+        raise ValueError(f"geometry must be a Polygon or MultiPolygon found {type(geometry)}")
+
     geodata = FakeGeoData(crs=crs, transform=transform)
 
     # Pixel coordinates surrounding the geometry
@@ -144,7 +147,13 @@ def export_image(image_or_asset_id:Union[str, ee.Image],
                 pol = box(*sb)
                 if not geometry.intersects(pol):
                     continue
-                pols_execute.append(pol.intersection(geometry))
+                intersection = pol.intersection(geometry)
+                if not isinstance(intersection, (Polygon, MultiPolygon)):
+                    warnings.warn(
+                        f"Geometry {intersection} is not a Polygon or MultiPolygon, skipping it.")
+                    continue
+
+                pols_execute.append(intersection)
 
             def process_bound(poly):
                 gt = export_image(image_or_asset_id=image_or_asset_id, geometry=poly, 
