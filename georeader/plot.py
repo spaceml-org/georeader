@@ -3,8 +3,6 @@ import matplotlib.patches as mpatches
 import numpy as np
 from georeader.abstract_reader import GeoData
 from typing import Optional, List, Union, Any
-import matplotlib.axes
-import matplotlib.image
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import rasterio.warp
@@ -18,6 +16,8 @@ except ImportError:
 import geopandas as gpd
 import matplotlib.cm
 import matplotlib.colorbar as cbar
+from shapely.geometry import Point
+from georeader import distance_meters, compare_crs, rasterio_crs
 
 
 def colorbar_next_to(im:matplotlib.cm.ScalarMappable, 
@@ -149,17 +149,34 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
                               "pip install matplotlib-scalebar"
                               f"{e}")
         
+        # https://github.com/ppinard/matplotlib-scalebar?tab=readme-ov-file#dx-required
+        crs = rasterio_crs(data.crs)
+        if crs.is_projected:
+            # Set dx to 1.0 if the axes image has already been calibrated by setting its extent.
+            # For UTM based coordinate system, where the X and Y are in meters, simply set dx = 1.
+            dx = 1
+        else:
+            # For WGS or NAD based coordinate system, where X and Y are in latitude (Y) and longitude (X), 
+            # compute the distance between two points at the latitude (Y) you wish to have the scale 
+            # represented and are also one full degree of longitude (X) apart, in meters. For example, 
+            # dx = great_circle_distance((X, Y), (X + 1, Y))
+
+            point = Point((xmin + xmax) / 2, (ymin + ymax) / 2)
+            point_plus_1_deg = Point(point.x + 1, point.y)
+            dx = distance_meters(point, point_plus_1_deg)
+
         if kwargs_scalebar is None:
-            kwargs_scalebar = {"dx":1}
+            kwargs_scalebar = {"dx":dx}
         if "dx" not in kwargs_scalebar:
-            kwargs_scalebar["dx"] = 1
+            kwargs_scalebar["dx"] = dx
         ax.add_artist(ScaleBar(**kwargs_scalebar))
     
     if bounds_in_latlng:
+        if compare_crs(data.crs, "EPSG:4326"):
+            return ax
+        
         from matplotlib.ticker import FuncFormatter
-
-        xmin, ymin, xmax, ymax = data.bounds
-
+        
         @FuncFormatter
         def x_formatter(x, pos):
             # transform x,ymin to latlng

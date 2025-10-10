@@ -5,7 +5,7 @@ import numbers
 import numpy as np
 from shapely.geometry import Polygon, MultiPolygon, shape, mapping
 import rasterio.warp
-from georeader import compare_crs
+from georeader import compare_crs, res
 import math
 
 PIXEL_PRECISION = 3
@@ -127,24 +127,6 @@ def round_outer_window(window:rasterio.windows.Window, precision=PIXEL_PRECISION
 # Precision to round the windows before applying ceiling/floor. e.g. 3.0001 will be rounded to 3 but 3.001 will not
 def _is_exact_round(x, precision=PIXEL_PRECISION):
     return abs(round(x,ndigits=precision)-x) < 1e-6
-
-
-def res(transform:rasterio.Affine) -> Tuple[float, float]:
-    """
-    Computes the resolution from a given transform
-
-    Args:
-        transform:
-
-    Returns:
-        resolution (tuple of floats)
-    """
-
-    z0_0 = np.array(transform * (0, 0))
-    z0_1 = np.array(transform * (0, 1))
-    z1_0 = np.array(transform * (1, 0))
-
-    return float(np.sqrt(np.sum((z0_0 - z1_0) ** 2))), float(np.sqrt(np.sum((z0_0 - z0_1) ** 2)))
 
 
 def get_slice_pad(window_data:rasterio.windows.Window,
