@@ -10,7 +10,7 @@ class EETimeoutError(Exception):
     pass
 from typing import Callable, Any
 
-DEFAULT_EE_TIMEOUT = 120  # seconds
+DEFAULT_EE_TIMEOUT = 180  # seconds
 
 def gee_method_with_timeout(method:Callable[[], Any], 
                             timeout: float = DEFAULT_EE_TIMEOUT) -> Any:
