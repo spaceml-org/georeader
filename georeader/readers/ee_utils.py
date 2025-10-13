@@ -20,7 +20,7 @@ def gee_method_with_timeout(method:Callable[[], Any],
     Args:
         method (Callable[[Any], Any]): The Earth Engine method to call, e.g., `lambda _: obj.getInfo()`
         timeout (float): Maximum time to wait for calling the method. 
-            Defaults to 120 seconds.
+            Defaults to 120 seconds. If None or <=0, no timeout is applied.
 
     Returns:
         dict: The result of the call.
@@ -28,6 +28,9 @@ def gee_method_with_timeout(method:Callable[[], Any],
     Raises:
         EETimeoutError: If the  call exceeds the timeout duration.
     """
+    if (timeout is None) or (timeout <= 0):
+        return method()
+    
     result = [None]
     exception = [None]
     
