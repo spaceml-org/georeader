@@ -19,6 +19,7 @@ try:
 except ImportError:
     raise ImportError("Please install the package 'earthengine-api' to use this module: pip install earthengine-api")
 
+from georeader.readers.ee_utils import gee_method_with_timeout, DEFAULT_EE_TIMEOUT
 
 def export_image_fast(image:ee.Image, 
                       geometry:Union[ee.Geometry, Polygon, MultiPolygon],
@@ -64,7 +65,9 @@ def export_image(image_or_asset_id:Union[str, ee.Image],
                  dtype_dst:Optional[str]=None,
                  pad_add:Tuple[int, int]=(0, 0),
                  crs_polygon:str="EPSG:4326",
-                 resolution_dst: Optional[Union[float, Tuple[float, float]]]=None) -> GeoTensor:
+                 resolution_dst: Optional[Union[float, Tuple[float, float]]]=None,
+                 timeout: float = DEFAULT_EE_TIMEOUT
+                 ) -> GeoTensor:
     """
     Exports an image from the GEE as a GeoTensor. 
      It uses the `ee.data.getPixels` or `ee.data.computePixels` method to export the image.
@@ -78,6 +81,8 @@ def export_image(image_or_asset_id:Union[str, ee.Image],
             is called for interpolation/CNN prediction.
         bands_gee (List[str]): List of bands to export
         crs_polygon (str, optional): crs of the geometry. Defaults to "EPSG:4326".
+        timeout (float): Maximum time to wait for calling the export method. 
+            Defaults to 120 seconds.
 
     Returns:
         GeoTensor: GeoTensor object
@@ -98,7 +103,8 @@ def export_image(image_or_asset_id:Union[str, ee.Image],
     geodata = FakeGeoData(crs=crs, transform=transform)
 
     # Pixel coordinates surrounding the geometry
-    window_polygon = read.window_from_polygon(geodata, geometry, crs_polygon=crs_polygon,
+    window_polygon = read.window_from_polygon(geodata, geometry, 
+                                              crs_polygon=crs_polygon,
                                               window_surrounding=True)
     if any(p > 0 for p in pad_add):
         window_polygon = window_utils.pad_window(window_polygon, pad_add)
@@ -108,7 +114,8 @@ def export_image(image_or_asset_id:Union[str, ee.Image],
     transform_window = rasterio.windows.transform(window_polygon, geodata.transform)
 
     if resolution_dst is not None:
-        transform_window = window_utils.transform_to_resolution_dst(transform_window, resolution_dst)
+        transform_window = window_utils.transform_to_resolution_dst(transform_window, 
+                                                                    resolution_dst)
 
     request_params.update({
                     'fileFormat':"GEO_TIFF", 
@@ -131,7 +138,9 @@ def export_image(image_or_asset_id:Union[str, ee.Image],
                     })
 
     try:
-        data_raw = method(request_params)
+
+        data_raw = gee_method_with_timeout(lambda: method(request_params), 
+                                           timeout=timeout)
         data = rasterio.open(BytesIO(data_raw))
         geotensor = GeoTensor(data.read(), transform=data.transform,
                              crs=data.crs, fill_value_default=data.nodata)
@@ -282,7 +291,9 @@ def export_cube(query:gpd.GeoDataFrame, geometry:Union[Polygon, MultiPolygon],
             bands_gee_iter = image["bands_gee"]
         else:
             bands_gee_iter = bands_gee
-        geotensor = export_image(asset_id, geometry=geometry, crs=crs, transform=transform,
+        geotensor = export_image(asset_id, geometry=geometry, 
+                                 crs=crs, 
+                                 transform=transform,
                                  bands_gee_iter=bands_gee_iter, 
                                  crs_polygon=crs_polygon, dtype_dst=dtype_dst)
         return geotensor
