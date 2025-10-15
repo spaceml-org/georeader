@@ -258,46 +258,6 @@ class PRISMA:
 
         return ltoa_img
 
-    # def target_spectrum(self, swir_flag:bool) -> NDArray:
-
-    #     if swir_flag:
-    #         vza = self.vza_swir
-    #         sza = self.sza_swir
-    #         band_array = self.wavelength_swir
-    #         fwhm_array = self.fwhm_swir
-    #         N, M, B = self.ltoa_swir.shape
-    #     else:
-    #         vza = self.vza_vnir
-    #         sza = self.sza_vnir
-    #         band_array = self.wavelength_vnir
-    #         fwhm_array = self.fwhm_vnir
-    #         N, M, B = self.ltoa_vnir.shape
-
-    #     amf = 1.0 / np.cos(vza * np.pi / 180) + 1.0 / np.cos(sza * np.pi / 180)
-    #     parent_dir = os.path.dirname(os.path.dirname(__file__))
-    #     file_lut_gas = os.path.join(parent_dir, LUT_FILE["name"])
-
-    #     wvl_mod, t_gas_arr, gas_sc_arr, mr_gas_arr = read_luts(
-    #         file_lut=file_lut_gas,
-    #         t_arr_str=LUT_FILE["t_arr_variable"],
-    #         sc_arr_str=LUT_FILE["sc_arr_variable"],
-    #         mr_arr_str=LUT_FILE["mr_arr_variable"],
-    #         amf=amf,
-    #     )
-
-    #     n_wvl = len(wvl_mod)
-    #     mr_gas_arr = mr_gas_arr / 1000.0
-    #     delta_mr_ref = 1.0
-
-    #     k_spectre = calc_jac_rad(mr_gas_arr, n_wvl, t_gas_arr, delta_mr_ref)
-    #     k_array = np.zeros((M, B))
-    #     for i in range(0, M):
-    #         s = generate_filter(wvl_mod, band_array[i], fwhm_array[i])
-    #         k = np.dot(k_spectre, s)
-    #         k_array[i] = k
-
-    #     return k_array
-
     def load_wavelengths(
         self,
         wavelengths: Union[float, List[float], NDArray],

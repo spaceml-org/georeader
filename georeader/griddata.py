@@ -102,7 +102,34 @@ def read_to_crs(data:NDArray, lons: NDArray, lats:NDArray,
     Returns:
         GeoTensor: with reprojected data
     """
-    
+    width, height, transform, dst_crs = get_shape_transform_crs(lons, lats, 
+                                                                resolution_dst=resolution_dst, 
+                                                                dst_crs=dst_crs, crs=crs)
+
+    return reproject(data, lons=lons, lats=lats, width=width, 
+                     height=height, transform=transform, dst_crs=dst_crs,
+                     fill_value_default=fill_value_default,
+                     crs=crs, method=method)
+
+def get_shape_transform_crs(lons: NDArray, lats:NDArray, 
+                            resolution_dst:Union[float, Tuple[float,float]], 
+                            dst_crs:Optional[Any]=None,
+                            crs:Optional[Any]="EPSG:4326") -> Tuple[int, int, rasterio.transform.Affine, Any]:
+    """
+    Get the shape, transform and crs for the given lons and lats and resolution_dst.    
+
+    Args:
+        lons (NDArray): 2D array of longitudes (H, W).
+        lats (NDArray): 2D array of latitudes (H, W).
+        resolution_dst (Union[float, Tuple[float,float]]): Output resolution
+         If a single float is provided, the resolution will be (resolution_dst, resolution_dst).
+        dst_crs (Optional[Any], optional): Output crs. If None, 
+            the dst_crs will be the UTM crs of the center of the data. Defaults to None.
+        crs (Any, optional): Input crs. Defaults to "EPSG:4326".
+
+    Returns:
+        Tuple[int, int, rasterio.transform.Affine, Any]: width, height, transform and dst_crs.
+    """
     if isinstance(resolution_dst, numbers.Number):
         resolution_dst = (abs(resolution_dst), abs(resolution_dst))
     
@@ -126,10 +153,7 @@ def read_to_crs(data:NDArray, lons: NDArray, lats:NDArray,
     # resolution_dst= res(transform)
     width = math.ceil(abs((maxx -minx) / resolution_dst[0]))
     height = math.ceil(abs((maxy - miny) / resolution_dst[1]))
-
-    return reproject(data, lons, lats, width, height, transform, dst_crs, 
-                     fill_value_default=fill_value_default,
-                     crs=crs, method=method)
+    return width, height, transform, dst_crs
 
 
 def reproject(data:NDArray, lons: NDArray, lats: NDArray,
