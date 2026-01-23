@@ -276,7 +276,7 @@ class EMITImage:
     
     Attributes:
         filename (str): Path to the EMIT file.
-        nc_ds (netCDF4.Dataset): netCDF4 dataset for the EMIT file.
+        nc_ds (xr.Dataset): xarray dataset for the EMIT file.
         _nc_ds_obs (Optional[xr.Dataset]): xarray dataset for observation data.
         _nc_ds_l2amask (Optional[xr.Dataset]): xarray dataset for L2A mask.
         real_transform (rasterio.Affine): Affine transform for the image.
