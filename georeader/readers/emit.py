@@ -576,7 +576,7 @@ class EMITImage:
             band_index.append(4)
         
         slice_y, slice_x = self.window_raw.toslices()
-        mask_arr = self.nc_ds_l2amask['mask'][slice_y, slice_x, band_index]
+        mask_arr = self.nc_ds_l2amask['mask'].values[slice_y, slice_x, band_index]
         mask_arr = np.sum(mask_arr, axis=-1)
         mask_arr = (mask_arr >= 1)
         return mask_arr

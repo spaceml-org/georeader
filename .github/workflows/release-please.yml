@@ -24,8 +24,6 @@ jobs:
         with:
           # Token for creating releases and PRs
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag-separator: ""
-          include-v-in-tag: true
 
   # Optional: log release info after release is created
   post-release:
