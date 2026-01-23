@@ -1,8 +1,8 @@
 """
 Module to read EMIT images.
 
-Requires: netCDF4:
-pip install netCDF4 
+Requires: xarray
+pip install xarray
 
 Some of the functions of this module are based on the official EMIT repo: https://github.com/emit-sds/emit-utils/
 
@@ -27,9 +27,13 @@ from georeader.griddata import georreference
 from georeader import get_utm_epsg
 
 try:
-    import netCDF4
+    import xarray as xr
+    from georeader.io import safe_open_netcdf
+    HAS_XARRAY = True
 except ImportError:
-    raise ImportError("netCDF4 is required to read EMIT images. Please install it with: pip install netCDF4")
+    HAS_XARRAY = False
+    xr = None
+    safe_open_netcdf = None
 
 AUTH_METHOD = "auth" # "auth" or "token"
 TOKEN = None
@@ -273,8 +277,8 @@ class EMITImage:
     Attributes:
         filename (str): Path to the EMIT file.
         nc_ds (netCDF4.Dataset): netCDF4 dataset for the EMIT file.
-        _nc_ds_obs (Optional[netCDF4.Dataset]): netCDF4 dataset for observation data.
-        _nc_ds_l2amask (Optional[netCDF4.Dataset]): netCDF4 dataset for L2A mask.
+        _nc_ds_obs (Optional[xr.Dataset]): xarray dataset for observation data.
+        _nc_ds_l2amask (Optional[xr.Dataset]): xarray dataset for L2A mask.
         real_transform (rasterio.Affine): Affine transform for the image.
         time_coverage_start (datetime): Start time of the acquisition.
         time_coverage_end (datetime): End time of the acquisition.
@@ -308,16 +312,19 @@ class EMITImage:
     attributes_set_if_exists = ["_nc_ds_obs", "_mean_sza", "_mean_vza", 
                                 "_observation_bands", "_nc_ds_l2amask", "_mask_bands", 
                                 "_nc_ds", "obs_file",
-                                "l2amaskfile"]
+                                "l2amaskfile", "_sensor_band_params"]
     def __init__(self, filename:str, glt:Optional[GeoTensor]=None, 
                  band_selection:Optional[Union[int, Tuple[int, ...],slice]]=slice(None)):
+        if not HAS_XARRAY:
+            raise ImportError("xarray is required to read EMIT images. Please install it with: pip install xarray")
+        
         self.filename = filename
-        self.nc_ds = netCDF4.Dataset(self.filename, 'r', format='NETCDF4')
-        self._nc_ds_obs:Optional[netCDF4.Dataset] = None
-        self._nc_ds_l2amask:Optional[netCDF4.Dataset] = None
+        self.nc_ds = safe_open_netcdf(self.filename, cache=False, load=False)
+        self._nc_ds_obs = None
+        self._nc_ds_l2amask = None
         self._observation_bands = None
         self._mask_bands = None
-        self.nc_ds.set_auto_mask(False) # disable automatic masking when reading data
+        self._sensor_band_params = None
         # self.real_shape = (self.nc_ds['radiance'].shape[-1],) + self.nc_ds['radiance'].shape[:-1]
 
         self._mean_sza = None
@@ -325,27 +332,34 @@ class EMITImage:
         self.obs_file:Optional[str] = None
         self.l2amaskfile:Optional[str] = None
 
-        self.real_transform = rasterio.Affine(self.nc_ds.geotransform[1], self.nc_ds.geotransform[2], self.nc_ds.geotransform[0],
-                                              self.nc_ds.geotransform[4], self.nc_ds.geotransform[5], self.nc_ds.geotransform[3])
+        geotransform = self.nc_ds.attrs['geotransform']
+        self.real_transform = rasterio.Affine(geotransform[1], geotransform[2], geotransform[0],
+                                              geotransform[4], geotransform[5], geotransform[3])
         
-        self.time_coverage_start = datetime.strptime(self.nc_ds.time_coverage_start, "%Y-%m-%dT%H:%M:%S%z")
-        self.time_coverage_end = datetime.strptime(self.nc_ds.time_coverage_end, "%Y-%m-%dT%H:%M:%S%z")
+        self.time_coverage_start = datetime.strptime(self.nc_ds.attrs['time_coverage_start'], "%Y-%m-%dT%H:%M:%S%z")
+        self.time_coverage_end = datetime.strptime(self.nc_ds.attrs['time_coverage_end'], "%Y-%m-%dT%H:%M:%S%z")
 
         self.dtype = self.nc_ds['radiance'].dtype
         self.dims = ("band", "y", "x")
-        self.fill_value_default = self.nc_ds['radiance']._FillValue
-        self.nodata = self.nc_ds['radiance']._FillValue
-        self.units = self.nc_ds["radiance"].units
+        self.fill_value_default = self.nc_ds['radiance'].attrs.get('_FillValue', -9999)
+        self.nodata = self.fill_value_default
+        self.units = self.nc_ds["radiance"].attrs.get('units', '')
 
         if glt is None:
-            glt_arr = np.zeros((2,) + self.nc_ds.groups['location']['glt_x'].shape, dtype=np.int32)
-            glt_arr[0] = np.array(self.nc_ds.groups['location']['glt_x'])
-            glt_arr[1] = np.array(self.nc_ds.groups['location']['glt_y'])
+            # Open the location group to access glt_x and glt_y
+            location_ds = safe_open_netcdf(self.filename, cache=False, load=False, group='location')
+            glt_x = location_ds['glt_x'].values
+            glt_y = location_ds['glt_y'].values
+            location_ds.close()
+            
+            glt_arr = np.zeros((2,) + glt_x.shape, dtype=np.int32)
+            glt_arr[0] = glt_x
+            glt_arr[1] = glt_y
             # glt_arr -= 1 # account for 1-based indexing
 
             # https://rasterio.readthedocs.io/en/stable/api/rasterio.crs.html
             self.glt = GeoTensor(glt_arr, transform=self.real_transform, 
-                                 crs=rasterio.crs.CRS.from_wkt(self.nc_ds.spatial_ref),
+                                 crs=rasterio.crs.CRS.from_wkt(self.nc_ds.attrs['spatial_ref']),
                                  fill_value_default=0)
         else:
             self.glt = glt
@@ -362,16 +376,18 @@ class EMITImage:
         self.window_raw = rasterio.windows.Window(col_off=xmin-1, row_off=ymin-1, 
                                                   width=xmax-xmin+1, height=ymax-ymin+1)
 
-        if "wavelengths" in self.nc_ds['sensor_band_parameters'].variables:
+        # Load sensor_band_parameters from its group
+        self._sensor_band_params = safe_open_netcdf(self.filename, cache=False, load=False, group='sensor_band_parameters')
+        if "wavelengths" in self._sensor_band_params:
             self.bandname_dimension = "wavelengths"
-        elif "radiance_wl"  in self.nc_ds['sensor_band_parameters'].variables:
+        elif "radiance_wl" in self._sensor_band_params:
             self.bandname_dimension = "radiance_wl"
         else:
-            raise ValueError(f"Cannot find wavelength dimension in {list(self.nc_ds['sensor_band_parameters'].variables.keys())}")
+            raise ValueError(f"wavelengths or radiance_wl not found in sensor_band_parameters")
         
         self.band_selection = band_selection
-        self.wavelengths = self.nc_ds['sensor_band_parameters'][self.bandname_dimension][self.band_selection]
-        self.fwhm = self.nc_ds['sensor_band_parameters']['fwhm'][self.band_selection]
+        self.wavelengths = self._sensor_band_params[self.bandname_dimension].values[self.band_selection]
+        self.fwhm = self._sensor_band_params['fwhm'].values[self.band_selection]
         self._observation_date_correction_factor:Optional[float] = None
 
     @property
@@ -453,11 +469,11 @@ class EMITImage:
         if band_selection is None:
             band_selection = slice(None)
         self.band_selection = band_selection
-        self.wavelengths = self.nc_ds['sensor_band_parameters'][self.bandname_dimension][self.band_selection]
-        self.fwhm = self.nc_ds['sensor_band_parameters']['fwhm'][self.band_selection]
+        self.wavelengths = self._sensor_band_params[self.bandname_dimension].values[self.band_selection]
+        self.fwhm = self._sensor_band_params['fwhm'].values[self.band_selection]
     
     @ property
-    def nc_ds_obs(self, obs_file:Optional[str]=None) -> netCDF4.Dataset:
+    def nc_ds_obs(self, obs_file:Optional[str]=None):
         """
         Loads the observation file. In this file we have information about angles (solar and viewing),
         elevation and ilumination based on elevation and path length.
@@ -481,13 +497,15 @@ class EMITImage:
                 download_product(link_obs_file, obs_file)
         
         self.obs_file = obs_file
-        self._nc_ds_obs = netCDF4.Dataset(obs_file)
-        self._nc_ds_obs.set_auto_mask(False)
-        self._observation_bands = self._nc_ds_obs['sensor_band_parameters']['observation_bands'][:]
+        self._nc_ds_obs = safe_open_netcdf(obs_file, cache=False, load=False)
+        # Load observation_bands from sensor_band_parameters group
+        sensor_params = safe_open_netcdf(obs_file, cache=False, load=False, group='sensor_band_parameters')
+        self._observation_bands = sensor_params['observation_bands'].values
+        sensor_params.close()
         return self._nc_ds_obs
     
     @property
-    def nc_ds_l2amask(self, l2amaskfile:Optional[str]=None) -> netCDF4.Dataset:
+    def nc_ds_l2amask(self, l2amaskfile:Optional[str]=None) -> xr.Dataset:
         """
         Loads the L2A mask file. In this file we have information about the cloud mask.
 
@@ -512,9 +530,12 @@ class EMITImage:
                 download_product(link_l2amaskfile, l2amaskfile)
         
         self.l2amaskfile = l2amaskfile
-        self._nc_ds_l2amask = netCDF4.Dataset(l2amaskfile)
-        self._nc_ds_l2amask.set_auto_mask(False)
-        self._mask_bands = self._nc_ds_l2amask["sensor_band_parameters"]["mask_bands"][:]
+        self._nc_ds_l2amask = safe_open_netcdf(l2amaskfile, cache=False, load=False)
+        # Load mask_bands from sensor_band_parameters group
+        sensor_params = safe_open_netcdf(l2amaskfile, cache=False, load=False, 
+                                         group='sensor_band_parameters')
+        self._mask_bands = sensor_params["mask_bands"].values
+        sensor_params.close()
         return self._nc_ds_l2amask
     
     @property
@@ -587,9 +608,9 @@ class EMITImage:
         """
         band_index = self.mask_bands.tolist().index(mask_name)
         slice_y, slice_x = self.window_raw.toslices()
-        mask_arr = self.nc_ds_l2amask['mask'][slice_y, slice_x, band_index]
+        mask_arr = self.nc_ds_l2amask['mask'].values[slice_y, slice_x, band_index]
         return self.georreference(mask_arr,
-                                  fill_value_default=self.nc_ds_l2amask['mask']._FillValue)
+                                  fill_value_default=self.nc_ds_l2amask['mask'].attrs.get('_FillValue', -9999))
     
     def water_mask(self) -> GeoTensor:
         """ Returns the water mask """
@@ -605,9 +626,10 @@ class EMITImage:
         """ Returns the observation with the given name """
         band_index = self.observation_bands.tolist().index(name)
         slice_y, slice_x = self.window_raw.toslices()
-        obs_arr = self.nc_ds_obs['obs'][slice_y, slice_x, band_index]
+        # The obs file stores obs data in root group, not in a subgroup
+        obs_arr = self.nc_ds_obs['obs'].values[slice_y, slice_x, band_index]
         return self.georreference(obs_arr, 
-                                  fill_value_default=self.nc_ds_obs['obs']._FillValue)
+                                  fill_value_default=self.nc_ds_obs['obs'].attrs.get('_FillValue', -9999))
 
     def sza(self) -> GeoTensor:
         """ Return the solar zenith angle as a GeoTensor """
@@ -618,10 +640,13 @@ class EMITImage:
         return self.observation('To-sensor zenith (0 to 90 degrees from zenith)')
     
     def elevation(self) -> GeoTensor:
-        obs_arr = self.nc_ds["location"]["elev"]
+        location_ds = safe_open_netcdf(self.filename, cache=False, load=False, group='location')
+        obs_arr = location_ds["elev"]
         slice_y, slice_x = self.window_raw.toslices()
-        return self.georreference(obs_arr[slice_y, slice_x], 
-                                  fill_value_default=obs_arr._FillValue)
+        elev_data = obs_arr.values[slice_y, slice_x]
+        fill_val = obs_arr.attrs.get('_FillValue', -9999)
+        location_ds.close()
+        return self.georreference(elev_data, fill_value_default=fill_val)
 
     @property
     def mean_sza(self) -> float:
@@ -630,8 +655,9 @@ class EMITImage:
             return self._mean_sza
         
         band_index = self.observation_bands.tolist().index('To-sun zenith (0 to 90 degrees from zenith)')
-        sza_arr = self.nc_ds_obs['obs'][..., band_index]
-        self._mean_sza = float(np.mean(sza_arr[sza_arr != self.nc_ds_obs['obs']._FillValue]))
+        sza_arr = self.nc_ds_obs['obs'].values[..., band_index]
+        fill_val = self.nc_ds_obs['obs'].attrs.get('_FillValue', -9999)
+        self._mean_sza = float(np.mean(sza_arr[sza_arr != fill_val]))
         return self._mean_sza
     
     @property
@@ -640,8 +666,9 @@ class EMITImage:
         if self._mean_vza is not None:
             return self._mean_vza
         band_index = self.observation_bands.tolist().index('To-sensor zenith (0 to 90 degrees from zenith)')
-        vza_arr = self.nc_ds_obs['obs'][..., band_index]
-        self._mean_vza = float(np.mean(vza_arr[vza_arr != self.nc_ds_obs['obs']._FillValue]))
+        vza_arr = self.nc_ds_obs['obs'].values[..., band_index]
+        fill_val = self.nc_ds_obs['obs'].attrs.get('_FillValue', -9999)
+        self._mean_vza = float(np.mean(vza_arr[vza_arr != fill_val]))
         return self._mean_vza
         
     def __copy__(self) -> '__class__':
@@ -745,9 +772,9 @@ class EMITImage:
         slice_y, slice_x = self.window_raw.toslices()
 
         if isinstance(self.band_selection, slice):
-            data = np.array(self.nc_ds['radiance'][slice_y, slice_x, self.band_selection])
+            data = self.nc_ds['radiance'].values[slice_y, slice_x, self.band_selection]
         else:
-            data = np.array(self.nc_ds['radiance'][slice_y, slice_x][..., self.band_selection])
+            data = self.nc_ds['radiance'].values[slice_y, slice_x][..., self.band_selection]
         
         # transpose to (C, H, W)
         if transpose and (len(data.shape) == 3):
@@ -810,20 +837,29 @@ def valid_mask(filename:str, with_buffer:bool=False,
         GeoTensor: valid mask
     """
     
-    nc_ds = netCDF4.Dataset(filename, 'r', format='NETCDF4')
-    nc_ds.set_auto_mask(False)
-
-    real_transform = rasterio.Affine(nc_ds.geotransform[1], nc_ds.geotransform[2], nc_ds.geotransform[0],
-                                     nc_ds.geotransform[4], nc_ds.geotransform[5], nc_ds.geotransform[3])
+    if not HAS_XARRAY:
+        raise ImportError("xarray is required to read EMIT images. Please install it with: pip install xarray")
     
-    glt_arr = np.zeros((2,) + nc_ds.groups['location']['glt_x'].shape, dtype=np.int32)
-    glt_arr[0] = np.array(nc_ds.groups['location']['glt_x'])
-    glt_arr[1] = np.array(nc_ds.groups['location']['glt_y'])
+    nc_ds = safe_open_netcdf(filename, cache=False, load=False)
+
+    geotransform = nc_ds.attrs['geotransform']
+    real_transform = rasterio.Affine(geotransform[1], geotransform[2], geotransform[0],
+                                     geotransform[4], geotransform[5], geotransform[3])
+    
+    # Open location group to access glt data
+    location_ds = safe_open_netcdf(filename, cache=False, load=False, group='location')
+    glt_x = location_ds['glt_x'].values
+    glt_y = location_ds['glt_y'].values
+    location_ds.close()
+    
+    glt_arr = np.zeros((2,) + glt_x.shape, dtype=np.int32)
+    glt_arr[0] = glt_x
+    glt_arr[1] = glt_y
     # glt_arr -= 1 # account for 1-based indexing
 
     # https://rasterio.readthedocs.io/en/stable/api/rasterio.crs.html
     glt = GeoTensor(glt_arr, transform=real_transform, 
-                    crs=rasterio.crs.CRS.from_wkt(nc_ds.spatial_ref),
+                    crs=rasterio.crs.CRS.from_wkt(nc_ds.attrs['spatial_ref']),
                     fill_value_default=0)
     
     if dst_crs is not None:
