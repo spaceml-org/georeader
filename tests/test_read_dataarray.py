@@ -12,7 +12,6 @@ The test file has: 15 bands, height=200, width=250, CRS=EPSG:32738, resolution=1
 """
 
 from georeader import read, rasterio_reader, dataarray
-from georeader.window_utils import window_bounds
 import rasterio
 import rasterio.windows
 import numpy as np
