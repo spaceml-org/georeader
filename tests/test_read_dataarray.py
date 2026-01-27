@@ -110,9 +110,9 @@ def test_read_window(test_raster_path, window, trigger_load):
         window: Window to read from
         trigger_load: Whether to trigger loading data into memory
     """
-    data_array = rasterio_reader.RasterioReader(test_raster_path)
+    rst = rasterio_reader.RasterioReader(test_raster_path)
 
-    chip_out = read.read_from_window(data_array, window, trigger_load=trigger_load)
+    chip_out = read.read_from_window(rst, window, trigger_load=trigger_load)
 
     # Skip fully out-of-bounds windows when not boundless
     if chip_out is None:
@@ -157,7 +157,7 @@ def test_read_bounds(test_raster_path, window, trigger_load):
         window: Window to derive bounds from
         trigger_load: Whether to trigger loading data into memory
     """
-    data_array = rasterio_reader.RasterioReader(test_raster_path)
+    rst = rasterio_reader.RasterioReader(test_raster_path)
 
     with rasterio.open(test_raster_path) as src:
         chip_out_expected = src.read(window=window, boundless=True, fill_value=0)
@@ -165,7 +165,7 @@ def test_read_bounds(test_raster_path, window, trigger_load):
         bounds_read = rasterio.windows.bounds(window, src.transform)
         crs_bounds = src.crs
 
-    chip_out = read.read_from_bounds(data_array, bounds_read, crs_bounds=crs_bounds, trigger_load=trigger_load)
+    chip_out = read.read_from_bounds(rst, bounds_read, crs_bounds=crs_bounds, trigger_load=trigger_load)
 
     # Skip fully out-of-bounds windows when not boundless
     if chip_out is None:
@@ -201,7 +201,7 @@ def test_read_reproject_same(test_raster_path, window):
         test_raster_path: Path to the test raster file (fixture)
         window: Window to derive bounds from
     """
-    data_array = rasterio_reader.RasterioReader(test_raster_path)
+    rst = rasterio_reader.RasterioReader(test_raster_path)
 
     with rasterio.open(test_raster_path) as src:
         chip_out_expected = src.read(window=window, boundless=True, fill_value=0)
@@ -210,7 +210,7 @@ def test_read_reproject_same(test_raster_path, window):
         crs_bounds = src.crs
 
     chip_out = read.read_reproject(
-        data_array, bounds=bounds_read, dst_crs=crs_bounds,
+        rst, bounds=bounds_read, dst_crs=crs_bounds,
         resolution_dst_crs=(abs(expected_transform.a), abs(expected_transform.e))
     )
 
@@ -251,7 +251,7 @@ def test_read_reproject_other_res(test_raster_path, window):
         test_raster_path: Path to the test raster file (fixture)
         window: Window to derive bounds from
     """
-    data_array = rasterio_reader.RasterioReader(test_raster_path)
+    rst = rasterio_reader.RasterioReader(test_raster_path)
 
     with rasterio.open(test_raster_path) as src:
         expected_transform = rasterio.windows.transform(window, src.transform)
@@ -260,7 +260,7 @@ def test_read_reproject_other_res(test_raster_path, window):
         crs_bounds = src.crs
 
     chip_out = read.read_reproject(
-        data_array, bounds=bounds_read, dst_crs=crs_bounds,
+        rst, bounds=bounds_read, dst_crs=crs_bounds,
         resolution_dst_crs=RESOLUTION_TEST
     )
 
