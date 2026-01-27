@@ -78,12 +78,12 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
         data (GeoData): GeoData object to plot with imshow
         add_colorbar_next_to (bool, optional): Defaults to False. Add a colorbar next to the plot
         add_scalebar (bool, optional): Defaults to False. Add a scalebar to the plot
-        kwargs_scalebar (Optional[dict], optional): Defaults to None. Keyword arguments for the scalebar. 
-        See https://github.com/ppinard/matplotlib-scalebar. (install with pip install matplotlib-scalebar)
-        mask (Union[bool,np.array], optional): Defaults to False. Mask to apply to the data. 
+        kwargs_scalebar (Optional[dict], optional): Defaults to None. Keyword arguments for the scalebar.
+            See https://github.com/ppinard/matplotlib-scalebar (install with pip install matplotlib-scalebar)
+        mask (Union[bool,np.array], optional): Defaults to False. Mask to apply to the data.
             If True, the fill_value_default of the GeoData is used.
         bounds_in_latlng (bool, optional): Defaults to True. If True, the x and y ticks are shown in latlng.
-        **kwargs: Keyword arguments for imshow
+        **kwargs (Any): Additional keyword arguments passed to imshow
 
     Returns:
         plt.Axes: image object
@@ -270,8 +270,8 @@ def plot_segmentation_mask(mask:GeoData, color_array:Optional[NDArray]=None,
         legend: plot the legend
         ax: plt.Axes to plot
         add_scalebar (bool, optional): Defaults to False. Add a scalebar to the plot
-        kwargs_scalebar (Optional[dict], optional): Defaults to None. Keyword arguments for the scalebar. 
-        See https://github.com/ppinard/matplotlib-scalebar. (install with pip install matplotlib-scalebar)
+        kwargs_scalebar (Optional[dict], optional): Defaults to None. Keyword arguments for the scalebar.
+            See https://github.com/ppinard/matplotlib-scalebar (install with pip install matplotlib-scalebar)
         bounds_in_latlng (bool, optional): Defaults to True. If True, the x and y ticks are shown in latlng.
     
     Returns:

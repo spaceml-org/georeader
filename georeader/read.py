@@ -1294,12 +1294,32 @@ def read_reproject(
 
     named_shape = OrderedDict(zip(data_in.dims, data_in.shape))
 
-    # Compute output transform
+    # ─────────────────────────────────────────────────────────────────────────
+    # STEP 1: DETERMINE OUTPUT TRANSFORM
+    # ─────────────────────────────────────────────────────────────────────────
+    # The output transform defines the mapping from pixel coordinates to
+    # geographic coordinates in the destination CRS. It can be:
+    # - Provided directly (dst_transform)
+    # - Computed from bounds + resolution
+    # - Computed from bounds with inferred resolution
+    # 
+    # Shape tracking:
+    #   Input:  named_shape = {'band': C, 'y': H_in, 'x': W_in}
+    #   Output: will have {'band': C, 'y': H_out, 'x': W_out}
+    # ─────────────────────────────────────────────────────────────────────────
     dst_transform = window_utils.figure_out_transform(
         transform=dst_transform, bounds=bounds, resolution_dst=resolution_dst_crs
     )
 
-    # Compute size of window in out crs
+    # ─────────────────────────────────────────────────────────────────────────
+    # STEP 2: COMPUTE OUTPUT DIMENSIONS
+    # ─────────────────────────────────────────────────────────────────────────
+    # The output window defines pixel dimensions (W_out, H_out). Either:
+    # - Provided directly (window_out)
+    # - Computed from bounds in dst_crs coordinate units
+    #
+    # Example: bounds=(0, 0, 1000, 1000) with 10m resolution → (100, 100) pixels
+    # ─────────────────────────────────────────────────────────────────────────
     if window_out is None:
         assert bounds is not None, (
             "Both window_out and bounds are None. This is needed to figure out the size of the output array"
@@ -1312,7 +1332,16 @@ def read_reproject(
     if dst_crs is None:
         dst_crs = crs_data_in
 
-    #  if dst_crs == data_in.crs and the resolution is the same and window is exact return read_from_window
+    # ─────────────────────────────────────────────────────────────────────────
+    # STEP 3: CHECK FOR NO-OP OPTIMIZATION
+    # ─────────────────────────────────────────────────────────────────────────
+    # If source and destination have:
+    #   - Same CRS
+    #   - Same pixel size (transform.a and transform.e)
+    #   - Grid-aligned origins (integer pixel offset)
+    # Then we can skip reprojection entirely and use a simple window read.
+    # This is ~10-100x faster for aligned data.
+    # ─────────────────────────────────────────────────────────────────────────
     if window_utils.compare_crs(dst_crs, crs_data_in):
         transform_data = data_in.transform
         if (
@@ -1321,15 +1350,25 @@ def read_reproject(
             and (dst_transform.d == transform_data.d)
             and (dst_transform.e == transform_data.e)
         ):
-            # find shift between the two transforms
+            # Find pixel offset between src and dst grids
+            # Uses inverse transform: geo coords → pixel coords
             x_dst, y_dst = dst_transform.c, dst_transform.f
             col_off, row_off = ~transform_data * (x_dst, y_dst)
             window_in_data = rasterio.windows.Window(col_off, row_off, window_out.width, window_out.height)
 
+            # Only use fast path if offsets are exact integers (grids align)
             if _is_exact_round(window_in_data.row_off) and _is_exact_round(window_in_data.col_off):
                 window_in_data = window_in_data.round_offsets(op="floor", pixel_precision=PIXEL_PRECISION)
                 return read_from_window(data_in, window_in_data, return_only_data=return_only_data, trigger_load=True)
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # STEP 4: HANDLE DATA TYPES
+    # ─────────────────────────────────────────────────────────────────────────
+    # Boolean arrays need special handling:
+    #   bool → float32 → interpolate → threshold(0.5) → bool
+    # This prevents interpolation artifacts in mask data while still
+    # allowing smooth boundaries (anti-aliasing effect).
+    # ─────────────────────────────────────────────────────────────────────────
     isbool_dtypein = data_in.dtype == "bool"
     isbool_dtypedst = False
 
@@ -1342,7 +1381,16 @@ def read_reproject(
     elif np.dtype(dtype_dst) == "bool":
         isbool_dtypedst = True
 
-    # Create out array for reprojection
+    # ─────────────────────────────────────────────────────────────────────────
+    # STEP 5: ALLOCATE OUTPUT ARRAY
+    # ─────────────────────────────────────────────────────────────────────────
+    # Pre-allocate with nodata fill. Shape is built by replacing x,y dims
+    # with the new window dimensions while preserving other dims (band, time).
+    #
+    # Example shape transformation:
+    #   Input:  (4, 1000, 1000)  → 4 bands, 1000×1000 pixels
+    #   Output: (4, 500, 600)    → 4 bands, 500×600 pixels (new extent)
+    # ─────────────────────────────────────────────────────────────────────────
     dict_shape_window_out = {"x": window_out.width, "y": window_out.height}
     shape_out = tuple([named_shape[s] if s not in ["x", "y"] else dict_shape_window_out[s] for s in named_shape])
     dst_nodata = dst_nodata or data_in.fill_value_default
@@ -1351,24 +1399,34 @@ def read_reproject(
 
     destination = np.full(shape_out, fill_value=dst_nodata, dtype=dtype_dst)
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # STEP 6: CHECK INTERSECTION
+    # ─────────────────────────────────────────────────────────────────────────
+    # If the requested output region doesn't overlap the input data at all,
+    # return early with the nodata-filled array. Saves computation.
+    # ─────────────────────────────────────────────────────────────────────────
     polygon_dst_crs = window_utils.window_polygon(window_out, dst_transform)
 
-    # If the polygon does not intersect the data return a GeoTensor with nodata
     if not data_in.footprint(crs=dst_crs).intersects(polygon_dst_crs):
         return GeoTensor(destination, transform=dst_transform, crs=dst_crs, fill_value_default=dst_nodata)
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # STEP 7: LOAD SOURCE DATA
+    # ─────────────────────────────────────────────────────────────────────────
+    # For lazy data (xarray/dask), read only the region that will contribute
+    # to the output, plus a 3-pixel buffer for interpolation edge handling.
+    # The buffer prevents edge artifacts from bilinear/cubic resampling.
+    # ─────────────────────────────────────────────────────────────────────────
     if not isinstance(data_in, GeoTensor):
-        # Compute real polygon that is going to be read
-        # Read a padded window of the input data. This data will be then used for reprojection
         geotensor_in = read_from_polygon(
             data_in, polygon_dst_crs, crs_polygon=dst_crs, pad_add=(3, 3), return_only_data=False, trigger_load=True
         )
     else:
         geotensor_in = data_in
 
-    # Triggering load makes that fill_value_default goes to nodata
     np_array_in = np.asanyarray(geotensor_in.values)
 
+    # Type casting for interpolation compatibility
     if cast:
         if isbool_dtypedst:
             np_array_in = np_array_in.astype(np.float32)
@@ -1377,13 +1435,19 @@ def read_reproject(
     elif isbool_dtypein:
         np_array_in = np_array_in.astype(np.float32)
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # STEP 8: ITERATE OVER NON-SPATIAL DIMENSIONS
+    # ─────────────────────────────────────────────────────────────────────────
+    # rasterio.warp.reproject operates on 2D arrays. For multi-band or
+    # multi-temporal data, we iterate over all (time, band) combinations.
+    #
+    # Example: shape (4, 3, H, W) with dims ('time', 'band', 'y', 'x')
+    #   → iterates over 4×3=12 slices: (0,0), (0,1), (0,2), (1,0), ...
+    # ─────────────────────────────────────────────────────────────────────────
     index_iter = [[(ns, i) for i in range(s)] for ns, s in named_shape.items() if ns not in ["x", "y"]]
-    # e.g. if named_shape = {'time': 4, 'band': 2, 'x':10, 'y': 10} index_iter ->
-    # [[('time', 0), ('time', 1), ('time', 2), ('time', 3)],
-    #  [('band', 0), ('band', 1)]]
 
     for current_select_tuple in itertools.product(*index_iter):
-        # current_select_tuple = (('time', 0), ('band', 0))
+        # Extract the index tuple: (('time', 0), ('band', 1)) → (0, 1)
         i_sel_tuple = tuple(t[1] for t in current_select_tuple)
 
         np_array_iter = np_array_in[i_sel_tuple]
@@ -1394,6 +1458,15 @@ def read_reproject(
             dst_iter_write = destination[i_sel_tuple]
             dst_nodata_iter = dst_nodata
 
+        # ─────────────────────────────────────────────────────────────────────
+        # CORE REPROJECTION: rasterio.warp.reproject
+        # ─────────────────────────────────────────────────────────────────────
+        # This is where the actual coordinate transformation happens:
+        # 1. For each output pixel, compute its geographic coordinates
+        # 2. Transform those coords from dst_crs to src_crs
+        # 3. Sample the input raster at those locations using resampling
+        # 4. Write the result to the output array
+        # ─────────────────────────────────────────────────────────────────────
         rasterio.warp.reproject(
             np_array_iter,
             dst_iter_write,
@@ -1406,6 +1479,7 @@ def read_reproject(
             resampling=resampling,
         )
 
+        # Convert interpolated floats back to boolean via thresholding
         if isbool_dtypedst:
             destination[i_sel_tuple] = dst_iter_write > 0.5
 

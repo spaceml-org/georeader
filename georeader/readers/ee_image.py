@@ -1,3 +1,165 @@
+"""
+Google Earth Engine Image Export Module.
+
+This module provides functions for exporting raster data from Google Earth Engine
+(GEE) to GeoTensor objects. It handles the complexity of GEE's size limits through
+recursive tile splitting and parallel downloads.
+
+Architecture Overview
+--------------------
+
+::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                  GEE EXPORT WORKFLOW                                     │
+    │                                                                          │
+    │   User Request                                                           │
+    │   ┌──────────────────┐                                                  │
+    │   │ export_image()   │                                                  │
+    │   │ - ee.Image       │                                                  │
+    │   │ - geometry       │                                                  │
+    │   │ - bands          │                                                  │
+    │   └────────┬─────────┘                                                  │
+    │            │                                                             │
+    │            ▼                                                             │
+    │   ┌──────────────────────────────────────────────────────────┐          │
+    │   │  Try ee.data.computePixels() / ee.data.getPixels()       │          │
+    │   │  (Limited to ~32MB per request)                          │          │
+    │   └────────┬─────────────────────────────────┬───────────────┘          │
+    │            │ Success                         │ "Total request size"     │
+    │            ▼                                 ▼ error                    │
+    │   ┌──────────────────┐            ┌──────────────────────────┐          │
+    │   │ Return GeoTensor │            │ RECURSIVE TILE SPLITTING │          │
+    │   └──────────────────┘            │                          │          │
+    │                                   │  ┌────┬────┐             │          │
+    │                                   │  │ Q1 │ Q2 │ Split into  │          │
+    │                                   │  ├────┼────┤ 4 quadrants │          │
+    │                                   │  │ Q3 │ Q4 │             │          │
+    │                                   │  └────┴────┘             │          │
+    │                                   │       │                  │          │
+    │                                   │       ▼                  │          │
+    │                                   │  Process each in        │          │
+    │                                   │  parallel (ThreadPool)  │          │
+    │                                   │       │                  │          │
+    │                                   │       ▼                  │          │
+    │                                   │  spatial_mosaic()       │          │
+    │                                   │  to combine tiles       │          │
+    │                                   └──────────────────────────┘          │
+    │                                            │                            │
+    │                                            ▼                            │
+    │                                   ┌──────────────────┐                  │
+    │                                   │ Return GeoTensor │                  │
+    │                                   └──────────────────┘                  │
+    │                                                                          │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+Size Limits
+-----------
+
+Google Earth Engine has request size limits (~32MB for computePixels).
+This module automatically handles large requests by:
+
+1. Attempting the full request first
+2. On "Total request size" error, splitting geometry into quadrants
+3. Recursively processing each quadrant (may split further if needed)
+4. Mosaicking results with `spatial_mosaic()`
+
+This enables downloading arbitrarily large areas, limited only by time and memory.
+
+Key Functions
+-------------
+
+export_image
+    Main function for exporting a single ee.Image or asset to GeoTensor.
+    Handles recursive splitting automatically.
+
+export_cube
+    Export multiple images (time series) from a query DataFrame.
+    Returns 4D GeoTensor (time, band, y, x).
+
+interpolate_20mbands_s2ee
+    Fix GEE's nearest-neighbor interpolation of Sentinel-2 20m bands
+    when downloaded at 10m resolution.
+
+Usage Examples
+--------------
+
+Basic export from GEE::
+
+    import ee
+    from georeader.readers.ee_image import export_image
+    from shapely.geometry import box
+    
+    ee.Initialize()
+    
+    # Define area of interest (WGS84)
+    aoi = box(-122.5, 37.7, -122.3, 37.9)  # San Francisco Bay
+    
+    # Get Sentinel-2 image
+    image = ee.Image('COPERNICUS/S2_SR_HARMONIZED/20230615T184919_20230615T185823_T10SEG')
+    
+    # Define output grid (UTM Zone 10N, 10m resolution)
+    from rasterio import Affine
+    transform = Affine(10, 0, 550000, 0, -10, 4200000)
+    
+    # Export RGB bands
+    gt = export_image(
+        image,
+        geometry=aoi,
+        transform=transform,
+        crs="EPSG:32610",
+        bands_gee=["B4", "B3", "B2"]
+    )
+    print(gt.shape)  # (3, H, W)
+
+Export time series::
+
+    from georeader.readers.ee_query import query_s2_ee
+    from georeader.readers.ee_image import export_cube
+    
+    # Query Sentinel-2 images
+    query = query_s2_ee(
+        aoi,
+        date_start="2023-06-01",
+        date_end="2023-06-30",
+        cloud_cover_max=20
+    )
+    
+    # Download all images
+    cube = export_cube(
+        query,
+        geometry=aoi,
+        bands_gee=["B4", "B3", "B2", "B8"],
+        display_progress=True
+    )
+    print(cube.shape)  # (N_images, 4, H, W)
+
+Fix 20m band interpolation::
+
+    from georeader.readers.ee_image import interpolate_20mbands_s2ee
+    
+    # GEE uses nearest-neighbor for 20m→10m, causing blocky artifacts
+    # This function applies proper bilinear interpolation
+    gt_fixed = interpolate_20mbands_s2ee(gt, channels_query_original=["B4","B5","B6"])
+
+Notes
+-----
+- Requires `earthengine-api` package: ``pip install earthengine-api``
+- Must call ``ee.Initialize()`` before using these functions
+- Large areas may take significant time due to recursive splitting
+- Consider using ``ee.batch.Export`` for very large areas (async)
+
+See Also
+--------
+georeader.readers.ee_query : Query image collections
+georeader.mosaic.spatial_mosaic : Combine tiles into single raster
+georeader.readers.S2_SAFE_reader : Direct Sentinel-2 SAFE file access
+
+References
+----------
+- GEE Python API: https://developers.google.com/earth-engine/guides/python_install
+- GEE Data Catalog: https://developers.google.com/earth-engine/datasets
+"""
 from georeader.geotensor import GeoTensor, concatenate
 from georeader.abstract_reader import FakeGeoData
 from shapely.geometry import Polygon, MultiPolygon, box

@@ -248,17 +248,64 @@ class GeoTensor:
 
     def __add__(self, other: Union[numbers.Number, "__class__"]) -> "__class__":
         """
-        Add two GeoTensors. The georeferencing must match.
-
+        Add a value or array to this GeoTensor element-wise.
+        
+        Supports broadcasting with scalars, numpy arrays, or other GeoTensors.
+        When adding two GeoTensors, they must have the same spatial extent
+        (matching transform, CRS, and spatial dimensions).
+        
+        Broadcasting Rules:
+        - Scalar: Added to every pixel
+        - Array: Must be broadcastable to self.values shape
+        - GeoTensor: Must have identical georeferencing (same_extent)
+        
         Args:
-            other (GeoTensor): GeoTensor to add.
-
-        Raises:
-            ValueError: if the georeferencing does not match.
-            TypeError: if other is not a GeoTensor.
-
+            other (Union[numbers.Number, np.ndarray, GeoTensor]): Value to add. Can be:
+                - Scalar (int, float): Added to all pixels
+                - np.ndarray: Must be broadcastable with self.values
+                - GeoTensor: Must have same spatial extent
+        
         Returns:
-            GeoTensor: GeoTensor with the result of the addition.
+            GeoTensor: New GeoTensor with same transform, CRS, and fill_value_default.
+                Shape matches self.shape (or broadcast result for arrays).
+        
+        Raises:
+            ValueError: If other is a GeoTensor and georeferencing doesn't match.
+        
+        Examples:
+            >>> import numpy as np
+            >>> import rasterio
+            >>> from georeader import GeoTensor
+            >>>
+            >>> # Create sample GeoTensor (3 bands, 100x100 pixels)
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
+            >>> data = np.random.rand(3, 100, 100)
+            >>> gt = GeoTensor(data, transform, crs="EPSG:32630")
+            >>>
+            >>> # Add scalar to all pixels
+            >>> gt_offset = gt + 0.1
+            >>> print(gt_offset.shape)  # (3, 100, 100)
+            >>>
+            >>> # Add per-band offset using broadcasting
+            >>> band_offsets = np.array([0.1, 0.2, 0.3])[:, None, None]  # Shape: (3, 1, 1)
+            >>> gt_adjusted = gt + band_offsets
+            >>>
+            >>> # Add two GeoTensors (must have same extent)
+            >>> gt2 = GeoTensor(np.random.rand(3, 100, 100), transform, crs="EPSG:32630")
+            >>> gt_sum = gt + gt2
+            >>>
+            >>> # Error case: mismatched georeferencing
+            >>> gt_different = GeoTensor(data, rasterio.Affine(20, 0, 0, 0, -20, 0), crs="EPSG:4326")
+            >>> # gt + gt_different  # Raises ValueError
+        
+        Note:
+            - Result inherits transform, CRS, and fill_value_default from self
+            - For GeoTensor addition, use `read.read_reproject_like(other, self)`
+              to align georeferencing before adding
+        
+        See Also:
+            - `same_extent`: Check if two GeoTensors have matching georeferencing
+            - `read.read_reproject_like`: Reproject one GeoTensor to match another
         """
         if isinstance(other, GeoTensor):
             if self.same_extent(other):
@@ -278,18 +325,47 @@ class GeoTensor:
 
     def __sub__(self, other: Union[numbers.Number, "__class__"]) -> "__class__":
         """
-        Substract two GeoTensors. The georeferencing must match.
-
+        Subtract a value or array from this GeoTensor element-wise.
+        
+        Supports broadcasting with scalars, numpy arrays, or other GeoTensors.
+        When subtracting two GeoTensors, they must have the same spatial extent.
+        
         Args:
-            other (GeoTensor): GeoTensor to add.
-
-        Raises:
-            ValueError: if the georeferencing does not match.
-            TypeError: if other is not a GeoTensor.
-
+            other (Union[numbers.Number, np.ndarray, GeoTensor]): Value to subtract. Can be:
+                - Scalar (int, float): Subtracted from all pixels
+                - np.ndarray: Must be broadcastable with self.values
+                - GeoTensor: Must have same spatial extent
+        
         Returns:
-            GeoTensor: GeoTensor with the result of the substraction.
-
+            GeoTensor: New GeoTensor with result of subtraction.
+        
+        Raises:
+            ValueError: If other is a GeoTensor and georeferencing doesn't match.
+        
+        Examples:
+            >>> import numpy as np
+            >>> import rasterio
+            >>> from georeader import GeoTensor
+            >>>
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
+            >>> data = np.random.rand(3, 100, 100)
+            >>> gt = GeoTensor(data, transform, crs="EPSG:32630")
+            >>>
+            >>> # Remove offset from all pixels
+            >>> gt_corrected = gt - 0.05
+            >>>
+            >>> # Compute difference between two images (e.g., change detection)
+            >>> gt_before = GeoTensor(np.random.rand(3, 100, 100), transform, crs="EPSG:32630")
+            >>> gt_after = GeoTensor(np.random.rand(3, 100, 100), transform, crs="EPSG:32630")
+            >>> change = gt_after - gt_before  # Positive = increase, negative = decrease
+            >>>
+            >>> # Subtract mean per band (centering)
+            >>> band_means = gt.values.mean(axis=(1, 2))[:, None, None]  # (3, 1, 1)
+            >>> gt_centered = gt - band_means
+        
+        See Also:
+            - `__add__`: Addition operation
+            - `same_extent`: Check georeferencing compatibility
         """
         if isinstance(other, GeoTensor):
             if self.same_extent(other):
@@ -309,17 +385,54 @@ class GeoTensor:
 
     def __mul__(self, other: Union[numbers.Number, "__class__"]) -> "__class__":
         """
-        Multiply two GeoTensors. The georeferencing must match.
-
+        Multiply this GeoTensor by a value or array element-wise.
+        
+        Supports broadcasting with scalars, numpy arrays, or other GeoTensors.
+        Common uses include scaling, applying masks, and band math operations.
+        
         Args:
-            other (GeoTensor): GeoTensor to add.
-
-        Raises:
-            ValueError: if the georeferencing does not match.
-            TypeError: if other is not a GeoTensor.
-
+            other (Union[numbers.Number, np.ndarray, GeoTensor]): Value to multiply. Can be:
+                - Scalar (int, float): Scales all pixels
+                - np.ndarray: Must be broadcastable with self.values
+                - GeoTensor: Must have same spatial extent
+        
         Returns:
-            GeoTensor: GeoTensor with the result of the multiplication.
+            GeoTensor: New GeoTensor with result of multiplication.
+        
+        Raises:
+            ValueError: If other is a GeoTensor and georeferencing doesn't match.
+        
+        Examples:
+            >>> import numpy as np
+            >>> import rasterio
+            >>> from georeader import GeoTensor
+            >>>
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
+            >>> data = np.random.rand(3, 100, 100)
+            >>> gt = GeoTensor(data, transform, crs="EPSG:32630")
+            >>>
+            >>> # Scale all values (e.g., unit conversion)
+            >>> gt_scaled = gt * 10000  # Reflectance [0-1] to [0-10000]
+            >>>
+            >>> # Apply per-band gain coefficients
+            >>> gains = np.array([1.1, 1.0, 0.95])[:, None, None]  # Shape: (3, 1, 1)
+            >>> gt_calibrated = gt * gains
+            >>>
+            >>> # Apply binary mask (mask out invalid pixels)
+            >>> mask = np.random.rand(100, 100) > 0.5  # Boolean mask
+            >>> gt_masked = gt * mask  # Broadcasts mask to all bands
+            >>>
+            >>> # Element-wise product of two rasters
+            >>> gt2 = GeoTensor(np.random.rand(3, 100, 100), transform, crs="EPSG:32630")
+            >>> gt_product = gt * gt2
+        
+        Note:
+            - For masking, consider using `gt[mask] = fill_value` for in-place updates
+            - Result inherits georeferencing from self
+        
+        See Also:
+            - `__truediv__`: Division operation
+            - `__setitem__`: In-place value assignment with masks
         """
         if isinstance(other, GeoTensor):
             if self.same_extent(other):
@@ -339,17 +452,62 @@ class GeoTensor:
 
     def __truediv__(self, other: Union[ArrayLike, "__class__"]) -> "__class__":
         """
-        Divide two GeoTensors. The georeferencing must match.
-
+        Divide this GeoTensor by a value or array element-wise.
+        
+        Supports broadcasting with scalars, numpy arrays, or other GeoTensors.
+        Common uses include normalization, ratio calculations, and index computation.
+        
         Args:
-            other (GeoTensor): GeoTensor to add.
-
-        Raises:
-            ValueError: if the georeferencing does not match.
-            TypeError: if other is not a GeoTensor.
-
+            other (Union[numbers.Number, np.ndarray, GeoTensor]): Divisor. Can be:
+                - Scalar (int, float): Divides all pixels
+                - np.ndarray: Must be broadcastable with self.values
+                - GeoTensor: Must have same spatial extent
+        
         Returns:
-            GeoTensor: GeoTensor with the result of the division.
+            GeoTensor: New GeoTensor with result of division.
+        
+        Raises:
+            ValueError: If other is a GeoTensor and georeferencing doesn't match.
+        
+        Note:
+            Division by zero produces inf or nan (numpy behavior).
+            Consider adding small epsilon for numerical stability: ``gt / (other + 1e-10)``
+        
+        Examples:
+            >>> import numpy as np
+            >>> import rasterio
+            >>> from georeader import GeoTensor
+            >>>
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
+            >>> data = np.random.rand(3, 100, 100)
+            >>> gt = GeoTensor(data, transform, crs="EPSG:32630")
+            >>>
+            >>> # Normalize to [0, 1] range
+            >>> gt_norm = gt / gt.values.max()
+            >>>
+            >>> # Per-band normalization
+            >>> band_maxes = gt.values.max(axis=(1, 2))[:, None, None] + 1e-10
+            >>> gt_normalized = gt / band_maxes
+            >>>
+            >>> # Compute NDVI-like ratio: (NIR - Red) / (NIR + Red)
+            >>> # Assuming band 0 = Red, band 1 = NIR
+            >>> red = gt.values[0]
+            >>> nir = gt.values[1]
+            >>> ndvi_values = (nir - red) / (nir + red + 1e-10)  # Add epsilon
+            >>> ndvi = GeoTensor(ndvi_values, gt.transform, gt.crs)
+            >>>
+            >>> # Ratio of two rasters
+            >>> gt2 = GeoTensor(np.random.rand(3, 100, 100) + 0.1, transform, crs="EPSG:32630")
+            >>> ratio = gt / gt2
+        
+        Note:
+            - Add small epsilon to divisor to avoid division by zero
+            - Use np.where or masking for conditional division
+            - Result may contain inf/nan values - clean with np.nan_to_num if needed
+        
+        See Also:
+            - `__mul__`: Multiplication operation
+            - `clip`: Clip values to valid range after division
         """
         if isinstance(other, GeoTensor):
             if self.same_extent(other):

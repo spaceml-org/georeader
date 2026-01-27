@@ -34,9 +34,8 @@ def save_tiled_geotiff(data_save:GeoData, path_tiff_save:str,
     Args:
         data_save: GeoData (C, H, W) format with geoinformation (crs and transform).
         path_tiff_save: path to save the GeoTIFF
-        profile_arg: profile dict to save the data. crs and transform will be updated from data_save.
+        profile_arg (Optional[Dict[str, Any]]): profile dict to save the data. crs and transform will be updated from data_save.
         descriptions: name of the bands
-        profile: profile dict to save the data. crs and transform will be updated from data_save.
         tags: Dict to save as tags of the image
         dir_tmpfiles: dir to create tempfiles if needed
         blocksize: blocksize of the GeoTIFF

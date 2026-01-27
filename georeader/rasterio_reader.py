@@ -740,7 +740,7 @@ class RasterioReader:
             x (int): x coordinate of the tile in the TMS system.
             y (int): y coordinate of the tile in the TMS system.
             z (int): z coordinate of the tile in the TMS system.
-            out_shape (Tuple[int,int]: size of the tile to read. Defaults to (read.SIZE_DEFAULT, read.SIZE_DEFAULT).
+            out_shape (Tuple[int, int]): size of the tile to read. Defaults to (read.SIZE_DEFAULT, read.SIZE_DEFAULT).
             dst_crs (Optional[Any], optional): CRS of the output tile. Defaults to read.WEB_MERCATOR_CRS.
             
         Returns:

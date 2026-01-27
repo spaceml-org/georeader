@@ -53,9 +53,9 @@ def create_slices(named_shape: Dict[str, int],
         named_shape: {"x": 5600, "y": 4000} shape to split in slices
         dims: size of the slices {"x": 128, "y": 128}
         overlap: number of pixels to read with overlap e.g. {"x": 16, "y": 16} to read with 16 px overlap
-        include_incomplete: if `True` includes incomplete slices in the borders if `False` it discards the slices in the
-        borders that will have size lower than dims.
-        start_negative_if_padding: if `True` starts in -overlap//2 each slice. Useful to create slices to write in predict
+        include_incomplete: if ``True`` includes incomplete slices in the borders. If ``False`` it discards
+            slices in the borders that will have size lower than dims.
+        start_negative_if_padding: if ``True`` starts in -overlap//2 each slice. Useful to create slices to write in predict
             mode.
         trim_incomplete: for the end of the array, trim the value
             (e.g. if the end raster has dimsize=11, and size=5 the last slice will be slice(10,11) if True and slice(10,15) if False)
@@ -86,14 +86,14 @@ def create_windows(geodata_shape: Tuple[int, int],
     This function creates a list of window objects to slice the dataset in windows of shape `window_size`
 
     Args:
-        geodata_shape: tuple with the spatial shape of hte geodata object `(n_rows, n_cols)` `(height, width)`
+        geodata_shape: tuple with the spatial shape of hte geodata object ``(n_rows, n_cols)`` ``(height, width)``
         window_size: shape of the windows to yield
         overlap: number of pixels to read with overlap (same concept as stride in neural networks)
-        include_incomplete: if `True` includes incomplete slices in the borders if `False` it discards the slices in the
-        borders that will have size lower than dims.
-        start_negative_if_padding: if `True` starts in -overlap//2 each slice. Useful to create slices to write in predict
+        include_incomplete: if ``True`` includes incomplete slices in the borders. If ``False`` it discards
+            slices in the borders that will have size lower than dims.
+        start_negative_if_padding: if ``True`` starts in -overlap//2 each slice. Useful to create slices to write in predict
             mode.
-        trim_incomplete: if `True` windows at the edge of the array will have smaller size if needed (i.e. those windows
+        trim_incomplete: if ``True`` windows at the edge of the array will have smaller size if needed (i.e. those windows
             will have a smaller width or height)
 
     Returns:

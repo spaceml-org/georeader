@@ -2,79 +2,138 @@
 
 # <img src="https://raw.githubusercontent.com/spaceml-org/georeader/main/docs/images/logo_georeader.png" alt="Logo" width='7%'>  georeader
 
-**georeader** is a package to process raster data from different satellite missions. **georeader** makes easy to [read specific areas of your image](https://github.com/spaceml-org/georeader/blob/main/docs/read_S2_SAFE_from_bucket.ipynb), to [reproject images from different satellites to a common grid](https://github.com/spaceml-org/georeader/blob/main/docs/reading_overlapping_sentinel2_aviris.ipynb)  ([`georeader.read`](https://spaceml-org.github.io/georeader/modules/read_module/)), to go from vector to raster formats ([`georeader.vectorize`](https://spaceml-org.github.io/georeader/modules/vectorize_module/) and [`georeader.rasterize`](https://spaceml-org.github.io/georeader/modules/rasterize_module/)) or to do [radiance to reflectance conversions](https://spaceml-org.github.io/georeader/enmap_with_cloudsen12/) ([`georeader.reflectance`](https://spaceml-org.github.io/georeader/modules/reflectance_module/)). 
+**georeader** is a Python package for processing raster data from different satellite missions. It provides a unified interface for reading, manipulating, and saving geospatial raster data with a focus on machine learning workflows.
 
-**georeader** is mainly used to process satellite data for scientific usage, to create ML-ready datasets and to implement *end-to-end* operational inference pipelines ([e.g. the Kherson Dam Break floodmap](https://spaceml-org.github.io/ml4floods/content/ml4ops/HOWTO_postprocess_inference.html)). 
+## Key Features
+
+| Feature | Description |
+|---------|-------------|
+| 🛰️ **Multi-sensor support** | Read data from Sentinel-2, EMIT, PRISMA, EnMAP, and any GeoTIFF |
+| 📍 **Flexible reading** | Read by coordinates, bounding box, polygon, or window |
+| 🔄 **Reprojection** | Align images from different sensors to a common grid |
+| ✂️ **Tiling** | Slice images with overlap for ML inference, then stitch predictions |
+| 🌡️ **Radiometric conversion** | Convert between radiance and reflectance with full unit tracking |
+| ☁️ **Cloud-native** | Read directly from cloud buckets (GCS, S3, Azure) without downloading |
+| 🗺️ **Vector ↔ Raster** | Convert between vector (GeoDataFrame) and raster (GeoTensor) formats |
 
 ## Install
 
-The core package dependencies are `numpy`, `rasterio`, `shapely` and `geopandas`.
+**Requirements:** Python ≥3.11
 
 ```bash
 pip install georeader-spaceml
 ```
 
-## Getting started
+**Optional dependencies** for specific readers:
 
-> Read from a Sentinel-2 image a fixed size subimage on an specific `lon,lat` location (directly from the [S2 public Google Cloud bucket](https://cloud.google.com/storage/docs/public-datasets/sentinel-2?hl=es-419)):
- 
+```bash
+# For cloud storage access (GCS, S3, Azure)
+pip install georeader-spaceml fsspec gcsfs s3fs adlfs
+
+# For hyperspectral sensors (EMIT, PRISMA, EnMAP)
+pip install georeader-spaceml h5py xarray h5netcdf
+
+# For Google Earth Engine integration
+pip install georeader-spaceml earthengine-api
+```
+
+## Quick Start
+
+### Read a Sentinel-2 image from cloud storage
+
 ```python
-# This snippet requires:
-# pip install fsspec gcsfs google-cloud-storage
 import os
 os.environ["GS_NO_SIGN_REQUEST"] = "YES"
 
 from georeader.readers import S2_SAFE_reader
 from georeader import read
 
-cords_read = (-104.394, 32.026) # long, lat
-crs_cords = "EPSG:4326"
-s2_safe_path = S2_SAFE_reader.s2_public_bucket_path("S2B_MSIL1C_20191008T173219_N0208_R055_T13SER_20191008T204555.SAFE")
-s2obj = S2_SAFE_reader.s2loader(s2_safe_path, 
-                                out_res=10, bands=["B04","B03","B02"])
+# Load Sentinel-2 from Google Cloud public bucket
+s2_path = S2_SAFE_reader.s2_public_bucket_path(
+    "S2B_MSIL1C_20191008T173219_N0208_R055_T13SER_20191008T204555.SAFE"
+)
+s2obj = S2_SAFE_reader.s2loader(s2_path, out_res=10, bands=["B04", "B03", "B02"])
 
-# copy to local avoids http errors specially when not using a Google Cloud project.
-# This will only copy the bands set up above B04, B03 and B02
-s2obj = s2obj.cache_product_to_local_dir(".")
+# Read a specific area by center coordinates
+coords = (-104.394, 32.026)  # lon, lat
+data = read.read_from_center_coords(
+    s2obj, coords, 
+    shape=(2040, 4040),
+    crs_center_coords="EPSG:4326"
+)
 
-# See also read.read_from_bounds, read.read_from_polygon for different ways of croping an image
-data = read.read_from_center_coords(s2obj,cords_read, shape=(2040, 4040),
-                                    crs_center_coords=crs_cords)
-
-data_memory = data.load() # this loads the data to memory
-
-data_memory # GeoTensor object
-
-```
-```
->>  Transform: | 10.00, 0.00, 537020.00|
-| 0.00,-10.00, 3553680.00|
-| 0.00, 0.00, 1.00|
-         Shape: (3, 2040, 4040)
-         Resolution: (10.0, 10.0)
-         Bounds: (537020.0, 3533280.0, 577420.0, 3553680.0)
-         CRS: EPSG:32613
-         fill_value_default: 0
+# Load to memory and access the numpy array
+gt = data.load()
+print(gt)  # GeoTensor with shape, CRS, transform info
 ```
 
-In the `.values` attribute we have the plain numpy array that we can plot with `show`:
-
-```python
-from rasterio.plot import show
-show(data_memory.values/3500, transform=data_memory.transform)
-
-```
-<img src="https://raw.githubusercontent.com/spaceml-org/georeader/main/notebooks/images/sample_read.png" alt="awesome georeader" width="50%">
-
-
-Saving the `GeoTensor` as a COG GeoTIFF: 
+### Save as Cloud-Optimized GeoTIFF
 
 ```python
 from georeader.save import save_cog
 
-# Supports writing in bucket location (e.g. gs://bucket-name/s2_crop.tif)
-save_cog(data_memory, "s2_crop.tif", descriptions=s2obj.bands)
+save_cog(gt, "output.tif", descriptions=["Red", "Green", "Blue"])
 ```
+
+### Align images from different sensors
+
+```python
+from georeader import read
+
+# Load two images from different sensors
+s2_data = read.read_from_tif("sentinel2.tif")
+aviris_data = read.read_from_tif("aviris.tif")
+
+# Reproject AVIRIS to match Sentinel-2 grid
+aviris_aligned = read.read_reproject(
+    aviris_data, 
+    dst_crs=s2_data.crs,
+    dst_transform=s2_data.transform,
+    dst_shape=s2_data.shape[-2:]
+)
+```
+
+## Core Concepts
+
+### GeoTensor
+
+The central data structure is `GeoTensor` - a numpy array with geospatial metadata:
+
+```python
+from georeader.geotensor import GeoTensor
+
+gt = GeoTensor(
+    values=np_array,           # Shape: (C, H, W) or (H, W)
+    transform=affine_transform, # Maps pixel to geographic coordinates
+    crs="EPSG:32613"           # Coordinate Reference System
+)
+
+# Access properties
+gt.bounds      # (xmin, ymin, xmax, ymax)
+gt.res         # (x_res, y_res)
+gt.footprint() # Shapely polygon of extent
+```
+
+### Reader Protocol
+
+All readers implement the `GeoData` protocol, providing a consistent interface:
+
+```python
+# Any reader works with the same read functions
+from georeader import read
+
+data = read.read_from_bounds(reader, bounds, crs_bounds="EPSG:4326")
+data = read.read_from_polygon(reader, polygon)
+data = read.read_from_center_coords(reader, coords, shape=(512, 512))
+```
+
+## Documentation
+
+📚 **Full documentation:** [spaceml-org.github.io/georeader](https://spaceml-org.github.io/georeader/)
+
+**georeader** makes easy to [read specific areas of your image](https://github.com/spaceml-org/georeader/blob/main/docs/read_S2_SAFE_from_bucket.ipynb), to [reproject images from different satellites to a common grid](https://github.com/spaceml-org/georeader/blob/main/docs/reading_overlapping_sentinel2_aviris.ipynb)  ([`georeader.read`](https://spaceml-org.github.io/georeader/modules/read_module/)), to go from vector to raster formats ([`georeader.vectorize`](https://spaceml-org.github.io/georeader/modules/vectorize_module/) and [`georeader.rasterize`](https://spaceml-org.github.io/georeader/modules/rasterize_module/)) or to do [radiance to reflectance conversions](https://spaceml-org.github.io/georeader/enmap_with_cloudsen12/) ([`georeader.reflectance`](https://spaceml-org.github.io/georeader/modules/reflectance_module/)). 
+
+**georeader** is mainly used to process satellite data for scientific usage, to create ML-ready datasets and to implement *end-to-end* operational inference pipelines ([e.g. the Kherson Dam Break floodmap](https://spaceml-org.github.io/ml4floods/content/ml4ops/HOWTO_postprocess_inference.html)).
 
 ## Tutorials
 

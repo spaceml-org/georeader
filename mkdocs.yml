@@ -14,8 +14,15 @@ nav:
     - reflectance: modules/reflectance_module.md
     - GeoTensor: modules/geotensor_module.md
     - RasterioReader: modules/rasterio_reader.md
+    - abstract_reader: modules/abstract_reader_module.md
     - rasterize: modules/rasterize_module.md
     - vectorize: modules/vectorize_module.md
+    - mosaic: modules/mosaic_module.md
+    - window_utils: modules/window_utils_module.md
+    - slices: modules/slices_module.md
+    - griddata: modules/griddata_module.md
+    - plot: modules/plot_module.md
+    - io: modules/io_module.md
     - ee_image: modules/ee_image.md
     - readers: modules/readers_module.md
   - Tutorials:
