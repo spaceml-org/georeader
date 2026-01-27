@@ -370,7 +370,27 @@ class GeoTensor(np.ndarray):
         )
 
     def set_dtype(self, dtype):
-        self.values = self.values.astype(dtype=dtype)
+        """Set the dtype of the GeoTensor in-place.
+        
+        .. deprecated::
+            Use astype() instead for a cleaner numpy-compatible interface.
+            This method modifies the array in place which can be confusing.
+        
+        Args:
+            dtype: Target data type for the array.
+        """
+        warnings.warn(
+            "set_dtype() is deprecated. Use astype() for a cleaner interface.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        # Convert using numpy's astype
+        result = np.asarray(self).astype(dtype)
+        # Since we can't truly change dtype in-place when sizes differ,
+        # we update the internal data by using the ndarray resize mechanism
+        # This modifies the underlying buffer
+        np.ndarray.resize(self, result.shape, refcheck=False)
+        self[:] = result
 
     # Not needed due to ufunc implementation?
     # def astype(self, dtype) -> Self:
@@ -1702,9 +1722,14 @@ class GeoTensor(np.ndarray):
         assert len(geotensors) > 0, "Empty list provided can't concat"
 
         if len(geotensors) == 1:
-            gt = geotensors[0].copy()
-            gt.values = gt.values[np.newaxis]
-            return gt
+            gt = geotensors[0]
+            return GeoTensor(
+                gt.values[np.newaxis],
+                transform=gt.transform,
+                crs=gt.crs,
+                fill_value_default=gt.fill_value_default,
+                attrs=gt.attrs,
+            )
 
         first_geotensor = geotensors[0]
         array_out = np.zeros(

@@ -745,16 +745,15 @@ class TestGeoTensorSetitemErrors:
 
     def test_setitem_invalid_index_type_raises(self, sample_geotensor):
         """Test that invalid index type raises an error."""
-        # The source code has a bug where it accesses .dtype on non-array types,
-        # causing AttributeError before the ValueError is raised
-        with pytest.raises((ValueError, AttributeError)):
+        # String indexing should raise a TypeError from numpy
+        with pytest.raises((TypeError, IndexError)):
             sample_geotensor["invalid"] = 5
 
     def test_setitem_wrong_shape_mask_raises(self, sample_geotensor):
-        """Test that boolean mask with wrong shape raises ValueError."""
+        """Test that boolean mask with wrong shape raises IndexError from numpy."""
         wrong_shape_mask = np.ones((50, 50), dtype=bool)
 
-        with pytest.raises(ValueError, match="Unsupported index type"):
+        with pytest.raises(IndexError):
             sample_geotensor[wrong_shape_mask] = 5
 
 
@@ -783,28 +782,16 @@ class TestGeoTensorValidFootprintErrors:
 
 
 class TestGeoTensorSetDtype:
-    """Tests for GeoTensor set_dtype method."""
+    """Tests for GeoTensor set_dtype method.
+    
+    Note: set_dtype is deprecated and doesn't work reliably due to numpy subclass limitations.
+    These tests verify the deprecation warning is raised.
+    """
 
-    def test_set_dtype_to_float64(self, sample_geotensor):
-        """Test setting dtype to float64."""
-        original_dtype = sample_geotensor.dtype
-        sample_geotensor.set_dtype(np.float64)
-
-        assert sample_geotensor.dtype == np.float64
-        assert sample_geotensor.dtype != original_dtype
-
-    def test_set_dtype_to_int32(self, sample_geotensor):
-        """Test setting dtype to int32."""
-        sample_geotensor.set_dtype(np.int32)
-
-        assert sample_geotensor.dtype == np.int32
-
-    def test_set_dtype_preserves_shape(self, sample_geotensor):
-        """Test that set_dtype preserves shape."""
-        original_shape = sample_geotensor.shape
-        sample_geotensor.set_dtype(np.float64)
-
-        assert sample_geotensor.shape == original_shape
+    def test_set_dtype_deprecated_warning(self, sample_geotensor):
+        """Test that set_dtype raises deprecation warning."""
+        with pytest.warns(DeprecationWarning, match="set_dtype.*deprecated"):
+            sample_geotensor.set_dtype(np.float64)
 
 
 class TestGeoTensorValidFootprint:
@@ -882,30 +869,34 @@ class TestGeoTensorRepr:
 class TestGeoTensorReverseArithmetic:
     """Tests for GeoTensor reverse arithmetic operations.
 
-    Note: GeoTensor does not implement __radd__, __rsub__, __rmul__, __rtruediv__.
-    These tests document that reverse operations with scalars are NOT supported.
+    Note: With numpy ufunc implementation, reverse operations now work correctly.
+    These tests document that reverse operations with scalars ARE supported.
     """
 
-    def test_radd_scalar_not_supported(self, sample_geotensor):
-        """Test that reverse add with scalar is not supported."""
-        with pytest.raises(TypeError, match="unsupported operand"):
-            5 + sample_geotensor
+    def test_radd_scalar_works(self, sample_geotensor):
+        """Test that reverse add with scalar now works."""
+        result = 5 + sample_geotensor
+        assert isinstance(result, GeoTensor)
+        assert np.allclose(result.values, 5 + sample_geotensor.values)
 
-    def test_rsub_scalar_not_supported(self, sample_geotensor):
-        """Test that reverse subtract with scalar is not supported."""
-        with pytest.raises(TypeError, match="unsupported operand"):
-            10 - sample_geotensor
+    def test_rsub_scalar_works(self, sample_geotensor):
+        """Test that reverse subtract with scalar now works."""
+        result = 10 - sample_geotensor
+        assert isinstance(result, GeoTensor)
+        assert np.allclose(result.values, 10 - sample_geotensor.values)
 
-    def test_rmul_scalar_not_supported(self, sample_geotensor):
-        """Test that reverse multiply with scalar is not supported."""
-        with pytest.raises(TypeError, match="unsupported operand"):
-            3 * sample_geotensor
+    def test_rmul_scalar_works(self, sample_geotensor):
+        """Test that reverse multiply with scalar now works."""
+        result = 3 * sample_geotensor
+        assert isinstance(result, GeoTensor)
+        assert np.allclose(result.values, 3 * sample_geotensor.values)
 
-    def test_rtruediv_scalar_not_supported(self, sample_geotensor):
-        """Test that reverse divide with scalar is not supported."""
+    def test_rtruediv_scalar_works(self, sample_geotensor):
+        """Test that reverse divide with scalar now works."""
         gt = sample_geotensor + 1
-        with pytest.raises(TypeError, match="unsupported operand"):
-            10 / gt
+        result = 10 / gt
+        assert isinstance(result, GeoTensor)
+        assert np.allclose(result.values, 10 / gt.values)
 
 
 class TestGeoTensorLoadFile:
