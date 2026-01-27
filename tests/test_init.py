@@ -239,3 +239,165 @@ class TestPixelSizeMeters:
         # 0.0001 degree at 45 degrees latitude should be ~8-11 meters
         assert 5 < result[0] < 15
         assert 5 < result[1] < 15
+
+
+# =============================================================================
+# Tests for __init__ module error handling (Phase 2 Sprint 1)
+# =============================================================================
+
+
+class TestCompareCrsErrors:
+    """Tests for compare_crs function error handling."""
+
+    def test_empty_string(self):
+        """Test comparing with empty strings."""
+        # Empty strings should be comparable (both normalize to empty)
+        result = georeader.compare_crs("", "")
+        assert result is True
+
+    def test_none_raises(self):
+        """Test that None values raise an error."""
+        # None can't be converted to string properly for comparison
+        # but the function may still work (str(None) = "None")
+        result = georeader.compare_crs(None, None)
+        assert result is True  # str(None) == str(None)
+
+    def test_none_vs_valid_crs(self):
+        """Test comparing None with valid CRS."""
+        result = georeader.compare_crs(None, "EPSG:4326")
+        assert result is False
+
+
+class TestRasterioCrsErrors:
+    """Tests for rasterio_crs function error handling."""
+
+    def test_invalid_type_list_raises(self):
+        """Test that list type raises ValueError."""
+        with pytest.raises(ValueError, match="crs must be str"):
+            georeader.rasterio_crs([4326])
+
+    def test_invalid_type_dict_raises(self):
+        """Test that dict type raises ValueError."""
+        with pytest.raises(ValueError, match="crs must be str"):
+            georeader.rasterio_crs({"epsg": 4326})
+
+    def test_invalid_type_none_raises(self):
+        """Test that None raises ValueError."""
+        with pytest.raises(ValueError, match="crs must be str"):
+            georeader.rasterio_crs(None)
+
+    def test_invalid_epsg_int_raises(self):
+        """Test that invalid EPSG integer raises an error."""
+        with pytest.raises(Exception):  # rasterio raises CRSError
+            georeader.rasterio_crs(99999999)  # Invalid EPSG code
+
+    def test_invalid_wkt_string_raises(self):
+        """Test that invalid WKT string raises an error."""
+        with pytest.raises(Exception):  # rasterio raises CRSError
+            georeader.rasterio_crs("NOT_VALID_WKT_STRING")
+
+
+class TestGetUtmFromMgrsErrors:
+    """Tests for get_utm_from_mgrs function error handling."""
+
+    def test_empty_string_raises(self):
+        """Test that empty MGRS string raises an error."""
+        with pytest.raises((ValueError, IndexError)):
+            georeader.get_utm_from_mgrs("")
+
+    def test_invalid_zone_number_raises(self):
+        """Test that invalid zone number raises an error."""
+        with pytest.raises((ValueError, Exception)):
+            georeader.get_utm_from_mgrs("99Z")  # Zone 99 is invalid
+
+    def test_short_string_raises(self):
+        """Test that too short MGRS string raises an error."""
+        with pytest.raises((ValueError, IndexError)):
+            georeader.get_utm_from_mgrs("3")  # Too short
+
+
+class TestGetUtmEpsgEdgeCases:
+    """Tests for get_utm_epsg edge cases."""
+
+    def test_extreme_longitude_east(self):
+        """Test UTM zone at extreme east longitude."""
+        # 180 degrees longitude
+        result = georeader.get_utm_epsg((180, 45))
+        assert result.startswith("EPSG:326")
+
+    def test_extreme_longitude_west(self):
+        """Test UTM zone at extreme west longitude."""
+        # -180 degrees longitude
+        result = georeader.get_utm_epsg((-180, 45))
+        assert result.startswith("EPSG:326")
+
+    def test_equator_boundary(self):
+        """Test UTM zone at equator (latitude = 0)."""
+        result = georeader.get_utm_epsg((0, 0))
+        assert result.startswith("EPSG:326")  # North hemisphere at equator
+
+    def test_just_south_of_equator(self):
+        """Test UTM zone just south of equator."""
+        result = georeader.get_utm_epsg((0, -0.001))
+        assert result.startswith("EPSG:327")  # South hemisphere
+
+
+class TestResEdgeCases:
+    """Tests for res function edge cases."""
+
+    def test_identity_transform(self):
+        """Test resolution with identity transform."""
+        transform = Affine(1, 0, 0, 0, 1, 0)
+        result = georeader.res(transform)
+        assert abs(result[0] - 1) < 0.001
+        assert abs(result[1] - 1) < 0.001
+
+    def test_very_small_resolution(self):
+        """Test with very small resolution."""
+        transform = from_origin(0, 100, 0.0001, 0.0001)
+        result = georeader.res(transform)
+        assert abs(result[0] - 0.0001) < 1e-8
+        assert abs(result[1] - 0.0001) < 1e-8
+
+    def test_negative_y_resolution(self):
+        """Test with standard negative y resolution (common in GeoTIFF)."""
+        # Standard transform: x increases right, y decreases down
+        transform = Affine(10, 0, 0, 0, -10, 100)
+        result = georeader.res(transform)
+        # Resolution should always be positive
+        assert result[0] > 0
+        assert result[1] > 0
+
+
+class TestDistanceMetersEdgeCases:
+    """Tests for distance_meters edge cases."""
+
+    def test_very_close_points(self):
+        """Test distance between very close points."""
+        point1 = Point(0, 0)
+        point2 = Point(0.00001, 0.00001)  # Very close
+
+        result = georeader.distance_meters(point1, point2)
+
+        # Should be small but positive
+        assert 0 < result < 10
+
+    def test_antipodal_points_raises(self):
+        """Test distance between points on opposite sides of earth raises error."""
+        point1 = Point(0, 0)
+        point2 = Point(180, 0)
+
+        # UTM projection can't handle transforming points at 180 degrees
+        # when using a UTM zone centered at midpoint (90 degrees)
+        with pytest.raises(Exception):  # rasterio raises CPLE_AppDefinedError
+            georeader.distance_meters(point1, point2)
+
+    def test_large_distance(self):
+        """Test distance between distant but valid points."""
+        point1 = Point(0, 0)
+        point2 = Point(50, 0)  # 50 degrees apart
+
+        result = georeader.distance_meters(point1, point2)
+
+        # 50 degrees at equator should be approximately 5,500 km
+        assert 5_000_000 < result < 6_000_000

@@ -296,3 +296,130 @@ class TestReflectanceToRadiance:
 
         # Should be approximately equal
         assert np.allclose(geotensor.values, restored.values, rtol=0.01)
+
+
+# =============================================================================
+# Tests for reflectance module error handling (Phase 2 Sprint 1)
+# =============================================================================
+
+
+class TestRadianceToReflectanceErrors:
+    """Tests for radiance_to_reflectance function error handling."""
+
+    def test_2d_data_raises(self):
+        """Test that 2D data raises AssertionError."""
+        data = np.ones((10, 10), dtype=np.float32) * 100  # 2D instead of 3D
+        transform = from_origin(0, 100, 10, 10)
+        geotensor = GeoTensor(data, transform=transform, crs="EPSG:32631")
+
+        solar_irradiance = np.array([1.5])
+
+        with pytest.raises(AssertionError, match="Expected 3 channels"):
+            reflectance.radiance_to_reflectance(geotensor, solar_irradiance, observation_date_corr_factor=np.pi)
+
+    def test_mismatched_bands_raises(self):
+        """Test that mismatched band count raises AssertionError."""
+        data = np.ones((3, 10, 10), dtype=np.float32) * 100  # 3 bands
+        transform = from_origin(0, 100, 10, 10)
+        geotensor = GeoTensor(data, transform=transform, crs="EPSG:32631")
+
+        solar_irradiance = np.array([1.5, 1.5])  # Only 2 bands
+
+        with pytest.raises(AssertionError, match="Different number of channels"):
+            reflectance.radiance_to_reflectance(geotensor, solar_irradiance, observation_date_corr_factor=np.pi)
+
+    def test_no_date_or_factor_raises(self):
+        """Test that neither date nor factor raises AssertionError."""
+        data = np.ones((3, 10, 10), dtype=np.float32) * 100
+        transform = from_origin(0, 100, 10, 10)
+        geotensor = GeoTensor(data, transform=transform, crs="EPSG:32631")
+
+        solar_irradiance = np.array([1.5, 1.5, 1.5])
+
+        with pytest.raises(AssertionError, match="date_of_acquisition must be provided"):
+            reflectance.radiance_to_reflectance(
+                geotensor,
+                solar_irradiance,  # No factor or date
+            )
+
+
+class TestReflectanceToRadianceErrors:
+    """Tests for reflectance_to_radiance function error handling."""
+
+    def test_2d_data_raises(self):
+        """Test that 2D data raises AssertionError."""
+        data = np.ones((10, 10), dtype=np.float32) * 0.5  # 2D instead of 3D
+        transform = from_origin(0, 100, 10, 10)
+        geotensor = GeoTensor(data, transform=transform, crs="EPSG:32631")
+
+        solar_irradiance = np.array([1.5])
+
+        with pytest.raises(AssertionError, match="Expected 3 channels"):
+            reflectance.reflectance_to_radiance(geotensor, solar_irradiance, observation_date_corr_factor=np.pi)
+
+    def test_mismatched_bands_raises(self):
+        """Test that mismatched band count raises AssertionError."""
+        data = np.ones((3, 10, 10), dtype=np.float32) * 0.5  # 3 bands
+        transform = from_origin(0, 100, 10, 10)
+        geotensor = GeoTensor(data, transform=transform, crs="EPSG:32631")
+
+        solar_irradiance = np.array([1.5])  # Only 1 band
+
+        with pytest.raises(AssertionError, match="Different number of channels"):
+            reflectance.reflectance_to_radiance(geotensor, solar_irradiance, observation_date_corr_factor=np.pi)
+
+
+class TestSRFErrors:
+    """Tests for srf function error handling."""
+
+    def test_mismatched_center_fwhm_raises(self):
+        """Test that mismatched center_wavelengths and fwhm raises AssertionError."""
+        center_wavelengths = np.array([450, 550, 650])  # 3 bands
+        fwhm = np.array([50, 50])  # Only 2 FWHM values
+        wavelengths = np.arange(400, 700, 1)
+
+        with pytest.raises(AssertionError, match="same shape"):
+            reflectance.srf(center_wavelengths, fwhm, wavelengths)
+
+
+class TestSRFEdgeCases:
+    """Tests for srf function edge cases."""
+
+    def test_single_wavelength(self):
+        """Test SRF with single wavelength in wavelengths array."""
+        center_wavelengths = np.array([550])
+        fwhm = np.array([50])
+        wavelengths = np.array([550])  # Single wavelength
+
+        result = reflectance.srf(center_wavelengths, fwhm, wavelengths)
+
+        assert result.shape == (1, 1)
+        # At center, value should be maximum
+        assert result[0, 0] > 0
+
+    def test_wavelengths_outside_band(self):
+        """Test SRF with wavelengths completely outside band range."""
+        center_wavelengths = np.array([550])
+        fwhm = np.array([50])
+        wavelengths = np.arange(800, 900)  # Far from center at 550
+
+        result = reflectance.srf(center_wavelengths, fwhm, wavelengths)
+
+        assert result.shape == (100, 1)
+        # SRF is normalized, so even outside band, values may not be tiny
+        # Check that it's a valid result with proper shape
+        assert result.sum() > 0  # Should have some weight due to normalization
+
+    def test_very_narrow_fwhm(self):
+        """Test SRF with very narrow FWHM."""
+        center_wavelengths = np.array([550])
+        fwhm = np.array([1])  # Very narrow: 1nm FWHM
+        wavelengths = np.arange(540, 560, 0.1)  # High resolution
+
+        result = reflectance.srf(center_wavelengths, fwhm, wavelengths)
+
+        # Should still work and have a sharp peak
+        assert result.shape == (200, 1)
+        peak_idx = np.argmax(result[:, 0])
+        # Peak should be near center
+        assert 95 < peak_idx < 105  # Near middle of 200 samples

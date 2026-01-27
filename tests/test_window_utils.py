@@ -464,3 +464,213 @@ class TestPadListNumpy:
         result = window_utils.pad_list_numpy(pad_width)
 
         assert result == [(0, 0), (0, 0)]
+
+
+# =============================================================================
+# Tests for window_utils error handling (Phase 2 Sprint 1)
+# =============================================================================
+
+
+class TestFigureOutTransformErrors:
+    """Tests for figure_out_transform function error handling."""
+
+    def test_no_transform_no_bounds_raises(self):
+        """Test that providing no transform and no bounds raises AssertionError."""
+        with pytest.raises(AssertionError, match="Transform and bounds not provided"):
+            window_utils.figure_out_transform(resolution_dst=10.0)
+
+    def test_no_transform_no_resolution_raises(self):
+        """Test that providing no transform and no resolution raises AssertionError."""
+        bounds = (0, 0, 100, 100)
+        with pytest.raises(AssertionError, match="Transform and resolution not provided"):
+            window_utils.figure_out_transform(bounds=bounds)
+
+    def test_all_none_raises(self):
+        """Test that providing all None parameters raises AssertionError."""
+        with pytest.raises(AssertionError):
+            window_utils.figure_out_transform()
+
+
+class TestGetSlicePadErrors:
+    """Tests for get_slice_pad function error handling."""
+
+    def test_completely_disjoint_windows_raises(self):
+        """Test that completely disjoint windows raise WindowError."""
+        window_data = rasterio.windows.Window(col_off=0, row_off=0, width=100, height=100)
+        window_read = rasterio.windows.Window(col_off=500, row_off=500, width=50, height=50)
+
+        with pytest.raises(rasterio.windows.WindowError):
+            window_utils.get_slice_pad(window_data, window_read)
+
+    def test_negative_disjoint_windows_raises(self):
+        """Test that negatively disjoint windows raise WindowError."""
+        window_data = rasterio.windows.Window(col_off=100, row_off=100, width=100, height=100)
+        window_read = rasterio.windows.Window(col_off=0, row_off=0, width=50, height=50)
+
+        with pytest.raises(rasterio.windows.WindowError):
+            window_utils.get_slice_pad(window_data, window_read)
+
+
+class TestExteriorPixelCoordsErrors:
+    """Tests for exterior_pixel_coords function error handling."""
+
+    def test_invalid_geometry_type_raises(self):
+        """Test that invalid geometry type raises NotImplementedError."""
+        transform = from_origin(0, 100, 10, 10)
+        point = Point(50, 50)  # Point is not Polygon or MultiPolygon
+
+        with pytest.raises(NotImplementedError, match="different from"):
+            window_utils.exterior_pixel_coords(transform, "EPSG:4326", point)
+
+
+class TestNormalizeBoundsEdgeCases:
+    """Tests for normalize_bounds edge cases and error handling."""
+
+    def test_inf_values(self):
+        """Test handling of infinite values in bounds."""
+        bounds = (0, 0, float("inf"), 100)
+
+        # Function should handle inf values (may produce inf in output)
+        result = window_utils.normalize_bounds(bounds)
+        assert result[2] == float("inf")
+
+    def test_negative_inf_values(self):
+        """Test handling of negative infinite values in bounds."""
+        bounds = (float("-inf"), 0, 100, 100)
+
+        result = window_utils.normalize_bounds(bounds)
+        assert result[0] == float("-inf")
+
+    def test_nan_values(self):
+        """Test handling of NaN values in bounds."""
+        bounds = (0, 0, float("nan"), 100)
+
+        # NaN comparison results in margin being added since min(0, nan) returns nan
+        # which causes xmin >= xmax to be False (nan comparisons are always False)
+        # so margin is added, leading to (-0.0005, ..., 0.0005, ...)
+        result = window_utils.normalize_bounds(bounds)
+        # Result depends on NaN comparison behavior in min/max
+        assert len(result) == 4  # Function completes without error
+
+
+class TestPadWindowEdgeCases:
+    """Tests for pad_window edge cases."""
+
+    def test_negative_padding_produces_smaller_window(self):
+        """Test that negative padding produces a smaller window."""
+        window = rasterio.windows.Window(col_off=50, row_off=50, width=100, height=100)
+        pad_size = (-10, -20)  # Negative padding
+
+        result = window_utils.pad_window(window, pad_size)
+
+        # Negative padding shrinks the window
+        assert result.width == 100 + 2 * (-20)  # 60
+        assert result.height == 100 + 2 * (-10)  # 80
+        assert result.col_off == 50 - (-20)  # 70
+        assert result.row_off == 50 - (-10)  # 60
+
+    def test_large_negative_padding_raises_on_negative_dimensions(self):
+        """Test that very large negative padding raises ValueError from rasterio."""
+        window = rasterio.windows.Window(col_off=50, row_off=50, width=100, height=100)
+        pad_size = (-60, -60)  # Padding larger than half dimensions
+
+        # rasterio.windows.Window validates that width/height must be non-negative
+        with pytest.raises(ValueError, match="non-negative"):
+            window_utils.pad_window(window, pad_size)
+
+
+class TestPadWindowToSizeEdgeCases:
+    """Tests for pad_window_to_size edge cases."""
+
+    def test_zero_size(self):
+        """Test padding to zero size."""
+        window = rasterio.windows.Window(col_off=10, row_off=10, width=50, height=50)
+        size = (0, 0)
+
+        result = window_utils.pad_window_to_size(window, size)
+
+        assert result.width == 0
+        assert result.height == 0
+
+    def test_negative_size_raises(self):
+        """Test padding to negative size raises ValueError from rasterio."""
+        window = rasterio.windows.Window(col_off=10, row_off=10, width=50, height=50)
+        size = (-10, -10)
+
+        # rasterio.windows.Window validates that width/height must be non-negative
+        with pytest.raises(ValueError, match="non-negative"):
+            window_utils.pad_window_to_size(window, size)
+
+
+class TestRoundOuterWindowEdgeCases:
+    """Tests for round_outer_window edge cases."""
+
+    def test_zero_dimensions(self):
+        """Test rounding window with zero dimensions."""
+        window = rasterio.windows.Window(col_off=10, row_off=20, width=0, height=0)
+
+        result = window_utils.round_outer_window(window)
+
+        assert result.width == 0
+        assert result.height == 0
+
+    def test_very_small_fractional(self):
+        """Test rounding window with very small fractional values."""
+        window = rasterio.windows.Window(col_off=10.0001, row_off=20.0001, width=50.0001, height=30.0001)
+
+        result = window_utils.round_outer_window(window)
+
+        # Very small fractions should be rounded to integers
+        assert result.col_off == 10
+        assert result.row_off == 20
+        assert result.width == 50
+        assert result.height == 30
+
+    def test_negative_offsets(self):
+        """Test rounding window with negative offsets."""
+        window = rasterio.windows.Window(col_off=-10.5, row_off=-20.5, width=50.5, height=30.5)
+
+        result = window_utils.round_outer_window(window)
+
+        assert result.col_off == -11  # floor(-10.5)
+        assert result.row_off == -21  # floor(-20.5)
+
+
+class TestPolygonToCrsEdgeCases:
+    """Tests for polygon_to_crs edge cases."""
+
+    def test_empty_polygon(self):
+        """Test transforming empty polygon."""
+        polygon = Polygon()  # Empty polygon
+
+        result = window_utils.polygon_to_crs(polygon, "EPSG:4326", "EPSG:4326")
+
+        assert result.is_empty
+
+
+class TestWindowFromBoundsEdgeCases:
+    """Tests for window operations with unusual bounds."""
+
+    def test_window_polygon_zero_dimensions(self):
+        """Test window_polygon with zero-dimension window."""
+        window = rasterio.windows.Window(col_off=10, row_off=10, width=0, height=0)
+        transform = from_origin(0, 100, 1, 1)
+
+        result = window_utils.window_polygon(window, transform)
+
+        # Zero-dimension window produces a degenerate polygon (all vertices at same point)
+        # This creates an invalid polygon by Shapely standards
+        assert isinstance(result, Polygon)
+        # The polygon has area 0 since width and height are 0
+        assert result.area == 0
+
+    def test_window_bounds_negative_offset(self):
+        """Test window_bounds with negative offsets."""
+        window = rasterio.windows.Window(col_off=-10, row_off=-10, width=50, height=50)
+        transform = from_origin(0, 100, 1, 1)
+
+        xmin, ymin, xmax, ymax = window_utils.window_bounds(window, transform)
+
+        # Should handle negative offsets correctly
+        assert xmin == -10
+        assert xmax == 40
