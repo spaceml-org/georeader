@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 from rasterio.transform import from_origin
 
-from georeader.abstract_reader import FakeGeoData, GeoData, GeoDataBase, same_extent
+from georeader.abstract_reader import FakeGeoData, same_extent
 from georeader.geotensor import GeoTensor
 
 
