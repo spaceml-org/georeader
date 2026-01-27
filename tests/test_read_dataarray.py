@@ -11,13 +11,15 @@ Uses a temporary GeoTiff test file created via the test_raster_path fixture.
 The test file has: 15 bands, height=200, width=250, CRS=EPSG:32738, resolution=10.0m
 """
 
-from georeader import read, rasterio_reader, dataarray
-import rasterio
-import rasterio.windows
+import itertools
+import math
+
 import numpy as np
 import pytest
-import math
-import itertools
+import rasterio
+import rasterio.windows
+
+from georeader import dataarray, rasterio_reader, read
 
 # Define windows for testing - based on the test image dimensions (height=200, width=250)
 # Normal window within bounds
@@ -53,6 +55,7 @@ def test_transform_bounds(test_raster_path):
 
     # Now verify we can recover the transform from these coordinates
     import xarray as xr
+
     coords_obj = xr.Coordinates(coords)
     transform = dataarray.coords_to_transform(coords_obj)
 
@@ -120,10 +123,12 @@ def test_read_window(test_raster_path, window, trigger_load):
 
     # Check that the output has the correct shape
     named_shape = dict(zip(chip_out.dims, chip_out.shape))
-    assert named_shape["y"] == window.height, \
+    assert named_shape["y"] == window.height, (
         f"Different height found: ({named_shape['y']}, {named_shape['x']}) expected ({window.height}, {window.width})"
-    assert named_shape["x"] == window.width, \
+    )
+    assert named_shape["x"] == window.width, (
         f"Different width found: ({named_shape['y']}, {named_shape['x']}) expected ({window.height}, {window.width})"
+    )
 
     # Check the same data is read with rasterio
     with rasterio.open(test_raster_path) as src:
@@ -132,10 +137,10 @@ def test_read_window(test_raster_path, window, trigger_load):
         expected_bounds = rasterio.windows.bounds(window, src.transform)
 
     # Verify bounds and transform
-    assert chip_out.bounds == expected_bounds, \
-        f"Different bounds found: {chip_out.bounds} expected: {expected_bounds}"
-    assert chip_out.transform == expected_transform, \
+    assert chip_out.bounds == expected_bounds, f"Different bounds found: {chip_out.bounds} expected: {expected_bounds}"
+    assert chip_out.transform == expected_transform, (
         f"Different transform found: {chip_out.transform} expected: {expected_transform}"
+    )
 
     # Verify the actual data values match
     assert np.allclose(chip_out_expected, chip_out.values), "Content of the array is different"
@@ -173,16 +178,18 @@ def test_read_bounds(test_raster_path, window, trigger_load):
 
     # Check that the output has the correct shape
     named_shape = dict(zip(chip_out.dims, chip_out.shape))
-    assert named_shape["y"] == window.height, \
+    assert named_shape["y"] == window.height, (
         f"Different height found: ({named_shape['y']}, {named_shape['x']}) expected ({window.height}, {window.width})"
-    assert named_shape["x"] == window.width, \
+    )
+    assert named_shape["x"] == window.width, (
         f"Different width found: ({named_shape['y']}, {named_shape['x']}) expected ({window.height}, {window.width})"
+    )
 
     # Verify bounds and transform
-    assert chip_out.bounds == bounds_read, \
-        f"Different bounds found: {chip_out.bounds} expected: {bounds_read}"
-    assert chip_out.transform == expected_transform, \
+    assert chip_out.bounds == bounds_read, f"Different bounds found: {chip_out.bounds} expected: {bounds_read}"
+    assert chip_out.transform == expected_transform, (
         f"Different transform found: {chip_out.transform} expected: {expected_transform}"
+    )
 
     # Verify the actual data values match
     assert np.allclose(chip_out_expected, chip_out.values), "Content of the array is different"
@@ -210,8 +217,10 @@ def test_read_reproject_same(test_raster_path, window):
         crs_bounds = src.crs
 
     chip_out = read.read_reproject(
-        rst, bounds=bounds_read, dst_crs=crs_bounds,
-        resolution_dst_crs=(abs(expected_transform.a), abs(expected_transform.e))
+        rst,
+        bounds=bounds_read,
+        dst_crs=crs_bounds,
+        resolution_dst_crs=(abs(expected_transform.a), abs(expected_transform.e)),
     )
 
     # Skip fully out-of-bounds windows
@@ -220,16 +229,18 @@ def test_read_reproject_same(test_raster_path, window):
 
     # Check that the output has the correct shape
     named_shape = dict(zip(chip_out.dims, chip_out.shape))
-    assert named_shape["y"] == window.height, \
+    assert named_shape["y"] == window.height, (
         f"Different height found: ({named_shape['y']}, {named_shape['x']}) expected ({window.height}, {window.width})"
-    assert named_shape["x"] == window.width, \
+    )
+    assert named_shape["x"] == window.width, (
         f"Different width found: ({named_shape['y']}, {named_shape['x']}) expected ({window.height}, {window.width})"
+    )
 
     # Verify bounds and transform
-    assert chip_out.bounds == bounds_read, \
-        f"Different bounds found: {chip_out.bounds} expected: {bounds_read}"
-    assert chip_out.transform == expected_transform, \
+    assert chip_out.bounds == bounds_read, f"Different bounds found: {chip_out.bounds} expected: {bounds_read}"
+    assert chip_out.transform == expected_transform, (
         f"Different transform found: {chip_out.transform} expected: {expected_transform}"
+    )
 
     # Verify the actual data values match (allowing for small differences due to reprojection)
     assert np.allclose(chip_out_expected, chip_out.values), "Content of the array is different"
@@ -259,10 +270,7 @@ def test_read_reproject_other_res(test_raster_path, window):
         factor_diff_shape = np.array(src.res) / np.array(RESOLUTION_TEST)
         crs_bounds = src.crs
 
-    chip_out = read.read_reproject(
-        rst, bounds=bounds_read, dst_crs=crs_bounds,
-        resolution_dst_crs=RESOLUTION_TEST
-    )
+    chip_out = read.read_reproject(rst, bounds=bounds_read, dst_crs=crs_bounds, resolution_dst_crs=RESOLUTION_TEST)
 
     # Skip fully out-of-bounds windows
     if chip_out is None:
@@ -270,28 +278,29 @@ def test_read_reproject_other_res(test_raster_path, window):
 
     # Check that the output has the correct shape (scaled by resolution factor)
     named_shape = dict(zip(chip_out.dims, chip_out.shape))
-    assert named_shape["y"] == int(window.height * factor_diff_shape[1]), \
+    assert named_shape["y"] == int(window.height * factor_diff_shape[1]), (
         f"Different height found: {named_shape['y']} expected {int(window.height * factor_diff_shape[1])}"
-    assert named_shape["x"] == int(window.width * factor_diff_shape[0]), \
+    )
+    assert named_shape["x"] == int(window.width * factor_diff_shape[0]), (
         f"Different width found: {named_shape['x']} expected {int(window.width * factor_diff_shape[0])}"
+    )
 
     # Verify bounds remain the same
-    assert chip_out.bounds == bounds_read, \
-        f"Different bounds found: {chip_out.bounds} expected: {bounds_read}"
+    assert chip_out.bounds == bounds_read, f"Different bounds found: {chip_out.bounds} expected: {bounds_read}"
 
     # Verify the transform has the expected resolution
     resolution_signed = (
         math.copysign(RESOLUTION_TEST[0], expected_transform.a),
-        math.copysign(RESOLUTION_TEST[1], expected_transform.e)
+        math.copysign(RESOLUTION_TEST[1], expected_transform.e),
     )
 
-    expected_transform_new_res = (
-        rasterio.Affine.translation(expected_transform.c, expected_transform.f) *
-        rasterio.Affine.scale(*resolution_signed)
-    )
+    expected_transform_new_res = rasterio.Affine.translation(
+        expected_transform.c, expected_transform.f
+    ) * rasterio.Affine.scale(*resolution_signed)
 
-    assert chip_out.transform == expected_transform_new_res, \
+    assert chip_out.transform == expected_transform_new_res, (
         f"Different transform found: {chip_out.transform} expected: {expected_transform_new_res}"
+    )
 
 
 def test_read_after_set_window(test_raster_path):
@@ -318,9 +327,101 @@ def test_read_after_set_window(test_raster_path):
     data1 = read.read_from_bounds(rst1, bounds_read, crs_bounds=crs_bounds)
     data2 = read.read_from_bounds(rst2, bounds_read, crs_bounds=crs_bounds)
 
-    assert data1.bounds == data2.bounds, \
-        f"Different bounds found: {data1.bounds} expected: {data2.bounds}"
-    assert data1.transform == data2.transform, \
+    assert data1.bounds == data2.bounds, f"Different bounds found: {data1.bounds} expected: {data2.bounds}"
+    assert data1.transform == data2.transform, (
         f"Different transform found: {data1.transform} expected: {data2.transform}"
+    )
 
     assert np.allclose(data1.values, data2.values), "Content of the array is different"
+
+
+# =============================================================================
+# Tests for dataarray conversion functions
+# =============================================================================
+
+
+class TestDataArrayConversions:
+    """Tests for toDataArray and fromDataArray conversion functions."""
+
+    def test_to_dataarray(self, test_raster_path):
+        """Test converting GeoTensor to xarray DataArray."""
+        rst = rasterio_reader.RasterioReader(test_raster_path)
+        geotensor = rst.load()
+
+        da = dataarray.toDataArray(geotensor)
+
+        assert da is not None
+        assert da.shape == geotensor.shape
+        # Should have x and y coordinates
+        assert "x" in da.coords
+        assert "y" in da.coords
+
+    def test_from_dataarray_roundtrip(self, test_raster_path):
+        """Test roundtrip conversion GeoTensor -> DataArray -> GeoTensor."""
+        rst = rasterio_reader.RasterioReader(test_raster_path)
+        original = rst.load()
+
+        # Convert to DataArray
+        da = dataarray.toDataArray(original)
+
+        # Convert back to GeoTensor
+        restored = dataarray.fromDataArray(da, crs=original.crs)
+
+        assert np.allclose(original.values, restored.values)
+        assert original.transform.almost_equals(restored.transform, precision=1e-6)
+
+    def test_coords_to_transform_regular_grid(self):
+        """Test coords_to_transform with regular grid."""
+        import xarray as xr
+
+        # Create regular grid coordinates
+        x_coords = np.linspace(0, 100, 101)  # 101 points, 1.0 spacing
+        y_coords = np.linspace(100, 0, 101)  # 101 points, -1.0 spacing (top to bottom)
+
+        coords = xr.Coordinates({"x": x_coords, "y": y_coords})
+
+        transform = dataarray.coords_to_transform(coords)
+
+        assert transform is not None
+        # Check resolution
+        assert abs(transform.a) == pytest.approx(1.0, rel=0.01)
+        assert abs(transform.e) == pytest.approx(1.0, rel=0.01)
+
+    def test_getcoords_from_transform_shape(self):
+        """Test generating coordinates from transform and shape."""
+        from rasterio.transform import from_origin
+
+        transform = from_origin(0, 100, 10, 10)  # 10m resolution
+        shape = (50, 50)  # 50 rows, 50 cols
+
+        coords = dataarray.getcoords_from_transform_shape(transform, shape)
+
+        assert "x" in coords
+        assert "y" in coords
+        assert len(coords["x"]) == 50
+        assert len(coords["y"]) == 50
+
+    def test_to_dataarray_with_extra_coords(self, test_raster_path):
+        """Test toDataArray with extra coordinates."""
+        rst = rasterio_reader.RasterioReader(test_raster_path)
+        geotensor = rst.load()
+
+        # Add extra band coordinates
+        band_names = [f"band_{i}" for i in range(geotensor.count)]
+        extra_coords = {"band": band_names}
+
+        da = dataarray.toDataArray(geotensor, extra_coords=extra_coords)
+
+        assert "band" in da.coords
+        assert list(da.coords["band"].values) == band_names
+
+    def test_from_dataarray_with_fill_value(self, test_raster_path):
+        """Test fromDataArray with custom fill value."""
+        rst = rasterio_reader.RasterioReader(test_raster_path)
+        original = rst.load()
+
+        da = dataarray.toDataArray(original)
+
+        restored = dataarray.fromDataArray(da, crs=original.crs, fill_value_default=-9999)
+
+        assert restored.fill_value_default == -9999
