@@ -1540,12 +1540,13 @@ def s2_load_from_feature_element84(
     granules = {}
     for k, v in feature["assets"].items():
         if v["href"].endswith(".tif"):
-            granules[k] = v["href"]
+            band_name = os.path.basename(os.path.splitext(v["href"])[0])
+            granules[band_name] = v["href"]
 
     polygon = shape(feature["geometry"])
 
-    metadata_msi = feature["assets"]["metadata"]["href"]
-    s2folder = feature["properties"]["sentinel:product_id"] + ".SAFE"
+    metadata_msi = feature["assets"]["product_metadata"]["href"]
+    s2folder = feature["properties"]["s2:product_uri"] + ".SAFE"
 
     return s2loader(
         s2folder=s2folder,

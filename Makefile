@@ -14,9 +14,9 @@ check: ## Run code quality tools.
 	@poetry run mypy
 
 .PHONY: test
-test: ## Test the code with pytest
+test: ## Test the code with pytest (requires tutorial group: poetry install --with dev,tutorial)
 	@echo "🚀 Testing code: Running pytest"
-	@poetry run pytest --doctest-modules
+	@poetry run pytest tests/ -v
 
 .PHONY: build
 build: clean-build ## Build wheel file using poetry
