@@ -378,12 +378,22 @@ class GeoTensor(np.ndarray):
         
         Args:
             dtype: Target data type for the array.
+            
+        Raises:
+            RuntimeError: If the dtype cannot be changed in-place (due to numpy subclass limitations).
         """
         warnings.warn(
             "set_dtype() is deprecated. Use astype() for a cleaner interface.",
             DeprecationWarning,
             stacklevel=2
         )
+        original_dtype = self.dtype
+        requested_dtype = np.dtype(dtype)
+        
+        # If requesting the same dtype, nothing to do
+        if original_dtype == requested_dtype:
+            return
+        
         # Convert using numpy's astype
         result = np.asarray(self).astype(dtype)
         # Since we can't truly change dtype in-place when sizes differ,
@@ -391,6 +401,14 @@ class GeoTensor(np.ndarray):
         # This modifies the underlying buffer
         np.ndarray.resize(self, result.shape, refcheck=False)
         self[:] = result
+        
+        # Check if dtype actually changed when a change was requested
+        if self.dtype != requested_dtype:
+            raise RuntimeError(
+                f"set_dtype() failed to change dtype from {original_dtype} to {requested_dtype}. "
+                f"This is due to numpy subclass limitations. Use astype() instead to create "
+                f"a new GeoTensor with the desired dtype."
+            )
 
     # Not needed due to ufunc implementation?
     # def astype(self, dtype) -> Self:
