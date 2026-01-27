@@ -391,7 +391,15 @@ class TestReadReprojectLike:
 
 
 class TestApplyAntiAliasing:
-    """Tests for apply_anti_aliasing function."""
+    """Tests for apply_anti_aliasing function.
+
+    These tests require scipy which is an optional dependency.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _skip_without_scipy(self):
+        """Skip all tests in this class if scipy is not available."""
+        pytest.importorskip("scipy")
 
     def test_basic_anti_aliasing(self, sample_geodata):
         """Test basic anti-aliasing application."""
