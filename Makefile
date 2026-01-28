@@ -104,19 +104,21 @@ docs-publish: ## Build and publish documentation to GitHub Pages
 	@poetry run mkdocs build
 	@poetry run ghp-import -n -p -f site
 
-.PHONY: update
-update: ## Update dependencies to latest versions
-	@echo "⬆️  Updating dependencies"
-	@poetry update
-
-.PHONY: lock
-lock: ## Regenerate poetry.lock file
-	@echo "🔒 Regenerating lock file"
-	@poetry lock
-
-.PHONY: shell
-shell: ## Activate poetry virtual environment shell
-	@poetry shell
+.PHONY: docs-publish-alpha
+docs-publish-alpha: ## Build and publish alpha docs to GitHub Pages under /alpha
+	@echo "🚀 Building alpha documentation into site/alpha"
+	@poetry run mkdocs build --site-dir site/alpha
+	@echo "🚀 Publishing alpha documentation to GitHub Pages under /alpha"
+	@cp -r site/alpha site_alpha_tmp
+	@git fetch origin gh-pages:gh-pages || true
+	@git checkout gh-pages || git checkout --orphan gh-pages
+	@rm -rf alpha
+	@cp -r site_alpha_tmp alpha
+	@rm -rf site_alpha_tmp
+	@git add alpha
+	@git commit -m "Update alpha docs" || true
+	@git push origin gh-pages
+	@git checkout -
 
 .PHONY: help
 help:
