@@ -555,8 +555,8 @@ class EMITImage:
         if glt is None:
             # Open the location group to access glt_x and glt_y
             location_ds = safe_open_netcdf(self.filename, cache=False, load=False, group='location')
-            glt_x = location_ds['glt_x'].values
-            glt_y = location_ds['glt_y'].values
+            glt_x = np.nan_to_num(location_ds['glt_x'].values, nan=0).astype(np.int32)
+            glt_y = np.nan_to_num(location_ds['glt_y'].values, nan=0).astype(np.int32)
             location_ds.close()
             
             glt_arr = np.zeros((2,) + glt_x.shape, dtype=np.int32)
