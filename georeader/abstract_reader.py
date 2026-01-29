@@ -1,3 +1,135 @@
+"""
+Abstract Reader: Base protocols and interfaces for geospatial data readers.
+
+This module defines the abstract interfaces (Protocols) that all georeader
+data sources must implement. These interfaces enable polymorphic processing
+of raster data from diverse sources (files, cloud storage, web services).
+
+Type Hierarchy
+--------------
+
+The module defines a hierarchy of data types::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                    GEOREADER TYPE HIERARCHY                              │
+    ├─────────────────────────────────────────────────────────────────────────┤
+    │                                                                          │
+    │  GeoDataBase (Protocol)           Minimal interface for geospatial data │
+    │  ├── transform: Affine            Pixel → coordinate mapping            │
+    │  ├── crs: Any                     Coordinate reference system           │
+    │  └── shape: Tuple                 (C, H, W) or (H, W) dimensions        │
+    │       │                                                                  │
+    │       ▼                                                                  │
+    │  AbstractGeoData (Protocol)       Adds read capabilities                │
+    │  ├── values: ndarray              Array data                            │
+    │  ├── fill_value_default           Nodata value                          │
+    │  └── load(): GeoTensor            Read all data                         │
+    │       │                                                                  │
+    │       ├──────────────────────┬──────────────────────┐                   │
+    │       ▼                      ▼                      ▼                   │
+    │  RasterioReader         GeoTensor              Custom Readers           │
+    │  (Lazy file access)     (In-memory)           (User-defined)           │
+    │                                                                          │
+    │  GeoData = Union[AbstractGeoData, GeoTensor]  ← Common type alias       │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+Protocol Requirements
+---------------------
+
+To implement a custom reader, fulfill these interfaces::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                    REQUIRED PROPERTIES                                   │
+    ├─────────────────────────────────────────────────────────────────────────┤
+    │                                                                          │
+    │  Property              Type                  Description                 │
+    │  ──────────           ──────                ───────────                 │
+    │  transform            rasterio.Affine       6-element affine matrix     │
+    │  crs                  Any (CRS-like)        EPSG code, WKT, or CRS obj  │
+    │  shape                Tuple[int, ...]       (C, H, W) or (H, W)         │
+    │  values               ndarray               Raster data array           │
+    │  fill_value_default   number                Nodata/fill value           │
+    │                                                                          │
+    │  Required Methods:                                                       │
+    │  ─────────────────                                                       │
+    │  load() → GeoTensor   Read all data into memory                         │
+    │                                                                          │
+    │  Derived Properties (computed from above):                              │
+    │  ──────────────────────────────────────────                             │
+    │  width                shape[-1]             Number of columns           │
+    │  height               shape[-2]             Number of rows              │
+    │  bounds               From transform+shape  (minx, miny, maxx, maxy)    │
+    │  res                  From transform        (xres, yres) pixel size     │
+    │  footprint            Polygon               Bounding polygon in CRS     │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+FakeGeoData Utility
+-------------------
+
+Lightweight placeholder for georeferencing without actual data::
+
+    # Create placeholder for transform/CRS operations
+    fake = FakeGeoData(
+        crs="EPSG:4326",
+        transform=Affine.translation(-122.5, 37.5) * Affine.scale(0.001, -0.001),
+        shape=(3, 1000, 1000)
+    )
+
+    # Use for window calculations, bounds checking, etc.
+    window = window_from_bounds(fake, bounds, crs_bounds)
+
+Module Contents
+---------------
+
+Protocols:
+    - :class:`GeoDataBase`: Minimal geospatial interface (transform, crs, shape)
+    - :class:`AbstractGeoData`: Full reader interface (adds values, load)
+
+Type Aliases:
+    - :data:`GeoData`: Union[AbstractGeoData, GeoTensor]
+    - :data:`GeoDataBase`: Protocol for any geospatial object
+
+Utilities:
+    - :class:`FakeGeoData`: Lightweight georeferencing placeholder
+    - :func:`res`: Get pixel resolution from GeoData
+    - :func:`bounds`: Get geographic bounds from GeoData
+    - :func:`footprint`: Get bounding polygon from GeoData
+
+Quick Start
+-----------
+
+Check if an object implements the GeoData interface::
+
+    from georeader.abstract_reader import GeoDataBase
+
+    def process_geodata(data: GeoDataBase):
+        '''Works with any GeoData-compatible object'''
+        print(f"CRS: {data.crs}")
+        print(f"Shape: {data.shape}")
+        print(f"Bounds: {window_utils.window_bounds(data)}")
+
+Create a fake geodata for testing::
+
+    from georeader.abstract_reader import FakeGeoData
+    from rasterio.transform import from_bounds
+
+    fake = FakeGeoData(
+        crs="EPSG:4326",
+        transform=from_bounds(-122.5, 37.0, -122.0, 37.5, 500, 500),
+        shape=(3, 500, 500)
+    )
+
+See Also
+--------
+georeader.geotensor : Concrete in-memory implementation
+georeader.rasterio_reader : Lazy file-backed implementation
+typing.Protocol : Python protocol documentation
+
+References
+----------
+- Python Protocols: https://peps.python.org/pep-0544/
+- Rasterio DatasetReader: https://rasterio.readthedocs.io/en/latest/api/rasterio.html
+"""
 import numpy as np
 from georeader import window_utils
 from georeader.geotensor import GeoTensor

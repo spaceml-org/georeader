@@ -1,3 +1,168 @@
+"""
+Window Utilities: Coordinate transformation between pixel and geographic space.
+
+This module provides utilities for working with rasterio Windows - the fundamental
+data structure for specifying regions of interest in pixel coordinates. Windows
+enable efficient reading of subsets from large raster files.
+
+Window Coordinate System
+------------------------
+
+A Window represents a rectangular region in pixel space::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                    RASTERIO WINDOW ANATOMY                               │
+    ├─────────────────────────────────────────────────────────────────────────┤
+    │                                                                          │
+    │    Full Raster (0,0 at top-left)                                        │
+    │    ↓                                                                     │
+    │    ┌────────────────────────────────────────────────────────┐           │
+    │    │ (0,0)                                        cols →    │           │
+    │    │     ┌────────────────────┐                             │           │
+    │    │     │← col_off →│        │                             │           │
+    │    │     │    (row_off, col_off) ← Window origin            │           │
+    │    │     │           ·─────────────────┐                    │           │
+    │  r │     │           │    WINDOW       │                    │           │
+    │  o │     │           │                 │ height             │           │
+    │  w │     │           │    width        │                    │           │
+    │  s │     │           └─────────────────┘                    │           │
+    │    │     │                                                  │           │
+    │  ↓ │     │                                                  │           │
+    │    └────────────────────────────────────────────────────────┘           │
+    │                                                                          │
+    │    Window = rasterio.windows.Window(col_off, row_off, width, height)    │
+    │                                     ───────  ───────  ─────  ──────     │
+    │                                     column   row      cols   rows       │
+    │                                     offset   offset                     │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+    NOTE: Window constructor order is (col_off, row_off) but most geospatial
+          operations use (row, col) or (y, x) order. Be careful!
+
+Window ↔ Bounds Conversion
+--------------------------
+
+Converting between pixel windows and geographic bounds requires a transform::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │              WINDOW ↔ BOUNDS TRANSFORMATION                              │
+    ├─────────────────────────────────────────────────────────────────────────┤
+    │                                                                          │
+    │    WINDOW (pixels)              AFFINE TRANSFORM           BOUNDS       │
+    │    ┌─────────────┐                    ║                ┌─────────────┐  │
+    │    │ col_off=100 │                    ║                │ minx=-122.5 │  │
+    │    │ row_off=200 │   ──────────────►  ║  ──────────►   │ miny=37.0   │  │
+    │    │ width=256   │   window_bounds()  ║                │ maxx=-122.0 │  │
+    │    │ height=256  │                    ║                │ maxy=37.5   │  │
+    │    └─────────────┘                    ║                └─────────────┘  │
+    │                                       ║                                  │
+    │                                       ║   Affine(a, b, c,               │
+    │                      ◄────────────────║          d, e, f)               │
+    │                      bounds_to_windows()                                │
+    │                                       ║                                  │
+    │    Affine Transform encodes:          ║                                  │
+    │    • Pixel resolution (a, e)          ║                                  │
+    │    • Origin coordinates (c, f)        ║                                  │
+    │    • Rotation/shear (b, d)            ║                                  │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+Window Rounding Strategies
+--------------------------
+
+When bounds don't align exactly with pixel boundaries::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                    WINDOW ROUNDING STRATEGIES                            │
+    ├─────────────────────────────────────────────────────────────────────────┤
+    │                                                                          │
+    │   Exact bounds (before rounding):                                       │
+    │   ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐                                │
+    │   │           Desired area             │                                │
+    │   └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘                                │
+    │                                                                          │
+    │   round_outer_window():                 round_inner_window():           │
+    │   ┌─────────────────────────────┐      ┌─────────────────────┐         │
+    │   │ ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐  │      │  ┌ ─ ─ ─ ─ ─ ─ ─ ┐ │         │
+    │   │ │                       │  │      │  │               │  │         │
+    │   │ │   Expands outward     │  │      │  │ Shrinks inward │  │         │
+    │   │ │   to include all      │  │      │  │ to only fully  │  │         │
+    │   │ │   partial pixels      │  │      │  │ covered pixels │  │         │
+    │   │ └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘  │      │  └ ─ ─ ─ ─ ─ ─ ─ ┘ │         │
+    │   └─────────────────────────────┘      └─────────────────────┘         │
+    │                                                                          │
+    │   Use outer when: You need all data that intersects the bounds          │
+    │   Use inner when: You need only data fully within the bounds            │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+Precision Handling
+------------------
+
+The module uses `PIXEL_PRECISION = 3` decimal places to handle floating-point
+precision issues in coordinate transformations::
+
+    Example: A window at col_off=99.9997 should be col_off=100
+             A window at col_off=100.0003 should be col_off=100
+             A window at col_off=100.5 should NOT be rounded
+
+Module Functions Overview
+-------------------------
+
+Window Padding:
+    - :func:`pad_window`: Add symmetric padding to window
+    - :func:`pad_window_to_size`: Pad window to specific size
+    - :func:`remove_pad`: Remove padding (slice array)
+
+Window Rounding:
+    - :func:`round_outer_window`: Round to include all partial pixels
+    - :func:`round_inner_window`: Round to exclude partial pixels
+
+Bounds Conversion:
+    - :func:`window_bounds`: Window → geographic bounds
+    - :func:`bounds_to_windows`: Geographic bounds → list of windows (handles antimeridian)
+    - :func:`polygon_to_crs`: Transform polygon to target CRS
+
+Grid Operations:
+    - :func:`apply_transform_to_pol`: Apply affine transform to polygon
+    - :func:`get_valid_mask`: Get mask of valid data region
+    - :func:`figure_out_transform`: Create transform from bounds and shape
+
+Quick Start
+-----------
+
+Convert bounds to a window::
+
+    from georeader import window_utils
+    import rasterio
+
+    # Open raster and get transform
+    with rasterio.open("data.tif") as src:
+        transform = src.transform
+        crs = src.crs
+
+    # Convert geographic bounds to pixel window
+    bounds = (-122.5, 37.0, -122.0, 37.5)  # (minx, miny, maxx, maxy)
+    windows = window_utils.bounds_to_windows(
+        data=src, bounds_dst=bounds, crs_dst="EPSG:4326"
+    )
+    # Returns list of Windows (usually 1, but 2 if crosses antimeridian)
+
+Get geographic bounds from a window::
+
+    window = rasterio.windows.Window(col_off=100, row_off=200, width=256, height=256)
+    bounds = window_utils.window_bounds(window, transform)
+    # Returns (minx, miny, maxx, maxy)
+
+See Also
+--------
+georeader.read : Higher-level reading functions using windows
+georeader.geotensor : GeoTensor with transform/bounds properties
+rasterio.windows : Base Window class documentation
+
+References
+----------
+- Rasterio windows: https://rasterio.readthedocs.io/en/latest/topics/windowed-rw.html
+- Affine transforms: https://github.com/rasterio/affine
+"""
 import math
 import numbers
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -15,16 +180,72 @@ PIXEL_PRECISION = 3
 
 def pad_window(window: rasterio.windows.Window, pad_size: Tuple[int, int]) -> rasterio.windows.Window:
     """
-    Add the provided pad to a rasterio window object
+    Expand a window symmetrically by adding padding on all sides.
+
+    Creates a larger window by adding the specified padding to each edge.
+    The center of the output window remains at the center of the input window.
+    Essential for CNN inference where context around tiles is needed.
+
+    Window expansion diagram::
+
+        Original window:              Padded window (pad_size=(2, 3)):
+        ┌─────────────┐               ┌─────────────────────┐
+        │             │               │← 3 cols → ← 3 cols →│
+        │   100×50    │     ───►      │↑         ↑          │
+        │   window    │               │2   106×54 window    │
+        │             │               │↓         ↓          │
+        └─────────────┘               │← 3 cols → ← 3 cols →│
+                                      └─────────────────────┘
+
+        Output: width = 100 + 2×3 = 106
+                height = 50 + 2×2 = 54
+                col_off = original - 3
+                row_off = original - 2
 
     Args:
-        window: input window
-        pad_size: Tuple,
-            `pad_size[0]` pad to add in rows (in both sides).
-            `pad_size[1]` pad to add in columns (in both sides).
+        window (rasterio.windows.Window): Input window to expand.
+            Format: Window(col_off, row_off, width, height).
+        pad_size (Tuple[int, int]): Padding amounts as (pad_rows, pad_cols).
+            - pad_size[0]: Pixels to add above AND below (total 2× added to height)
+            - pad_size[1]: Pixels to add left AND right (total 2× added to width)
+            Note: Order is (rows, cols) matching numpy array convention.
 
     Returns:
-        window with width `window.width + 2*pad_size[1]` and height `window.height + 2 * pad_size[0]`
+        rasterio.windows.Window: Expanded window with:
+            - col_off = original.col_off - pad_size[1]
+            - row_off = original.row_off - pad_size[0]
+            - width = original.width + 2 * pad_size[1]
+            - height = original.height + 2 * pad_size[0]
+
+    Examples:
+        >>> import rasterio.windows
+        >>>
+        >>> # Original 100×50 window at (10, 20)
+        >>> window = rasterio.windows.Window(10, 20, 100, 50)
+        >>>
+        >>> # Add 5 rows and 10 columns of padding
+        >>> padded = pad_window(window, pad_size=(5, 10))
+        >>> print(f"Original: {window}")
+        Window(col_off=10, row_off=20, width=100, height=50)
+        >>> print(f"Padded: {padded}")
+        Window(col_off=0, row_off=15, width=120, height=60)
+        >>> # New dimensions: 100+20=120, 50+10=60
+        >>> # New offset: (10-10, 20-5) = (0, 15)
+        >>>
+        >>> # CNN context: add 32 pixels around 256×256 tile
+        >>> tile = rasterio.windows.Window(128, 256, 256, 256)
+        >>> tile_with_context = pad_window(tile, pad_size=(32, 32))
+        >>> print(f"With context: {tile_with_context}")
+        Window(col_off=96, row_off=224, width=320, height=320)
+
+    Note:
+        - Output window may have negative offsets (boundless reading)
+        - Use with `read_from_window(..., boundless=True)` for edge tiles
+        - For asymmetric padding, use `get_slice_pad` instead
+
+    See Also:
+        - `pad_window_to_size`: Pad to reach specific dimensions
+        - `get_slice_pad`: Handle out-of-bounds windows with slicing
     """
 
     return rasterio.windows.Window(
@@ -37,16 +258,79 @@ def pad_window(window: rasterio.windows.Window, pad_size: Tuple[int, int]) -> ra
 
 def pad_window_to_size(window: rasterio.windows.Window, size: Tuple[int, int]) -> rasterio.windows.Window:
     """
-    Center pad the given window to the given size. if `size` is smaller than the size of the window it returns
-    the center pad of that window of the requested size.
+    Adjust window dimensions to exactly match a target size while maintaining center.
+
+    Expands (or shrinks) a window symmetrically to reach the specified dimensions.
+    The center pixel of the output window aligns with the center of the input window.
+    Essential for ensuring fixed-size inputs for neural networks.
+
+    This function handles both:
+    - Expansion: When target size > window size (adds padding)
+    - Contraction: When target size < window size (extracts center crop)
+
+    Center-alignment behavior::
+
+        Expansion (size > window):          Contraction (size < window):
+
+        ┌───────────────────────┐          ┌───────────────────────┐
+        │     padded area       │          │                       │
+        │   ┌─────────────┐     │          │   ┌─────────────┐     │
+        │   │             │     │          │   │┌───────────┐│     │
+        │   │   original  │     │    ◄──   │   ││  center   ││     │
+        │   │    window   │     │          │   ││   crop    ││     │
+        │   └─────────────┘     │          │   │└───────────┘│     │
+        │     padded area       │          │   └─────────────┘     │
+        └───────────────────────┘          └───────────────────────┘
+
+        Symmetric expansion             Symmetric contraction
 
     Args:
-        window: input window
-        size: Tuple. size of the output image (height, width)
+        window (rasterio.windows.Window): Input window to resize.
+            Format: Window(col_off, row_off, width, height).
+        size (Tuple[int, int]): Target dimensions as (height, width).
+            Note: Order is (height, width) matching numpy array convention,
+            NOT (width, height) like Window constructor.
 
     Returns:
-         window centered in `window` with width `size[1]` and height `size[0]`
+        rasterio.windows.Window: Resized window with:
+            - width = size[1] (target width)
+            - height = size[0] (target height)
+            - Center aligned with original window center
 
+    Examples:
+        >>> import rasterio.windows
+        >>>
+        >>> # Expand 100×100 window to 256×256 (for CNN)
+        >>> window = rasterio.windows.Window(500, 500, 100, 100)
+        >>> expanded = pad_window_to_size(window, size=(256, 256))
+        >>> print(expanded)
+        Window(col_off=422, row_off=422, width=256, height=256)
+        >>> # Offset moved: (500 - 78, 500 - 78) = (422, 422)
+        >>> # 78 = (256 - 100) / 2
+        >>>
+        >>> # Shrink large window to fixed size (center crop)
+        >>> large_window = rasterio.windows.Window(0, 0, 1000, 800)
+        >>> cropped = pad_window_to_size(large_window, size=(512, 512))
+        >>> print(cropped)
+        Window(col_off=244, row_off=144, width=512, height=512)
+        >>> # Center crop: offset = (1000-512)/2, (800-512)/2
+        >>>
+        >>> # Asymmetric adjustment
+        >>> window = rasterio.windows.Window(100, 100, 80, 120)
+        >>> resized = pad_window_to_size(window, size=(100, 100))
+        >>> print(resized)
+        Window(col_off=90, row_off=110, width=100, height=100)
+        >>> # Height shrinks by 20 (10 each side)
+        >>> # Width expands by 20 (10 each side)
+
+    Note:
+        - Padding is distributed equally when possible; odd differences favor bottom/right
+        - Output window may have negative offsets (use boundless reading)
+        - For truly symmetric padding, use `pad_window` with explicit pad_size
+
+    See Also:
+        - `pad_window`: Add fixed padding amounts
+        - `get_slice_pad`: Handle out-of-bounds with slicing + padding
     """
     pad_add_rows = size[0] - window.height
     pad_add_cols = size[1] - window.width
@@ -68,15 +352,91 @@ def figure_out_transform(
     resolution_dst: Optional[Union[float, Tuple[float, float]]] = None,
 ) -> rasterio.Affine:
     """
-    Based on transform, bounds and resolution_dst computes the output transform.
+    Compute an output transform from combinations of transform, bounds, and resolution.
+
+    Flexible factory function that creates an affine geotransform from various input
+    combinations. Useful when you know some parameters but need to derive others,
+    such as creating output transforms for reprojection or resampling operations.
+
+    The function handles three main scenarios:
+
+    1. **transform + resolution_dst**: Rescale existing transform to new resolution
+    2. **bounds + resolution_dst**: Create new transform from scratch (rectilinear)
+    3. **transform + bounds + resolution_dst**: Rescale and shift to new origin
+
+    Input Combinations::
+
+        ┌────────────┬────────┬──────────────┬─────────────────────────────┐
+        │ transform  │ bounds │ resolution   │ Result                      │
+        ├────────────┼────────┼──────────────┼─────────────────────────────┤
+        │ ✓          │ ✗      │ ✗            │ Return unchanged            │
+        │ ✓          │ ✗      │ ✓            │ Rescale resolution          │
+        │ ✓          │ ✓      │ ✗            │ Shift origin to bounds      │
+        │ ✓          │ ✓      │ ✓            │ Rescale + shift             │
+        │ ✗          │ ✓      │ ✓            │ Create new rectilinear      │
+        │ ✗          │ ✗      │ any          │ ERROR (need bounds)         │
+        │ ✗          │ ✓      │ ✗            │ ERROR (need resolution)     │
+        └────────────┴────────┴──────────────┴─────────────────────────────┘
 
     Args:
-        transform: base transform used as reference. If not provided will return a rectilinear transform.
-        bounds: bounds of the output transform
-        resolution_dst: resolution of the output transform
+        transform (Optional[rasterio.Affine]): Base transform to modify. If None,
+            creates a new rectilinear (north-up) transform from bounds and resolution.
+        bounds (Optional[Tuple[float, float, float, float]]): Geographic extent as
+            (minx, miny, maxx, maxy). Used to set the transform origin and/or compute
+            window offset. Required if transform is None.
+        resolution_dst (Optional[Union[float, Tuple[float, float]]]): Target pixel
+            resolution. If float, same resolution in x and y. If tuple, (res_x, res_y).
+            Units match CRS (meters for projected, degrees for geographic).
+            Required if transform is None.
 
     Returns:
-        rasterio.Affine object with resolution `resolution_dst` and origin at the bounds
+        rasterio.Affine: Output geotransform with requested resolution and origin.
+
+    Raises:
+        AssertionError: If transform is None and bounds is not provided.
+        AssertionError: If transform is None and resolution_dst is not provided.
+
+    Examples:
+        >>> import rasterio
+        >>>
+        >>> # Create transform from bounds + resolution (new raster)
+        >>> bounds = (-122.5, 37.0, -122.0, 37.5)  # WGS84 degrees
+        >>> transform = figure_out_transform(bounds=bounds, resolution_dst=0.001)
+        >>> print(f"Origin: ({transform.c}, {transform.f})")
+        Origin: (-122.5, 37.5)  # Top-left corner
+        >>> print(f"Resolution: {res(transform)}")
+        (0.001, 0.001)
+        >>>
+        >>> # Rescale existing transform to new resolution
+        >>> transform_10m = rasterio.Affine(10, 0, 500000, 0, -10, 4500000)
+        >>> transform_30m = figure_out_transform(transform=transform_10m, resolution_dst=30)
+        >>> print(f"New resolution: {res(transform_30m)}")
+        (30.0, 30.0)
+        >>>
+        >>> # Shift transform to new origin with same resolution
+        >>> new_bounds = (600000, 4400000, 700000, 4500000)
+        >>> transform_shifted = figure_out_transform(
+        ...     transform=transform_10m, bounds=new_bounds
+        ... )
+        >>> # Origin now at new_bounds top-left
+        >>>
+        >>> # Full specification: rescale and shift
+        >>> transform_out = figure_out_transform(
+        ...     transform=transform_10m,
+        ...     bounds=(600000, 4400000, 700000, 4500000),
+        ...     resolution_dst=20
+        ... )
+
+    Note:
+        - Resolution is always positive (absolute value taken)
+        - For rotated transforms, only resolution is modified (not rotation angle)
+        - Origin is placed at (min_x, max_y) following north-up convention
+        - Use `from_bounds` directly if you also need to compute shape from bounds
+
+    See Also:
+        - `transform_to_resolution_dst`: Rescale resolution only
+        - `rasterio.transform.from_bounds`: Create transform with known shape
+        - `rasterio.transform.from_origin`: Create transform from origin point
     """
     if resolution_dst is not None:
         if isinstance(resolution_dst, numbers.Number):
@@ -414,17 +774,80 @@ def window_polygon(
     window: rasterio.windows.Window, transform: rasterio.Affine, window_surrounding: bool = False
 ) -> Polygon:
     """
-    Computes the Polygon that contains the window
+    Convert a pixel window to a geographic polygon.
 
-    works similarly as `rasterio.windows.bounds` function
+    Creates a Shapely Polygon representing the spatial extent of a window by
+    transforming the four corner pixels to geographic coordinates. This is
+    useful for spatial queries, visualization, and intersection operations.
+
+    Similar to `rasterio.windows.bounds`, but returns a full Polygon object
+    rather than a bounding box tuple, which is essential for:
+    - Intersection tests with other geometries
+    - Visualization on maps
+    - Spatial joins with vector data
+    - Handling rotated/skewed transforms (where bounds != rectangle)
+
+    The `window_surrounding` parameter controls whether the polygon surrounds
+    pixel centers or pixel boundaries::
+
+        window_surrounding=False (default):     window_surrounding=True:
+        Polygon includes full pixels             Polygon passes through pixel centers
+
+        ┌───┬───┬───┬───┐                       ┌───┬───┬───┬───┐
+        │ P │ P │ P │ P │ ◄─ Polygon            │ · │ · │ · │ · │
+        ├───┼───┼───┼───┤    edges              ├───○───○───○───┤
+        │ P │ P │ P │ P │    touch              │ · │ · │ · │ · │ ◄─ Polygon
+        ├───┼───┼───┼───┤    pixel              ├───○───○───○───┤    passes
+        │ P │ P │ P │ P │    boundaries         │ · │ · │ · │ · │    through ○
+        └───┴───┴───┴───┘                       └───┴───┴───┴───┘
 
     Args:
-        window: Window object to compute the polygon
-        transform: geotransform
-        window_surrounding: The window surrounds the polygon. (i.e. window.row_off + window.height will not be a vertex)
+        window (rasterio.windows.Window): Pixel window to convert.
+            Format: Window(col_off, row_off, width, height).
+        transform (rasterio.Affine): Affine geotransform matrix mapping
+            pixel coordinates to geographic coordinates.
+        window_surrounding (bool, optional): If True, polygon vertices are
+            at pixel centers rather than pixel corners. This shrinks the
+            polygon by 1 pixel on the right and bottom edges.
+            Defaults to False (polygon at pixel boundaries).
 
     Returns:
-        Polygon surrounding the window in geographical coordinates
+        Polygon: Shapely Polygon with 5 vertices (4 corners + closing vertex)
+            in geographic coordinates. Coordinates are in the CRS defined
+            by the transform.
+
+    Examples:
+        >>> import rasterio
+        >>> import rasterio.windows
+        >>>
+        >>> # 10m resolution UTM transform
+        >>> transform = rasterio.Affine(10.0, 0.0, 500000.0,
+        ...                              0.0, -10.0, 4500000.0)
+        >>> # Window: 100x50 pixels starting at (10, 20)
+        >>> window = rasterio.windows.Window(10, 20, 100, 50)
+        >>>
+        >>> # Get geographic polygon
+        >>> polygon = window_polygon(window, transform)
+        >>> print(polygon.bounds)  # (xmin, ymin, xmax, ymax)
+        (500100.0, 4499500.0, 501100.0, 4499800.0)
+        >>> print(polygon.area)  # 1000m × 500m = 500000 m²
+        500000.0
+        >>>
+        >>> # Use for intersection test
+        >>> from shapely.geometry import Point
+        >>> point = Point(500500, 4499600)  # Point within window
+        >>> print(polygon.contains(point))
+        True
+        >>>
+        >>> # Surrounding mode (vertices at pixel centers)
+        >>> polygon_surr = window_polygon(window, transform, window_surrounding=True)
+        >>> # 1 pixel smaller on right/bottom: 99×49 pixels worth of area
+
+    Note:
+        - For rectilinear transforms: polygon is a rectangle
+        - For rotated transforms: polygon is a parallelogram
+        - Use `window_bounds` if you only need (xmin, ymin, xmax, ymax)
+        - Polygon is closed: first vertex == last vertex
     """
     row_off = window.row_off
     col_off = window.col_off

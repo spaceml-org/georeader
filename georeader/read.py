@@ -1,3 +1,188 @@
+"""
+Read Module: Window-based raster reading with reprojection and resampling.
+
+This module provides functions to read raster data from various sources using
+window-based access patterns. It handles coordinate transformations, reprojection,
+and resampling - the core I/O operations for geospatial raster processing.
+
+Reading Workflow Overview
+-------------------------
+
+The module supports multiple ways to specify the area of interest::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                    READING WORKFLOW: AREA SPECIFICATION                  │
+    ├─────────────────────────────────────────────────────────────────────────┤
+    │                                                                          │
+    │  Input Specification          Function                     Output       │
+    │  ────────────────────         ─────────────────────        ──────────   │
+    │                                                                          │
+    │  Polygon (geometry)     ───►  read_from_polygon()    ───►  GeoTensor   │
+    │                                                                          │
+    │  Bounds (minx,miny,     ───►  read_from_bounds()     ───►  GeoTensor   │
+    │          maxx,maxy)                                                      │
+    │                                                                          │
+    │  Center + Shape         ───►  read_from_center_coords() ─► GeoTensor   │
+    │  (x, y) + (H, W)                                                         │
+    │                                                                          │
+    │  Window (row_off,       ───►  read_from_window()     ───►  GeoTensor   │
+    │          col_off, H, W)                                                  │
+    │                                                                          │
+    │  Web Tile (x, y, z)     ───►  read_from_tile()       ───►  GeoTensor   │
+    │                                                                          │
+    │  Match another raster   ───►  read_reproject_like()  ───►  GeoTensor   │
+    │                                                                          │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+Window vs Bounds Coordinates
+----------------------------
+
+Understanding the difference between pixel windows and geographic bounds::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │              WINDOW (PIXELS) vs BOUNDS (GEOGRAPHIC COORDINATES)          │
+    ├─────────────────────────────────────────────────────────────────────────┤
+    │                                                                          │
+    │  WINDOW (pixel space)                BOUNDS (CRS units)                 │
+    │  ─────────────────────               ──────────────────                 │
+    │                                                                          │
+    │  (col_off, row_off)                  (minx, maxy)  ← upper-left         │
+    │       ↓                                   ↓                              │
+    │    ┌──────────────┐                  ┌──────────────┐                   │
+    │    │ width pixels │                  │              │ geographic        │
+    │    │              │   ◄═══════►      │              │ extent in         │
+    │    │ height pixels│    transform     │              │ CRS units         │
+    │    └──────────────┘                  └──────────────┘                   │
+    │                                           ↑                              │
+    │                                      (maxx, miny)  ← lower-right        │
+    │                                                                          │
+    │  Window: rasterio.windows.Window(col_off, row_off, width, height)       │
+    │  Bounds: (minx, miny, maxx, maxy) - order matches shapely/rasterio      │
+    │                                                                          │
+    │  Conversion:                                                             │
+    │    bounds = window_utils.window_bounds(window, transform)               │
+    │    window = window_from_bounds(data, bounds, crs_bounds)                │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+Reprojection & Resampling
+-------------------------
+
+When reading data into a different CRS or resolution::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                     REPROJECTION WORKFLOW                                │
+    ├─────────────────────────────────────────────────────────────────────────┤
+    │                                                                          │
+    │  Source CRS (e.g., EPSG:4326)         Target CRS (e.g., EPSG:32633)    │
+    │  ┌─────────────────────┐              ┌─────────────────────┐           │
+    │  │  ╱╲    ╱╲    ╱╲    │              │ □ □ □ □ □ □ □ □ □ │           │
+    │  │ ╱  ╲  ╱  ╲  ╱  ╲   │    ═════►    │ □ □ □ □ □ □ □ □ □ │           │
+    │  │╱    ╲╱    ╲╱    ╲  │   Reproject  │ □ □ □ □ □ □ □ □ □ │           │
+    │  │ Irregular grid     │   + Resample │ Regular UTM grid   │           │
+    │  └─────────────────────┘              └─────────────────────┘           │
+    │                                                                          │
+    │  Resampling Methods (rasterio.warp.Resampling):                         │
+    │  ┌────────────────┬────────────────────────────────────────────────┐    │
+    │  │ Method         │ Best for                                       │    │
+    │  ├────────────────┼────────────────────────────────────────────────┤    │
+    │  │ nearest        │ Categorical data, masks, classification        │    │
+    │  │ bilinear       │ Continuous data, fast                          │    │
+    │  │ cubic          │ Continuous data, smooth                        │    │
+    │  │ cubic_spline   │ Continuous data, very smooth (DEFAULT)         │    │
+    │  │ lanczos        │ Downsampling, sharp edges                      │    │
+    │  │ average        │ Downsampling, area-weighted mean               │    │
+    │  │ mode           │ Downsampling categorical data                  │    │
+    │  └────────────────┴────────────────────────────────────────────────┘    │
+    │                                                                          │
+    │  Anti-aliasing: Automatic Gaussian blur before downsampling to          │
+    │                 prevent aliasing artifacts. Controlled by:              │
+    │                 - anti_aliasing=True (default in resize)                │
+    │                 - anti_aliasing_sigma (auto-calculated or manual)       │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+Boundless Reading
+-----------------
+
+Reading outside raster bounds returns fill values::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                    BOUNDLESS READING (boundless=True)                    │
+    ├─────────────────────────────────────────────────────────────────────────┤
+    │                                                                          │
+    │  Requested Window              Result with boundless=True               │
+    │  ─────────────────              ─────────────────────────               │
+    │                                                                          │
+    │       ┌─────────────┐           ┌─────────────┐                         │
+    │       │ fill │ data │           │  0  │ data │   fill_value_default    │
+    │       │ ─────┼───── │           │ ────┼───── │   fills out-of-bounds   │
+    │       │ fill │ data │           │  0  │ data │   pixels                │
+    │       └─────────────┘           └─────────────┘                         │
+    │            ↑                                                             │
+    │     Request extends                                                      │
+    │     beyond raster bounds                                                 │
+    │                                                                          │
+    │  boundless=False: Raises error or clips to valid region                 │
+    │  boundless=True:  Pads with fill_value_default (default behavior)       │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+Module Functions Overview
+-------------------------
+
+Window Creation:
+    - :func:`window_from_polygon`: Polygon geometry → pixel window
+    - :func:`window_from_bounds`: Geographic bounds → pixel window
+    - :func:`window_from_center_coords`: Center point + shape → pixel window
+    - :func:`window_from_tile`: Web mercator tile (x,y,z) → pixel window
+
+Reading Functions:
+    - :func:`read_from_window`: Read using pixel window
+    - :func:`read_from_polygon`: Read area within polygon
+    - :func:`read_from_bounds`: Read area within bounds
+    - :func:`read_from_center_coords`: Read centered on point
+    - :func:`read_from_tile`: Read web mercator tile
+
+Reprojection:
+    - :func:`read_reproject`: Read with CRS transformation
+    - :func:`read_reproject_like`: Match another raster's grid
+    - :func:`read_to_crs`: Simple CRS conversion
+    - :func:`resize`: Change resolution with anti-aliasing
+
+Quick Start
+-----------
+
+Read a region by polygon::
+
+    from georeader import read
+    from shapely.geometry import box
+
+    # Define area of interest in WGS84
+    aoi = box(-122.5, 37.5, -122.0, 38.0)
+
+    # Read from raster (auto-transforms polygon to raster CRS)
+    gt = read.read_from_polygon(reader, aoi, crs_polygon="EPSG:4326")
+
+Read and reproject to match another raster::
+
+    # Make data_in match data_like's grid exactly
+    gt_aligned = read.read_reproject_like(data_in, data_like)
+
+Read a web map tile::
+
+    # Read tile at zoom 15, coordinates (x=5242, y=12661)
+    gt_tile = read.read_from_tile(reader, x=5242, y=12661, z=15)
+
+See Also
+--------
+georeader.geotensor : GeoTensor class returned by read functions
+georeader.window_utils : Lower-level window manipulation utilities
+georeader.rasterio_reader : RasterioReader for lazy file access
+
+References
+----------
+- Rasterio windowed reading: https://rasterio.readthedocs.io/en/latest/topics/windowed-rw.html
+- Rasterio reprojection: https://rasterio.readthedocs.io/en/latest/topics/reproject.html
+- Web Mercator tiles: https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
+"""
 import itertools
 import numbers
 from collections import OrderedDict
