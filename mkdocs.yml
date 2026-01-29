@@ -24,7 +24,6 @@ nav:
     - plot: modules/plot_module.md
     - io: modules/io_module.md
     - ee_image: modules/ee_image.md
-    - plot: modules/plot_module.md
     - readers: modules/readers_module.md
   - Tutorials:
     - Read overlapping rasters:
