@@ -185,7 +185,8 @@ def run_inference_tiled(geotensor, model, tile_size=256, window_size=512):
         pred = model.predict(tile.values[None, ...])[0]  # Add/remove batch dim
         
         # Extract valid region (remove padding)
-        pred_center = pred[slice_save]
+        # Apply spatial slices after channel dimension
+        pred_center = pred[:, slice_save[0], slice_save[1]]
         
         # Write to output mosaic
         output.write_from_window(pred_center, window=w_write)
