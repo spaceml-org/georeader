@@ -125,56 +125,70 @@ Overlap is crucial for ML inference to avoid edge artifacts:
 ```python
 import numpy as np
 from georeader import read
+from georeader.geotensor import GeoTensor
 from georeader.slices import create_windows
-from georeader.window_utils import stitch_windows
+from georeader.window_utils import pad_window_to_size, slice_save_for_pred
 
-def run_inference_tiled(geotensor, model, tile_size=256, overlap=32):
+def run_inference_tiled(geotensor, model, tile_size=256, window_size=512):
     """
-    Run ML inference on a large image using tiled processing.
+    Run ML inference on a large image using tiled processing with padding.
+    
+    This example demonstrates the "tiling and stitching" strategy for large images:
+    1. Divide image into non-overlapping output tiles
+    2. Read each tile with padding for context (reduces edge artifacts)
+    3. Run model on padded tile
+    4. Extract only the center region (remove padding)
+    5. Write to output mosaic
     
     Args:
         geotensor: Input GeoTensor (C, H, W)
-        model: ML model with .predict(tile) method
-        tile_size: Size of each tile
-        overlap: Overlap between tiles
+        model: ML model with .predict(tile) method expecting (1, C, H, W)
+        tile_size: Size of output tiles (without padding)
+        window_size: Size of input to model (with padding)
     
     Returns:
         GeoTensor with predictions
     """
-    # 1. Generate tile windows
-    windows = create_windows(
+    # 1. Create output GeoTensor with same spatial dims as input
+    # Assuming single-band output (e.g., segmentation mask)
+    output_shape = (1,) + geotensor.shape[-2:]  # (1, H, W)
+    output = GeoTensor(
+        np.zeros(output_shape, dtype=np.float32),
+        transform=geotensor.transform,
+        crs=geotensor.crs,
+        fill_value_default=0
+    )
+    
+    # 2. Generate non-overlapping write windows
+    windows_write = create_windows(
         geodata_shape=geotensor.shape[-2:],
         window_size=(tile_size, tile_size),
-        overlap=(overlap, overlap),
+        overlap=(0, 0),  # No overlap - tiles are adjacent
         trim_incomplete=True
     )
     
-    # 2. Process each tile
-    predictions = []
-    for window in windows:
-        # Extract tile from input
-        tile = read.read_from_window(geotensor, window, trigger_load=True)
+    # 3. Process each tile with padding
+    for w_write in windows_write:
+        # Create larger read window with padding for context
+        w_read = pad_window_to_size(w_write, size=(window_size, window_size))
         
-        # Pad to model input size if needed (edge tiles)
-        if tile.shape[-2:] != (tile_size, tile_size):
-            tile = np.pad(tile.values, 
-                         ((0, 0), 
-                          (0, tile_size - tile.shape[-2]),
-                          (0, tile_size - tile.shape[-1])),
-                         mode='reflect')
-        else:
-            tile = tile.values
+        # Compute slice to extract valid region after inference
+        slice_save = slice_save_for_pred(w_read, w_write)
         
-        # Run model
-        pred = model.predict(tile[np.newaxis, ...])[0]  # Add batch dim
-        predictions.append(pred)
-    
-    # 3. Stitch tiles back together
-    output = stitch_windows(
-        predictions, windows,
-        output_shape=geotensor.shape[-2:],
-        overlap=overlap
-    )
+        # Read padded tile (boundless=True handles edges)
+        tile = read.read_from_window(
+            geotensor, window=w_read, 
+            boundless=True, trigger_load=True
+        )
+        
+        # Run model inference
+        pred = model.predict(tile.values[None, ...])[0]  # Add/remove batch dim
+        
+        # Extract valid region (remove padding)
+        pred_center = pred[slice_save]
+        
+        # Write to output mosaic
+        output.write_from_window(pred_center, window=w_write)
     
     return output
 ```
