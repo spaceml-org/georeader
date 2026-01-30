@@ -18,13 +18,13 @@ from georeader.geotensor import GeoTensor
 import numpy as np
 import rasterio
 
-# Example 1: Get polygons from GeoTensor (automatically in geographic coordinates)
+# Example 1: Get polygons from GeoTensor (automatically in the GeoTensor's CRS)
 mask_data = np.zeros((100, 100), dtype=np.uint8)
 mask_data[20:80, 20:80] = 1  # A square region
 transform = rasterio.Affine(10.0, 0, 500000, 0, -10.0, 4500000)
 gt_mask = GeoTensor(mask_data, transform, crs="EPSG:32610")
 
-# Polygons are automatically in geographic coordinates (EPSG:32610)
+# Polygons are automatically in the GeoTensor's CRS (EPSG:32610)
 polygons = vectorize.get_polygons(gt_mask, min_area=100)
 
 # Example 2: Get polygons from numpy array (in pixel coordinates), then transform
@@ -53,7 +53,7 @@ polygon_wgs84 = window_utils.polygon_to_crs(polygons[0],
 
 - `binary_mask`: Input mask (GeoTensor or numpy array)
 - `min_area`: Minimum polygon area in pixel units (default: 25.5), applied before affine transform
-- Returns: List of shapely Polygon objects (in geographic coordinates if transform provided, else pixel coordinates)
+- Returns: List of shapely Polygon objects (in CRS coordinates if transform provided, else pixel coordinates)
 
 ### `transform_polygon`
 
