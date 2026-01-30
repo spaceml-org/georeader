@@ -43,7 +43,7 @@ polygon_wgs84 = vectorize.transform_polygon(polygons[0],
 ### `get_polygons`
 
 - `binary_mask`: Input mask (GeoTensor or numpy array)
-- `min_area`: Minimum polygon area in square units of the CRS (default: 25.5)
+- `min_area`: Minimum polygon area in pixel units (mask coordinate units), applied before any affine transform (default: 25.5)
 - Returns: List of shapely Polygon objects
 
 ### `transform_polygon`
