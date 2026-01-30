@@ -298,5 +298,4 @@ print(f"Output: {ortho.shape}, CRS: {ortho.crs}")
 ## See Also
 
 - [EMIT Tutorial](../emit_explore.ipynb) - Reading EMIT hyperspectral data
-- [Read Module](read_module.md) - Regular grid reprojection
-- [Window Utils](window_utils_module.md) - Coordinate transformations
+- [Read Module](../modules/read_module.md) - Regular grid reprojection

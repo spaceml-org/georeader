@@ -253,6 +253,6 @@ windows = create_windows(shape, tile_size,
 
 ## See Also
 
-- [Window Utils](window_utils_module.md) - Coordinate transformations and stitching
+- [Read Module](../modules/read_module.md) - Image reading and reprojection
 - [Mosaic Module](mosaic_module.md) - Combining multiple rasters
 - `georeader.read.read_from_window` - Reading tiles from GeoData
