@@ -120,64 +120,9 @@ Overlap is crucial for ML inference to avoid edge artifacts:
 | Vision Transformer | patch_size / 2 | Patch boundary artifacts |
 | Segmentation | class_boundary_width | Smooth boundaries |
 
-## Complete ML Inference Example
+## Examples
 
-```python
-import numpy as np
-from georeader import read
-from georeader.slices import create_windows
-from georeader.window_utils import stitch_windows
-
-def run_inference_tiled(geotensor, model, tile_size=256, overlap=32):
-    """
-    Run ML inference on a large image using tiled processing.
-    
-    Args:
-        geotensor: Input GeoTensor (C, H, W)
-        model: ML model with .predict(tile) method
-        tile_size: Size of each tile
-        overlap: Overlap between tiles
-    
-    Returns:
-        GeoTensor with predictions
-    """
-    # 1. Generate tile windows
-    windows = create_windows(
-        geodata_shape=geotensor.shape[-2:],
-        window_size=(tile_size, tile_size),
-        overlap=(overlap, overlap),
-        trim_incomplete=True
-    )
-    
-    # 2. Process each tile
-    predictions = []
-    for window in windows:
-        # Extract tile from input
-        tile = read.read_from_window(geotensor, window, trigger_load=True)
-        
-        # Pad to model input size if needed (edge tiles)
-        if tile.shape[-2:] != (tile_size, tile_size):
-            tile = np.pad(tile.values, 
-                         ((0, 0), 
-                          (0, tile_size - tile.shape[-2]),
-                          (0, tile_size - tile.shape[-1])),
-                         mode='reflect')
-        else:
-            tile = tile.values
-        
-        # Run model
-        pred = model.predict(tile[np.newaxis, ...])[0]  # Add batch dim
-        predictions.append(pred)
-    
-    # 3. Stitch tiles back together
-    output = stitch_windows(
-        predictions, windows,
-        output_shape=geotensor.shape[-2:],
-        overlap=overlap
-    )
-    
-    return output
-```
+For complete examples of using tiling for ML inference workflows, including handling edge cases and stitching predictions, see the [Tiling and Stitching tutorial](../advanced/tiling_and_stitching.ipynb).
 
 ## Handling Edge Cases
 
