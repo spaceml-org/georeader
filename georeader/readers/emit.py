@@ -1,10 +1,103 @@
 """
-Module to read EMIT images.
+Module to read EMIT (Earth Surface Mineral Dust Source Investigation) hyperspectral images.
 
-Requires: xarray
-pip install xarray
+EMIT is a NASA imaging spectrometer aboard the International Space Station that measures
+reflected solar radiation from Earth's surface in 285 spectral bands from 380 to 2500 nm.
+This module provides tools to read, georeference, and process EMIT L1B radiance data.
 
-Some of the functions of this module are based on the official EMIT repo: https://github.com/emit-sds/emit-utils/
+Data Format Overview
+--------------------
+EMIT data is distributed in NetCDF format with a unique storage layout:
+
+    Raw Data Structure (NetCDF file):
+    ┌─────────────────────────────────────┐
+    │  radiance: (downtrack, crosstrack, bands)  │
+    │  └── Shape: (~1280, ~1242, 285)            │
+    │                                             │
+    │  location/glt_x: (rows, cols)              │
+    │  location/glt_y: (rows, cols)              │
+    │  └── Geographic Lookup Table (GLT)         │
+    └─────────────────────────────────────┘
+
+The raw data is stored in *sensor coordinates* (pushbroom scan lines), NOT in 
+geographic coordinates. The GLT provides a mapping from geographic (orthorectified)
+coordinates back to raw sensor coordinates.
+
+GLT Orthorectification Process
+------------------------------
+The GLT (Geographic Lookup Table) is key to understanding EMIT data:
+
+    Geographic Grid (Output)          Sensor Grid (Raw Data)
+    ┌─────────────────────┐           ┌─────────────────────┐
+    │ (0,0)               │           │ radiance array      │
+    │   ┌───┬───┬───┐     │   GLT     │ ┌───────────────┐   │
+    │   │ a │ b │ c │     │ ──────→   │ │ (5,2) (5,3)   │   │
+    │   ├───┼───┼───┤     │ lookup    │ │ (6,1) (6,2)   │   │
+    │   │ d │ e │ f │     │           │ │ ...           │   │
+    │   └───┴───┴───┘     │           │ └───────────────┘   │
+    │               (H,W) │           │                     │
+    └─────────────────────┘           └─────────────────────┘
+
+    For pixel (row=1, col=2) in geographic grid:
+        glt_x[1,2] = 5  →  raw_col = 5
+        glt_y[1,2] = 2  →  raw_row = 2
+        value = radiance[2, 5, :]  (all bands)
+
+    GLT values of 0 indicate invalid/no-data pixels
+
+This approach allows:
+1. Efficient storage (no wasted pixels from orthorectification padding)
+2. Preservation of original radiometric values (no resampling)
+3. Flexible reprojection to any target CRS
+
+Radiometric Units
+-----------------
+- L1B Radiance: μW/(cm²·sr·nm) - microwatts per square centimeter per steradian per nanometer
+- FWHM: Full Width at Half Maximum of spectral response in nm
+- Wavelengths: Center wavelengths in nm (380-2500 nm range)
+
+Key Classes and Functions
+-------------------------
+- EMITImage: Main class for reading and processing EMIT data
+- download_product: Download EMIT products from NASA Earthdata
+- get_radiance_link, get_obs_link: Generate download URLs
+
+Requirements
+------------
+Requires xarray: ``pip install xarray``
+
+Authentication for downloads requires NASA Earthdata credentials stored in:
+``~/.georeader/auth_emit.json`` with format: ``{"user": "...", "password": "..."}``
+
+Examples
+--------
+Basic usage::
+
+    from georeader.readers.emit import EMITImage, download_product
+    
+    # Download and open EMIT image
+    link = 'https://data.lpdaac.earthdatacloud.nasa.gov/...'
+    filepath = download_product(link)
+    emit = EMITImage(filepath)
+    
+    # Reproject to UTM (recommended for analysis)
+    emit_utm = emit.to_crs("UTM")
+    
+    # Load as reflectance (applies solar irradiance correction)
+    reflectance = emit_utm.load(as_reflectance=True)
+    
+    # Load RGB composite
+    rgb = emit_utm.load_rgb(as_reflectance=True)
+    
+    # Get cloud mask
+    cloud_mask = emit.validmask()
+
+References
+----------
+- NASA EMIT Mission: https://earth.jpl.nasa.gov/emit/
+- EMIT Data Resources: https://github.com/nasa/EMIT-Data-Resources
+- EMIT Utils: https://github.com/emit-sds/emit-utils/
+- LP DAAC Data Access: https://lpdaac.usgs.gov/products/emitl1bradv001/
 
 """
 import os
@@ -204,7 +297,7 @@ def get_ch4enhancement_link(tile:str) -> str:
     See: https://git.earthdata.nasa.gov/projects/LPDUR/repos/daac_data_download_python/browse
 
     Args:
-        product_path: path to the product or filename of the product with or without extension.
+        tile (str): path to the product or filename of the product with or without extension.
             e.g. 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
 
     Example:
@@ -258,56 +351,170 @@ def get_l2amask_link(tile: str) -> str:
 
 class EMITImage:
     """
-    Class to read L1B EMIT (Earth Surface Mineral Dust Source Investigation) images.
+    Reader for EMIT L1B (Earth Surface Mineral Dust Source Investigation) hyperspectral images.
     
-    This class provides functionality to read and manipulate EMIT satellite imagery products.
-    It handles the specific format and metadata of EMIT HDF files, supporting operations
-    like loading radiometry data, masks, and viewing/solar angles.
+    This class provides comprehensive functionality to read and manipulate EMIT satellite 
+    imagery products from NASA's imaging spectrometer aboard the ISS. It handles the 
+    unique GLT-based (Geographic Lookup Table) storage format, supporting operations like:
     
-    This class incorporates features from the official EMIT utilities:
-    https://github.com/emit-sds/emit-utils/
+    - Loading radiometry data with automatic orthorectification
+    - Converting radiance to reflectance using solar irradiance
+    - Accessing cloud and quality masks
+    - Extracting viewing and solar geometry angles
+    - Reprojecting to different coordinate reference systems
     
-    Args:
-        filename (str): Path to the EMIT .nc file.
-        glt (Optional[GeoTensor]): Optional pre-loaded GLT (Geographic Lookup Table).
-            If None, it will be loaded from the file. Defaults to None.
-        band_selection (Optional[Union[int, Tuple[int, ...], slice]]): Optional band selection.
-            Defaults to slice(None) (all bands).
+    EMIT Data Model
+    ---------------
+    EMIT stores data in sensor coordinates, not geographic coordinates. The GLT provides
+    a lookup table mapping geographic pixels to sensor pixels:
     
-    Attributes:
-        filename (str): Path to the EMIT file.
-        nc_ds (xr.Dataset): xarray dataset for the EMIT file.
-        _nc_ds_obs (Optional[xr.Dataset]): xarray dataset for observation data.
-        _nc_ds_l2amask (Optional[xr.Dataset]): xarray dataset for L2A mask.
-        real_transform (rasterio.Affine): Affine transform for the image.
-        time_coverage_start (datetime): Start time of the acquisition.
-        time_coverage_end (datetime): End time of the acquisition.
-        dtype: Data type of the radiometry data.
-        dims (Tuple[str]): Names of dimensions ("band", "y", "x").
-        fill_value_default: Default fill value.
-        nodata: No data value.
-        units (str): Units of the radiometry data.
-        glt (GeoTensor): Geographic Lookup Table as a GeoTensor.
-        valid_glt (numpy.ndarray): Boolean mask of valid GLT values.
-        glt_relative (GeoTensor): Relative Geographic Lookup Table.
-        window_raw (rasterio.windows.Window): Window for raw data.
-        bandname_dimension (str): Dimension name for bands.
-        band_selection: Current band selection.
-        wavelengths (numpy.ndarray): Wavelengths of the selected bands.
-        fwhm (numpy.ndarray): Full Width at Half Maximum for each band.
+        GLT Orthorectification:
+        ┌────────────────────────────┐      ┌──────────────────────────┐
+        │    Geographic Grid         │      │   Sensor Grid (raw)      │
+        │  (orthorectified space)    │      │  (pushbroom scan)        │
+        │  ┌───┬───┬───┬───┐        │      │  ┌───┬───┬───┬───┐      │
+        │  │ · │ a │ b │ · │        │  GLT │  │ e │ a │ b │ · │      │
+        │  ├───┼───┼───┼───┤        │  ──→ │  ├───┼───┼───┼───┤      │
+        │  │ c │ d │ e │ f │        │      │  │ f │ c │ d │ · │      │
+        │  └───┴───┴───┴───┘        │      │  └───┴───┴───┴───┘      │
+        │  (pixels with data)        │      │  (original acquistion)   │
+        └────────────────────────────┘      └──────────────────────────┘
         
-    Examples:
+        · = no data (GLT value = 0)
+        
+        For geographic pixel (row, col):
+            raw_x = glt_x[row, col]  
+            raw_y = glt_y[row, col]
+            value = radiance[raw_y, raw_x, :]
+    
+    This approach preserves original radiometric values without interpolation artifacts.
+    
+    Spectral Characteristics
+    ------------------------
+    - Wavelength range: 380-2500 nm (VNIR + SWIR)
+    - Number of bands: 285
+    - Spectral sampling: ~7.4 nm
+    - Spatial resolution: 60m at nadir
+    
+    Attributes
+    ----------
+    filename : str
+        Path to the EMIT NetCDF file.
+    nc_ds : xr.Dataset
+        xarray Dataset handle for the main radiance file.
+    glt : GeoTensor
+        Geographic Lookup Table as a GeoTensor with shape (2, H, W).
+        - glt.values[0]: x-indices into raw radiance (1-based)
+        - glt.values[1]: y-indices into raw radiance (1-based)
+    valid_glt : np.ndarray
+        Boolean mask (H, W) indicating valid GLT entries (data coverage).
+    glt_relative : GeoTensor
+        GLT with indices relative to the data window (0-based).
+    window_raw : rasterio.windows.Window
+        Window defining the subset of raw data to read (optimizes I/O).
+    real_transform : rasterio.Affine
+        Affine transform for the orthorectified (geographic) grid.
+    time_coverage_start : datetime
+        UTC datetime of acquisition start.
+    time_coverage_end : datetime
+        UTC datetime of acquisition end.
+    wavelengths : np.ndarray
+        Center wavelengths (nm) for selected bands.
+    fwhm : np.ndarray
+        Full Width at Half Maximum (nm) for selected bands.
+    band_selection : Union[int, Tuple[int, ...], slice]
+        Current band subset selection.
+    units : str
+        Radiance units from file metadata (typically 'uW/(cm^2 sr nm)').
+    fill_value_default : float
+        No-data value for radiance data.
+    dims : Tuple[str]
+        Dimension names ("band", "y", "x").
+    dtype : np.dtype
+        Data type of radiance values.
+    
+    Lazy-Loaded Properties
+    ----------------------
+    nc_ds_obs : xr.Dataset
+        Observation data (viewing/solar angles, path length, elevation).
+        Auto-downloaded from NASA Earthdata if not present locally.
+    nc_ds_l2amask : xr.Dataset  
+        L2A quality mask data (clouds, cirrus, water, aggregate flags).
+        Auto-downloaded from NASA Earthdata if not present locally.
+    mean_sza : float
+        Mean solar zenith angle (degrees) across the scene.
+    mean_vza : float
+        Mean view zenith angle (degrees) across the scene.
+    observation_date_correction_factor : float
+        Earth-Sun distance correction factor for the acquisition date.
+    
+    Examples
+    --------
+    Basic loading and reprojection::
+    
         >>> from georeader.readers.emit import EMITImage, download_product
-        >>> link = 'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/EMIT_L1B_RAD_001_20220828T051941_2224004_006/EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
+        >>> 
+        >>> # Download from NASA Earthdata
+        >>> link = 'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/...'
         >>> filepath = download_product(link)
+        >>> 
+        >>> # Open and reproject to UTM
         >>> emit = EMITImage(filepath)
-        >>> # Reproject to UTM
-        >>> crs_utm = georeader.get_utm_epsg(emit.footprint("EPSG:4326"))
-        >>> emit_utm = emit.to_crs(crs_utm)
+        >>> emit_utm = emit.to_crs("UTM", resolution_dst_crs=60)
+        >>> 
         >>> # Load as reflectance
-        >>> reflectance = emit_utm.load(as_reflectance=True)
-        >>> # Get cloud mask
-        >>> cloud_mask = emit.nc_ds_l2amask
+        >>> refl = emit_utm.load(as_reflectance=True)
+        >>> print(refl.shape)  # (285, H, W)
+    
+    Working with specific wavelengths::
+    
+        >>> # Select RGB-like bands (640, 550, 460 nm)
+        >>> emit.set_band_selection([35, 23, 11])
+        >>> print(emit.wavelengths)  # [641.2, 553.1, 462.3]
+        >>> rgb = emit.load(as_reflectance=True)
+        >>> 
+        >>> # Or use the convenience method
+        >>> rgb = emit.load_rgb(as_reflectance=True)
+    
+    Accessing masks and quality data::
+    
+        >>> # Get valid (cloud-free) mask
+        >>> valid_mask = emit.validmask()
+        >>> print(f"Clear pixels: {emit.percentage_clear:.1f}%")
+        >>> 
+        >>> # Get specific mask layers
+        >>> cloud_mask = emit.mask("Cloud flag")
+        >>> water_mask = emit.water_mask()
+    
+    Working with viewing geometry::
+    
+        >>> # Get solar zenith angle
+        >>> sza = emit.sza()  # GeoTensor with SZA values
+        >>> 
+        >>> # Get mean angles for quick reference
+        >>> print(f"Mean SZA: {emit.mean_sza:.1f}°")
+        >>> print(f"Mean VZA: {emit.mean_vza:.1f}°")
+    
+    Spatial subsetting::
+    
+        >>> import rasterio.windows
+        >>> 
+        >>> # Read a spatial window
+        >>> window = rasterio.windows.Window(col_off=100, row_off=200, width=500, height=500)
+        >>> emit_subset = emit.read_from_window(window)
+        >>> data = emit_subset.load()
+    
+    See Also
+    --------
+    georeader.readers.prisma.PRISMA : PRISMA hyperspectral reader
+    georeader.readers.enmap.EnMAP : EnMAP hyperspectral reader
+    georeader.reflectance : Radiometric conversion utilities
+    
+    References
+    ----------
+    - EMIT L1B Product Guide: https://lpdaac.usgs.gov/products/emitl1bradv001/
+    - EMIT Data Resources: https://github.com/nasa/EMIT-Data-Resources
+    - EMIT Algorithms: Green et al. (2020) doi:10.1029/2020JD033451
     """
     attributes_set_if_exists = ["_nc_ds_obs", "_mean_sza", "_mean_vza", 
                                 "_observation_bands", "_nc_ds_l2amask", "_mask_bands", 

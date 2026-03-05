@@ -27,7 +27,7 @@ def safe_open_netcdf(
     load: bool = True,
     group: Optional[str] = None,
     **kwargs,
-):
+) -> "xr.Dataset":
     """
     Safely open a NetCDF file by trying multiple engines in order.
     
@@ -44,10 +44,10 @@ def safe_open_netcdf(
         cache (bool, optional): Whether to cache the file in memory. Defaults to False.
         load (bool, optional): Whether to load the data into memory. Defaults to True.
         group (str, optional): NetCDF4 group to open. Defaults to None (root group).
-        **kwargs: Additional keyword arguments passed to xr.open_dataset.
+        **kwargs (Any): Additional keyword arguments passed to xr.open_dataset.
     
     Returns:
-        xr.Dataset: The opened xarray Dataset with data loaded into memory.
+        xr.Dataset: The opened xarray Dataset with data loaded into memory (if load=True).
     
     Raises:
         ImportError: If xarray is not installed.

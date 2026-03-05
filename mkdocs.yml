@@ -10,15 +10,19 @@ nav:
   - Home: index.md
   - GeoReader concepts and protocols: modules/read_module.md
   - Modules:
-    - save: modules/save_module.md
     - reflectance: modules/reflectance_module.md
     - GeoTensor: modules/geotensor_module.md
     - RasterioReader: modules/rasterio_reader.md
     - rasterize: modules/rasterize_module.md
     - vectorize: modules/vectorize_module.md
     - ee_image: modules/ee_image.md
-    - plot: modules/plot_module.md
     - readers: modules/readers_module.md
+  - Advanced modules:
+    - save: advanced_modules/save_module.md
+    - plot: advanced_modules/plot_module.md
+    - mosaic: advanced_modules/mosaic_module.md
+    - slices: advanced_modules/slices_module.md
+    - griddata: advanced_modules/griddata_module.md
   - Tutorials:
     - Read overlapping rasters:
         - Overlapping S2 and Proba-V: read_overlapping_probav_and_sentinel2.ipynb
@@ -41,13 +45,11 @@ nav:
       - VSIL cache problem: advanced/error_read_write_in_remote_path.md
 plugins:
   - search
-  - social
+  # - social  # Disabled: requires mkdocs-material[imaging] with PIL and cairosvg
   - mkdocstrings:
       handlers:
         python:
-          setup_commands:
-            - import sys
-            - sys.path.append('../')
+          paths: [..]
   - mknotebooks:
       execute: false
       timeout: 100

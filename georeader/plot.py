@@ -83,7 +83,7 @@ def show(data:GeoData, add_colorbar_next_to:bool=False,
         mask (Union[bool,np.array], optional): Defaults to False. Mask to apply to the data. 
             If True, the fill_value_default of the GeoData is used.
         bounds_in_latlng (bool, optional): Defaults to True. If True, the x and y ticks are shown in latlng.
-        **kwargs: Keyword arguments for imshow
+        **kwargs (Any): Additional keyword arguments passed to imshow
 
     Returns:
         plt.Axes: image object

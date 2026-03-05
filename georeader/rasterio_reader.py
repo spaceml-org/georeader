@@ -1,3 +1,154 @@
+"""
+Rasterio Reader: Lazy file-backed raster reading with geospatial awareness.
+
+This module provides the RasterioReader class, a lazy wrapper around rasterio
+that enables efficient reading of raster data from disk or cloud storage.
+Unlike GeoTensor which holds data in memory, RasterioReader only reads data
+when explicitly requested, making it ideal for large files and parallel processing.
+
+Key Features
+------------
+
+- **Lazy Loading**: Data is read only when `load()` or `read()` is called
+- **Multi-file Support**: Read multiple rasters as a time series stack
+- **Windowed Reading**: Efficiently read subsets without loading full file
+- **Overview Support**: Read from pyramids for quick previews
+- **Cloud-native**: Works with COGs on S3, GCS, Azure via GDAL VSI
+- **Process-safe**: Opens files fresh each read for parallel processing
+
+Reader vs GeoTensor
+-------------------
+
+Choosing between RasterioReader and GeoTensor::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                 RASTERIOREADER vs GEOTENSOR                             │
+    ├─────────────────────────────────────────────────────────────────────────┤
+    │                                                                         │
+    │  RasterioReader (Lazy)              GeoTensor (In-Memory)               │
+    │  ─────────────────────              ────────────────────                │
+    │                                                                         │
+    │  • Data on disk/cloud               • Data in RAM                       │
+    │  • Read on demand                   • Instant access                    │
+    │  • Memory efficient                 • Full numpy API                    │
+    │  • Parallel-safe                    • Arithmetic operations             │
+    │  • Overview/pyramid support         • Broadcasting                      │
+    │                                                                         │
+    │  Use for:                           Use for:                            │
+    │  • Large files                      • Processing pipelines              │
+    │  • Cloud data                       • CNN inference                     │
+    │  • Tiled processing                 • Index calculations                │
+    │  • Quick previews                   • Visualizations                    │
+    │                                                                         │
+    │  Convert: reader.load() ────────────────────────────────► GeoTensor     │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+Time Series / Multi-file Reading
+--------------------------------
+
+RasterioReader can stack multiple files as a time dimension::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                    MULTI-FILE READING                                   │
+    ├─────────────────────────────────────────────────────────────────────────┤
+    │                                                                         │
+    │  Input: List of paths                Output array shape                 │
+    │  ────────────────────                ──────────────────                 │
+    │                                                                         │
+    │  paths = [                                                              │
+    │    "2023-01.tif",   ─────┐                                              │
+    │    "2023-02.tif",   ─────┼──────► stack=True:  (T, C, H, W)             │
+    │    "2023-03.tif"    ─────┘                      (3, 4, 1000, 1000)      │
+    │  ]                                                                      │
+    │                                                                         │
+    │  Each file: (4, 1000, 1000)        stack=False: (T×C, H, W)             │
+    │  4 bands, 1000×1000 pixels                       (12, 1000, 1000)       │
+    │                                                                         │
+    │  Requirements for multi-file:                                           │
+    │  • Same CRS                                                             │
+    │  • Same transform (resolution, origin)                                  │
+    │  • Same shape (unless allow_different_shape=True)                       │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+Window Focus
+------------
+
+set_window() creates a "view" into the raster for efficient subsetting::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                    WINDOW FOCUS CONCEPT                                 │
+    ├─────────────────────────────────────────────────────────────────────────┤
+    │                                                                         │
+    │  Full raster (10000 × 10000)                                            │
+    │  ┌────────────────────────────────────────────────────────────────┐     │
+    │  │                                                                │     │
+    │  │                                                                │     │
+    │  │        ┌─────────────────────┐                                 │     │
+    │  │        │    window_focus     │  ← reader.set_window(...)       │     │
+    │  │        │    (2000 × 2000)    │                                 │     │
+    │  │        │                     │  After set_window:              │     │
+    │  │        │  ┌───────────┐      │  • reader.shape → (C, 2000, 2000)│    │
+    │  │        │  │ read()    │      │  • reader.bounds → window bounds│     │
+    │  │        │  │ window    │      │  • read(window=...) is relative │     │
+    │  │        │  └───────────┘      │    to window_focus              │     │
+    │  │        └─────────────────────┘                                 │     │
+    │  │                                                                │     │
+    │  └────────────────────────────────────────────────────────────────┘     │
+    │                                                                         │
+    │  Benefits: • Work with large files efficiently                          │
+    │            • Coordinates/bounds reflect the focused region              │
+    │            • Tiled processing with consistent interface                 │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+Module Contents
+---------------
+
+Classes:
+    - :class:`RasterioReader`: Main lazy reader class
+
+Quick Start
+-----------
+
+Read a local GeoTIFF::
+
+    from georeader.rasterio_reader import RasterioReader
+
+    # Open reader (lazy - no data loaded yet)
+    reader = RasterioReader("image.tif")
+    print(f"Shape: {reader.shape}, CRS: {reader.crs}")
+
+    # Load into memory as GeoTensor
+    gt = reader.load()
+
+Read from cloud storage (COG on S3)::
+
+    reader = RasterioReader("s3://bucket/image.tif")
+
+    # Read only a small window
+    window = rasterio.windows.Window(1000, 2000, 512, 512)
+    subset = reader.read_from_window(window).load()
+
+Read time series::
+
+    paths = ["2023-01.tif", "2023-02.tif", "2023-03.tif"]
+    reader = RasterioReader(paths, stack=True)
+    print(f"Time series shape: {reader.shape}")  # (3, C, H, W)
+
+    # Read specific bands and time steps
+    subset = reader.isel({"time": [0, 2], "band": [0, 1, 2]})
+
+See Also
+--------
+georeader.geotensor : In-memory georeferenced arrays
+georeader.read : High-level read and reprojection functions
+rasterio : Underlying library documentation
+
+References
+----------
+- Rasterio: https://rasterio.readthedocs.io/
+- Cloud Optimized GeoTIFF: https://cogeo.org/
+- GDAL VSI: https://gdal.org/user/virtual_file_systems.html
+"""
 import rasterio
 import rasterio.windows
 import numpy as np
@@ -27,66 +178,125 @@ RIO_ENV_OPTIONS_DEFAULT = geotensor.RIO_ENV_OPTIONS_DEFAULT
 
 class RasterioReader:
     """
-    Class to read a raster or a set of rasters files (``paths``). If the path is a single file it will return a 3D np.ndarray 
-    with shape (C, H, W). If `paths` is a list, the `read` method will return a 4D np.ndarray with shape (len(paths), C, H, W)
+    Lazy file-backed raster reader with geospatial metadata.
 
-    It checks that all rasters have same CRS, transform and shape. The `read` method will open the file every time it
-    is called to work in parallel processing scenario.
+    RasterioReader wraps rasterio to provide lazy, memory-efficient access to
+    raster files on disk or cloud storage. Data is only read when explicitly
+    requested via `load()` or `read()`, making it ideal for large files and
+    parallel processing scenarios.
 
-    Parameters
-    -------------------
+    The class supports reading single files or multiple files as a stacked
+    time series. All files must share the same CRS, transform, and shape
+    (unless `allow_different_shape=True`).
 
-    - paths : `Union[List[str], str]`
-        Single path or list of paths of the rasters to read.
-    - allow_different_shape : `bool`
-        If True, will allow different shapes to be read (still checks that all rasters have same CRS,
-        transform and number of bands).
-    - window_focus : `Optional[rasterio.windows.Window]`
-        Window to read from. If provided, all windows in read call will be relative to this window.
-    - fill_value_default : `Optional[Union[int, float]]`
-        Value to fill when boundless read. It defaults to nodata if it is not None, otherwise it will be
-        set to zero.
-    - stack : `bool`
-        If `True`, returns 4D tensors; otherwise, it returns 3D tensors concatenated over the first dim. If 
-        paths is string this argument is ignored and will be set to False (3D tensor).
-    - indexes : `Optional[List[int]]`
-        If not None, it will read from each raster only the specified bands. This argument is 1-based as in rasterio.
-    - overview_level : `Optional[int]`
-        If not None, it will read from the corresponding pyramid level. This argument is 0-based as in rasterio
-        (None -> default resolution and 0 is the first overview).
-    - check : `bool`
-        Check all paths are OK.
-    - rio_env_options : `Optional[Dict[str, str]]`
-        GDAL options for reading. Defaults to: `RIO_ENV_OPTIONS_DEFAULT`. If you read rasters that might change
-        from a remote source, you might want to set `read_with_CPL_VSIL_CURL_NON_CACHED` to True.
+    Args:
+        paths (Union[List[str], str]): Single path or list of paths to raster files.
+            Supports local paths, S3 URIs (s3://), GCS URIs (gs://), Azure paths,
+            and HTTP URLs for COGs.
+        allow_different_shape (bool, optional): If True, allows reading files with
+            different shapes (still requires same CRS, transform, band count).
+            Defaults to False.
+        window_focus (Optional[rasterio.windows.Window], optional): Initial window
+            to focus on. All subsequent operations will be relative to this window.
+            Defaults to None (full raster).
+        fill_value_default (Optional[Union[int, float]], optional): Value for
+            out-of-bounds pixels in boundless reads. Defaults to nodata value
+            if available, otherwise 0.
+        stack (bool, optional): If True and paths is a list, returns 4D arrays
+            (T, C, H, W). If False, concatenates along band dimension (T*C, H, W).
+            Ignored for single file. Defaults to True.
+        indexes (Optional[List[int]], optional): Band indices to read (1-based,
+            following rasterio convention). None reads all bands. Defaults to None.
+        overview_level (Optional[int], optional): Pyramid level to read from
+            (0-based, 0 = first overview, None = full resolution). Useful for
+            quick previews. Defaults to None.
+        check (bool, optional): Validate that all paths have matching CRS,
+            transform, and shape. Defaults to True.
+        rio_env_options (Optional[Dict[str, str]], optional): GDAL environment
+            options for reading. Defaults to RIO_ENV_OPTIONS_DEFAULT.
 
-    Attributes
-    -------------------
+    Attributes:
+        crs (rasterio.crs.CRS): Coordinate reference system.
+        transform (rasterio.Affine): Affine transform (reflects window_focus if set).
+        shape (Tuple[int, ...]): Array shape as (T, C, H, W) or (C, H, W).
+        dtype (str): Data type of the raster.
+        count (int): Number of bands being read.
+        width (int): Width in pixels (of window_focus if set).
+        height (int): Height in pixels (of window_focus if set).
+        bounds (Tuple[float, float, float, float]): Geographic bounds (minx, miny, maxx, maxy).
+        res (Tuple[float, float]): Pixel resolution (x_res, y_res).
+        nodata (Optional[Union[int, float]]): Nodata value from file metadata.
+        fill_value_default (Union[int, float]): Fill value for boundless reads.
+        dims (List[str]): Dimension names for xarray compatibility.
+        attrs (Dict[str, Any]): Extra attributes dictionary.
 
-    - crs : `rasterio.crs.CRS`
-        Coordinate reference system.
-    - transform : `rasterio.Affine`
-        Transform of the rasters. If `window_focus` is provided, this transform will be relative to the window.
-    - dtype : `str`
-        Type of the input.
-    - count : `int`
-        Number of bands of the rasters.
-    - nodata : `Optional[Union[int, float]]`
-        Nodata value of the first raster in paths.
-    - fill_value_default : `Union[int, float]`
-        Value to fill when boundless read. Defaults to nodata.
-    - res : `Tuple[float, float]`
-        Resolution of the rasters.
-    - width : `int`
-        Width of the rasters. If `window_focus` is not None, this will be the width of the window.
-    - height : `int`
-        Height of the rasters. If `window_focus` is not None, this will be the height of the window.
-    - bounds : `Tuple[float, float, float, float]`
-        Bounds of the rasters. If `window_focus` is provided, these bounds will be relative to the window.
-    - dims : `List[str]`
-        Name of the dims (to make it compatible with xr.DataArray functions).
-    - attrs : `Dict[str, Any]`
-        Dictionary to store extra attributes.
+    Examples:
+        Read a single GeoTIFF::
+
+            >>> from georeader.rasterio_reader import RasterioReader
+            >>>
+            >>> reader = RasterioReader("image.tif")
+            >>> print(f"Shape: {reader.shape}")  # (C, H, W)
+            Shape: (4, 1000, 1000)
+            >>> print(f"CRS: {reader.crs}")
+            CRS: EPSG:32630
+            >>>
+            >>> # Load into memory as GeoTensor
+            >>> gt = reader.load()
+            >>> print(type(gt))
+            <class 'georeader.geotensor.GeoTensor'>
+
+        Read specific bands::
+
+            >>> # Read only RGB bands (1-based indexing)
+            >>> reader = RasterioReader("image.tif", indexes=[1, 2, 3])
+            >>> print(f"Shape: {reader.shape}")
+            Shape: (3, 1000, 1000)
+
+        Read time series from multiple files::
+
+            >>> paths = ["2023-01.tif", "2023-02.tif", "2023-03.tif"]
+            >>> reader = RasterioReader(paths, stack=True)
+            >>> print(f"Shape: {reader.shape}")  # (T, C, H, W)
+            Shape: (3, 4, 1000, 1000)
+            >>>
+            >>> # Access by dimension names
+            >>> january = reader.isel({"time": 0})
+            >>> print(f"January shape: {january.shape}")
+            January shape: (4, 1000, 1000)
+
+        Read from cloud storage::
+
+            >>> reader = RasterioReader("s3://bucket/cog.tif")
+            >>> # Read small window without loading entire file
+            >>> window = rasterio.windows.Window(0, 0, 512, 512)
+            >>> subset = reader.read_from_window(window).load()
+
+        Use overview for quick preview::
+
+            >>> reader = RasterioReader("large_image.tif", overview_level=2)
+            >>> # Much faster read at reduced resolution
+            >>> preview = reader.load()
+
+        Set window focus for tiled processing::
+
+            >>> reader = RasterioReader("large_image.tif")
+            >>> # Focus on region of interest
+            >>> reader.set_window(rasterio.windows.Window(5000, 5000, 2000, 2000))
+            >>> print(f"Focused shape: {reader.shape}")
+            Focused shape: (4, 2000, 2000)
+            >>> # All reads now relative to this window
+
+    Note:
+        - Files are opened fresh for each read() call (process-safe)
+        - Use `load()` to get a GeoTensor for in-memory operations
+        - Band indexing is 1-based (rasterio convention)
+        - Overview levels are 0-based (0 = first overview, not full res)
+
+    See Also:
+        georeader.geotensor.GeoTensor: In-memory array with geo metadata.
+        georeader.read.read: High-level read with reprojection.
+        read_out_shape: Read with resampling to target shape.
     """
     def __init__(self, paths:Union[List[str], str], allow_different_shape:bool=False,
                  window_focus:Optional[rasterio.windows.Window]=None,
@@ -183,15 +393,61 @@ class RasterioReader:
 
     def set_indexes(self, indexes:List[int], relative:bool=True)-> None:
         """
-        Set the channels to read. This is useful for processing only some channels of the raster. The indexes
-        passed will be relative to self.indexes
+        Set the band indices to read.
+
+        Modifies the reader in-place to read only the specified bands. Band
+        indices follow rasterio's 1-based convention. Useful for working with
+        subsets of multi-band imagery (e.g., RGB from RGBN).
+
         Args:
-            indexes: 1-based array to mantain rasterio convention
-            relative: True means the indexes arg will be treated ad relative to the current self.indexes. If false
-                     it sets self.indexes = indexes (and update the count attribute)
+            indexes (List[int]): Band indices to read (1-based, per rasterio
+                convention). Must be within valid range for the raster.
+            relative (bool, optional): If True, indices are relative to current
+                `self.indexes`. If False, indices are absolute (relative to
+                full raster). Defaults to True.
+
+        Raises:
+            AssertionError: If any index is out of bounds (< 1 or > band count).
+
         Examples:
-            >>> r = RasterioReader("path/to/raster.tif", indexes=[2,3,4]) # Read all bands except the first one.
-            >>> r.set_indexes([2,3], relative=True) # will read bands 2 and 3 of the original raster
+            Select specific bands from multi-band raster::
+
+                >>> reader = RasterioReader("image.tif")  # 6-band raster
+                >>> print(reader.count)
+                6
+                >>>
+                >>> # Read only RGB (bands 1, 2, 3)
+                >>> reader.set_indexes([1, 2, 3], relative=False)
+                >>> print(reader.count)
+                3
+                >>> print(reader.shape)
+                (3, 1000, 1000)
+
+            Relative indexing::
+
+                >>> reader = RasterioReader("image.tif", indexes=[2, 3, 4, 5])
+                >>> print(reader.indexes)  # Currently reading bands 2-5
+                [2, 3, 4, 5]
+                >>>
+                >>> # Select first two of current selection (bands 2, 3)
+                >>> reader.set_indexes([1, 2], relative=True)
+                >>> print(reader.indexes)
+                [2, 3]
+
+            Combined with constructor::
+
+                >>> # Directly specify bands at creation
+                >>> reader = RasterioReader("image.tif", indexes=[4, 3, 2])  # NIR, R, G
+                >>> nir_r_g = reader.load()
+
+        Note:
+            - Modifies reader in-place
+            - Use 1-based indexing (band 1 is the first band)
+            - For 0-based indexing, use `isel({"band": [...]})` instead
+
+        See Also:
+            set_indexes_by_name: Select bands by description/name.
+            isel: Dimension-based selection with 0-based indexing.
         """
         if relative:
             new_indexes = [self.indexes[idx - 1] for idx in indexes]
@@ -256,21 +512,71 @@ class RasterioReader:
     def set_window(self, window_focus:Optional[rasterio.windows.Window] = None,
                    relative:bool = True, boundless:bool=True)->None:
         """
-        Set window to read. This is useful for processing only some part of the raster. The windows passed as
-         arguments in the read calls will be relative to this window.
+        Set the window focus for subsequent read operations.
+
+        Modifies the reader in-place to focus on a specific window. All subsequent
+        `read()`, `load()`, and `read_from_window()` calls will be relative to this
+        window. This enables efficient tiled processing of large rasters.
 
         Args:
-            window_focus: rasterio window. If None will be set to the full raster tile
-            relative: provided window is relative to current self.window_focus
-            boundless: if boundless is false the windows that do not overlap the total raster will be
-                intersected.
-        
-        Examples:
-            >>> # Read the first 1000x1000 pixels of the raster
-            >>> r = RasterioReader("path/to/raster.tif")
-            >>> r.set_window(rasterio.windows.Window(col_off=0, row_off=0, width=1000, height=1000))
-            >>> r.load() #  returns GeoTensor with shape (1, 1, 1000, 1000)
+            window_focus (Optional[rasterio.windows.Window], optional): Window to
+                focus on. If None, resets to full raster extent. Defaults to None.
+            relative (bool, optional): If True, window is relative to current
+                `window_focus`. If False, window is absolute (relative to full
+                raster). Defaults to True.
+            boundless (bool, optional): If True, allows window to extend beyond
+                raster bounds. If False, intersects with valid extent. Defaults
+                to True.
 
+        Examples:
+            Focus on a 1000x1000 region::
+
+                >>> reader = RasterioReader("image.tif")
+                >>> print(f"Original: {reader.shape}")
+                Original: (4, 5000, 5000)
+                >>>
+                >>> reader.set_window(rasterio.windows.Window(0, 0, 1000, 1000))
+                >>> print(f"Focused: {reader.shape}")
+                Focused: (4, 1000, 1000)
+                >>>
+                >>> gt = reader.load()  # Only reads 1000x1000
+
+            Nested windowing (relative=True)::
+
+                >>> reader = RasterioReader("image.tif")
+                >>> # First focus: pixels 1000-2000 in both dims
+                >>> reader.set_window(rasterio.windows.Window(1000, 1000, 1000, 1000))
+                >>>
+                >>> # Second focus: relative to first, so actual 1100-1600
+                >>> reader.set_window(rasterio.windows.Window(100, 100, 500, 500))
+                >>> print(reader.bounds)  # Shows geographic bounds of 1100-1600 region
+
+            Absolute windowing (relative=False)::
+
+                >>> reader = RasterioReader("image.tif")
+                >>> reader.set_window(rasterio.windows.Window(0, 0, 500, 500))
+                >>>
+                >>> # Override with absolute position
+                >>> reader.set_window(
+                ...     rasterio.windows.Window(2000, 2000, 500, 500),
+                ...     relative=False
+                ... )
+                >>> # Now focused on pixels 2000-2500, not 500-1000
+
+            Reset to full extent::
+
+                >>> reader.set_window(None)
+                >>> print(reader.shape)  # Back to full raster
+                (4, 5000, 5000)
+
+        Note:
+            - Modifies reader in-place
+            - Updates `transform`, `bounds`, `width`, `height` attributes
+            - Use `read_from_window()` for a non-mutating alternative
+
+        See Also:
+            read_from_window: Create new reader for window (non-mutating).
+            isel: Dimension-based selection.
         """
         if window_focus is None:
             self.window_focus = rasterio.windows.Window(row_off=0, col_off=0,
@@ -347,18 +653,75 @@ class RasterioReader:
 
     def read_from_window(self, window:rasterio.windows.Window, boundless:bool=True) -> '__class__':
         """
-        Returns a new reader with window focus the window `window` relative to `self.window_focus`
-        
-        Args:
-            window: rasterio.window.Window to read
-            boundless: if boundless is False if the window do not overlap the total raster  it will be
-                intersected.
+        Create a new reader focused on a sub-window.
 
-        Raises:
-            rasterio.windows.WindowError: if bounless is False and window does not intersects self.window_focus
+        Returns a lazy RasterioReader with its `window_focus` set to the
+        specified window. The window is interpreted relative to the current
+        `window_focus`. No data is read until `load()` or `read()` is called.
+
+        This is efficient for tiled processing where you want to iterate over
+        windows without loading everything into memory.
+
+        Args:
+            window (rasterio.windows.Window): Target window, relative to current
+                `window_focus`.
+            boundless (bool, optional): If True, allows windows extending beyond
+                raster bounds (filled with `fill_value_default`). If False,
+                window is intersected with valid extent. Defaults to True.
 
         Returns:
-            RasterioReader: New reader object
+            RasterioReader: New reader focused on the specified window.
+
+        Raises:
+            rasterio.windows.WindowError: If `boundless=False` and window doesn't
+                intersect the valid raster extent.
+
+        Examples:
+            Read a 512x512 tile::
+
+                >>> reader = RasterioReader("large_image.tif")
+                >>> window = rasterio.windows.Window(1000, 1000, 512, 512)
+                >>> tile_reader = reader.read_from_window(window)
+                >>> tile = tile_reader.load()
+                >>> print(tile.shape)
+                (4, 512, 512)
+
+            Tiled processing pattern::
+
+                >>> reader = RasterioReader("large_image.tif")
+                >>> tile_size = 512
+                >>> results = []
+                >>> for row in range(0, reader.height, tile_size):
+                ...     for col in range(0, reader.width, tile_size):
+                ...         window = rasterio.windows.Window(col, row, tile_size, tile_size)
+                ...         tile = reader.read_from_window(window).load()
+                ...         # Process tile...
+                ...         results.append(process(tile))
+
+            Bounded vs boundless::
+
+                >>> # Window at edge of 1000x1000 raster
+                >>> window = rasterio.windows.Window(900, 900, 200, 200)
+                >>>
+                >>> # Boundless: full 200x200 with fill values
+                >>> sub = reader.read_from_window(window, boundless=True)
+                >>> print(sub.shape)
+                (4, 200, 200)
+                >>>
+                >>> # Bounded: clipped to 100x100 valid region
+                >>> sub = reader.read_from_window(window, boundless=False)
+                >>> print(sub.shape)
+                (4, 100, 100)
+
+        Note:
+            - Returns a lazy reader, not data
+            - Chain multiple operations before final `load()`
+            - Preserves band selection from parent reader
+
+        See Also:
+            set_window: Modify window focus in-place.
+            isel: Slice using dimension names.
+            load: Materialize reader to GeoTensor.
         """
         rst_reader = RasterioReader(list(self.paths),
                                     allow_different_shape=self.allow_different_shape,
@@ -375,22 +738,83 @@ class RasterioReader:
 
     def isel(self, sel: Dict[str, Union[slice, List[int], int]], boundless:bool=True) -> '__class__':
         """
-        Creates a copy of the current RasterioReader slicing the data with a given selection dict. This function
-        mimics ``xr.DataArray.isel()`` method.
+        Create a new reader by selecting along named dimensions.
+
+        Mimics xarray's `DataArray.isel()` for intuitive dimension-based slicing.
+        Supports selection on "time", "band", "y", and "x" dimensions. Returns
+        a lazy reader; data is not loaded until `load()` is called.
 
         Args:
-            sel: Dict of slices to slice the current reader
-            boundless: If `True` slices in "x" and "y" are boundless (i.e. negative means negative indexes rather than
-                values from the other side of the array as in numpy).
+            sel (Dict[str, Union[slice, List[int], int]]): Selection dictionary
+                mapping dimension names to index selections:
+                - "time": int, list of ints, or slice (for multi-file readers)
+                - "band": list of ints or slice (NOT single int)
+                - "x": slice only
+                - "y": slice only
+            boundless (bool, optional): If True, spatial slices can extend beyond
+                bounds. Defaults to True.
 
         Returns:
-            Copy of the current reader
-        
+            RasterioReader: New reader with the selection applied.
+
+        Raises:
+            NotImplementedError: If dimension not in reader's dims, or if
+                unsupported selection type is used.
+
         Examples:
-            >>> r = RasterioReader(["path/to/raster1.tif", "path/to/raster2.tif"])
-            >>> r.isel({"time": 0, "band": [0]}) # returns a reader with the first band of the first raster
-            >>> r.isel({"time": slice(0, 1), "band": [0]}) # returns a reader with the first band of the first raster and second raster
-            >>> r.isel({"x": slice(4000, 5000), "band": [0, 1]}) # returns a reader slicing the x axis from 4000 to 5000 and the first two bands
+            Select time steps from multi-file reader::
+
+                >>> paths = ["2023-01.tif", "2023-02.tif", "2023-03.tif"]
+                >>> reader = RasterioReader(paths, stack=True)
+                >>> print(reader.shape)  # (3, 4, 1000, 1000)
+                (3, 4, 1000, 1000)
+                >>>
+                >>> # Single time step (reduces dimension)
+                >>> jan = reader.isel({"time": 0})
+                >>> print(jan.shape)
+                (4, 1000, 1000)
+                >>>
+                >>> # Range of time steps
+                >>> first_two = reader.isel({"time": slice(0, 2)})
+                >>> print(first_two.shape)
+                (2, 4, 1000, 1000)
+
+            Select bands::
+
+                >>> reader = RasterioReader("image.tif")  # 4 bands
+                >>> rgb = reader.isel({"band": [0, 1, 2]})  # 0-based indexing
+                >>> print(rgb.shape)
+                (3, 1000, 1000)
+
+            Spatial slicing::
+
+                >>> # Crop to region
+                >>> subset = reader.isel({"y": slice(100, 500), "x": slice(200, 600)})
+                >>> print(subset.shape)
+                (4, 400, 400)
+
+            Combined selection::
+
+                >>> # First time step, RGB bands, spatial subset
+                >>> sel = {
+                ...     "time": 0,
+                ...     "band": [0, 1, 2],
+                ...     "y": slice(0, 512),
+                ...     "x": slice(0, 512)
+                ... }
+                >>> subset = reader.isel(sel)
+                >>> gt = subset.load()
+
+        Note:
+            - "time" dimension only available when `stack=True`
+            - Band indexing is 0-based in isel (unlike rasterio's 1-based)
+            - Single band selection with int not supported (use list)
+            - Spatial dimensions only accept slices, not lists/ints
+
+        See Also:
+            read_from_window: Window-based spatial selection.
+            set_indexes: Set bands to read (1-based).
+            set_window: Set spatial window focus.
         """
         for k in sel:
             if k not in self.dims:
@@ -478,7 +902,39 @@ class RasterioReader:
     
     def overviews(self, index:int=1, time_index:int=0) -> List[int]:
         """
-        Returns a list of the available overview levels for the current raster.
+        Get available overview (pyramid) levels for the raster.
+
+        Queries the raster file for internal overview levels, which enable
+        efficient reading at reduced resolutions. This is particularly useful
+        for COGs (Cloud Optimized GeoTIFFs).
+
+        Args:
+            index (int, optional): Band index to query (1-based). Defaults to 1.
+            time_index (int, optional): For multi-file readers, which file to
+                query (0-based). Defaults to 0.
+
+        Returns:
+            List[int]: Available overview factors (e.g., [2, 4, 8, 16] means
+                overviews at 1/2, 1/4, 1/8, 1/16 resolution).
+
+        Examples:
+            Check available overviews::
+
+                >>> reader = RasterioReader("cog.tif")
+                >>> print(reader.overviews())
+                [2, 4, 8, 16]
+                >>>
+                >>> # Read at 1/4 resolution using overview_level=1
+                >>> fast_reader = reader.reader_overview(overview_level=1)
+
+        Note:
+            - Overview levels are 0-based for `reader_overview()`:
+              level 0 = first overview (factor 2), not full resolution
+            - Empty list means no internal overviews (read full res only)
+
+        See Also:
+            reader_overview: Create reader at specific overview level.
+            RasterioReader: Constructor accepts `overview_level` parameter.
         """
         with rasterio.Env(**self._get_rio_options_path(self.paths[time_index])):
             with rasterio.open(self.paths[time_index]) as src:
@@ -486,16 +942,55 @@ class RasterioReader:
     
     def reader_overview(self, overview_level:int) -> '__class__':
         """
-        Returns a new reader with the overview level specified.
+        Create a new reader at a specific overview level.
+
+        Returns a lazy reader configured to read from the specified overview
+        (pyramid) level. Useful for fast previews or memory-efficient processing
+        of large rasters.
 
         Args:
-            overview_level (int): overview level to read. 
-                If negative it will be relative to the last overview level
-                The higher the number the higher the resolution. -1 is the highest resolution 
-                (which is the original one)
-                
+            overview_level (int): Overview level to read from.
+                - Non-negative: Direct overview index (0 = first overview)
+                - Negative: Relative from end (-1 = full resolution, -2 = finest
+                  overview, etc.)
+
         Returns:
-            RasterioReader: new reader with the overview level specified
+            RasterioReader: New reader configured for the specified overview level.
+
+        Examples:
+            Read at first overview level::
+
+                >>> reader = RasterioReader("large_cog.tif")
+                >>> print(reader.overviews())
+                [2, 4, 8]
+                >>>
+                >>> # Read at 1/2 resolution (first overview)
+                >>> preview = reader.reader_overview(0)
+                >>> gt = preview.load()
+
+            Use negative indexing::
+
+                >>> # -1 = full resolution (no overview)
+                >>> full_res = reader.reader_overview(-1)
+                >>>
+                >>> # -2 = finest available overview
+                >>> finest_overview = reader.reader_overview(-2)
+
+            Fast thumbnail generation::
+
+                >>> # Use coarsest overview for fastest load
+                >>> num_overviews = len(reader.overviews())
+                >>> thumb_reader = reader.reader_overview(num_overviews - 1)
+                >>> thumbnail = thumb_reader.load()
+
+        Note:
+            - Overview level 0 is the first overview, not full resolution
+            - Use `overview_level=None` in constructor for full resolution
+            - Window focus is reset when creating overview reader
+
+        See Also:
+            overviews: List available overview levels.
+            RasterioReader: Constructor accepts `overview_level` parameter.
         """
         if overview_level < 0:
             overview_level = len(self.overviews()) + overview_level
@@ -545,11 +1040,68 @@ class RasterioReader:
 
     def load(self, boundless:bool=True) -> geotensor.GeoTensor:
         """
-        Load all raster in memory in an GeoTensor object
+        Load all raster data into memory as a GeoTensor.
+
+        Reads the data from disk/cloud and returns an in-memory GeoTensor with
+        full geospatial metadata. This is the main method for converting a lazy
+        RasterioReader into a materialized array for computation.
+
+        Args:
+            boundless (bool, optional): If True, out-of-bounds regions are filled
+                with `fill_value_default`. If False, the output is clipped to the
+                valid data extent. Defaults to True.
 
         Returns:
-            GeoTensor (wrapper of numpy array with spatial information)
+            GeoTensor: In-memory array with transform, CRS, and fill value.
 
+        Examples:
+            Load a full raster::
+
+                >>> reader = RasterioReader("image.tif")
+                >>> gt = reader.load()
+                >>> print(type(gt))
+                <class 'georeader.geotensor.GeoTensor'>
+                >>> print(gt.shape)
+                (4, 1000, 1000)
+
+            Load with window focus::
+
+                >>> reader = RasterioReader("image.tif")
+                >>> reader.set_window(rasterio.windows.Window(0, 0, 512, 512))
+                >>> gt = reader.load()
+                >>> print(gt.shape)  # Only reads the focused region
+                (4, 512, 512)
+
+            Load time series::
+
+                >>> reader = RasterioReader(["jan.tif", "feb.tif"], stack=True)
+                >>> gt = reader.load()
+                >>> print(gt.shape)  # (T, C, H, W)
+                (2, 4, 1000, 1000)
+
+            Bounded vs boundless reads::
+
+                >>> # Window extends beyond raster edge
+                >>> reader = RasterioReader("image.tif")  # 1000x1000
+                >>> reader.set_window(rasterio.windows.Window(-100, -100, 500, 500))
+                >>>
+                >>> gt_boundless = reader.load(boundless=True)
+                >>> print(gt_boundless.shape)  # Full requested size, padded
+                (4, 500, 500)
+                >>>
+                >>> gt_bounded = reader.load(boundless=False)
+                >>> print(gt_bounded.shape)  # Clipped to valid extent
+                (4, 400, 400)
+
+        Note:
+            - For large files, consider using `read_from_window()` for partial reads
+            - Memory usage equals array size in dtype
+            - The returned GeoTensor can be used for in-memory operations
+
+        See Also:
+            read: Lower-level read returning raw numpy array.
+            read_from_window: Create reader for subset without loading.
+            georeader.geotensor.GeoTensor: The in-memory array class.
         """
         np_data = self.read(boundless=boundless)
         if boundless:
@@ -573,14 +1125,71 @@ class RasterioReader:
     @property
     def values(self) -> np.ndarray:
         """
-        This property is added to be consistent with xr.DataArray. It reads the whole raster in memory and returns it
+        Load raster data as numpy array (xarray compatibility).
+
+        Property for xarray DataArray compatibility. Equivalent to `read()`.
+        Useful when treating RasterioReader like an xarray object.
 
         Returns:
-            np.ndarray raster loaded in memory
+            np.ndarray: Full raster loaded in memory with shape depending on
+                `stack` setting: (T, C, H, W) if stacked, (T*C, H, W) otherwise.
+
+        Examples:
+            Access like xarray::
+
+                >>> reader = RasterioReader("image.tif")
+                >>> data = reader.values
+                >>> print(data.shape)
+                (4, 1000, 1000)
+
+        Note:
+            Loads entire raster into memory. For large files, consider
+            using `read_from_window()` or `isel()` for partial reads.
+
+        See Also:
+            read: Equivalent method with optional parameters.
+            load: Returns GeoTensor with geospatial metadata.
         """
         return self.read()
 
     def footprint(self, crs:Optional[str]=None) -> Polygon:
+        """
+        Get raster footprint as a Shapely polygon.
+
+        Returns the geographic extent of the current window focus as a
+        polygon. Can optionally reproject to a different CRS.
+
+        Args:
+            crs (Optional[str], optional): Target CRS for the footprint. If None,
+                returns polygon in raster's native CRS. Defaults to None.
+
+        Returns:
+            Polygon: Shapely polygon representing the raster's spatial extent.
+
+        Examples:
+            Get footprint in native CRS::
+
+                >>> reader = RasterioReader("image.tif")
+                >>> fp = reader.footprint()
+                >>> print(fp.bounds)  # (minx, miny, maxx, maxy)
+                (600000.0, 4000000.0, 610000.0, 4010000.0)
+
+            Get footprint in WGS84::
+
+                >>> fp_wgs84 = reader.footprint(crs="EPSG:4326")
+                >>> print(fp_wgs84.bounds)
+                (-3.5, 36.1, -3.4, 36.2)
+
+            Use with geopandas::
+
+                >>> import geopandas as gpd
+                >>> fp = reader.footprint()
+                >>> gdf = gpd.GeoDataFrame(geometry=[fp], crs=reader.crs)
+
+        See Also:
+            bounds: Get bounds as tuple instead of polygon.
+            georeader.window_utils.window_polygon: Underlying function.
+        """
         pol = window_utils.window_polygon(rasterio.windows.Window(row_off=0, col_off=0, height=self.shape[-2], width=self.shape[-1]),
                                           self.transform)
         if (crs is None) or window_utils.compare_crs(self.crs, crs):
@@ -606,18 +1215,66 @@ class RasterioReader:
 
     def read(self, **kwargs) -> np.ndarray:
         """
-        Read data from the list of rasters. It reads with boundless=True by default and
-        fill_value=self.fill_value_default by default.
+        Read raw pixel data from the raster files.
 
-        This function is process safe (opens and closes the rasterio object every time is called).
+        Low-level method that reads data as a numpy array without geospatial
+        metadata. Opens files fresh each call (process-safe). All windows are
+        relative to the current `window_focus`.
 
-        For arguments see: https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.read
+        Args:
+            **kwargs: Keyword arguments passed to rasterio's read method:
+                - window (rasterio.windows.Window): Read window relative to
+                    `window_focus`. Defaults to full `window_focus`.
+                - boundless (bool): Allow out-of-bounds reads. Defaults to True.
+                - fill_value (float): Fill value for boundless. Defaults to
+                    `fill_value_default`.
+                - indexes (List[int]): Band indices (1-based, relative to current
+                    `indexes`). Defaults to all selected bands.
+                - out_shape (Tuple[int, int]): Resample to target (H, W). None
+                    preserves original resolution.
+                - resampling (Resampling): Resampling method for `out_shape`.
 
         Returns:
-            if self.stack:
-                4D np.ndarray with shape (len(paths), C, H, W)
-            if self.stack is False:
-                3D np.ndarray with shape (len(paths)*C, H, W)
+            np.ndarray: Array of shape (T, C, H, W) if `stack=True`, else (T*C, H, W).
+                Returns None if `boundless=False` and window doesn't intersect raster.
+
+        Examples:
+            Read full raster::
+
+                >>> reader = RasterioReader("image.tif")
+                >>> data = reader.read()
+                >>> print(data.shape)
+                (4, 1000, 1000)
+
+            Read specific window::
+
+                >>> window = rasterio.windows.Window(0, 0, 256, 256)
+                >>> data = reader.read(window=window)
+                >>> print(data.shape)
+                (4, 256, 256)
+
+            Read with resampling::
+
+                >>> data = reader.read(out_shape=(512, 512))
+                >>> print(data.shape)
+                (4, 512, 512)
+
+            Read specific bands::
+
+                >>> # Read only first 2 bands (1-based, relative to selected)
+                >>> data = reader.read(indexes=[1, 2])
+                >>> print(data.shape)
+                (2, 1000, 1000)
+
+        Note:
+            - Opens/closes file each call (safe for multiprocessing)
+            - Windows are relative to `window_focus`, not full raster
+            - For geospatial metadata, use `load()` instead
+            - See rasterio API for full kwargs documentation
+
+        See Also:
+            load: Returns GeoTensor with geospatial metadata.
+            read_from_window: Create new reader focused on window.
         """
 
         if ("window" in kwargs) and kwargs["window"] is not None:
@@ -740,7 +1397,7 @@ class RasterioReader:
             x (int): x coordinate of the tile in the TMS system.
             y (int): y coordinate of the tile in the TMS system.
             z (int): z coordinate of the tile in the TMS system.
-            out_shape (Tuple[int,int]: size of the tile to read. Defaults to (read.SIZE_DEFAULT, read.SIZE_DEFAULT).
+            out_shape (Tuple[int, int]): size of the tile to read. Defaults to (read.SIZE_DEFAULT, read.SIZE_DEFAULT).
             dst_crs (Optional[Any], optional): CRS of the output tile. Defaults to read.WEB_MERCATOR_CRS.
             
         Returns:
@@ -776,21 +1433,73 @@ def read_out_shape(reader:Union[RasterioReader, rasterio.DatasetReader],
                    out_shape:Optional[Tuple[int, int]]=None,
                    fill_value_default:int=0) -> geotensor.GeoTensor:
     """
-    Reads data using the `out_shape` param of rasterio. This allows to read from the pyramids if the file is a COG.
-    This function returns an xarray with the data with its geographic metadata.
+    Read raster with resampling to target shape.
+
+    Reads data using rasterio's `out_shape` parameter for efficient resampling.
+    When reading COGs, this leverages internal overviews for faster reads at
+    reduced resolution. Returns a GeoTensor with correct geospatial metadata
+    accounting for the resampling.
 
     Args:
-        reader: RasterioReader, rasterio.DatasetReader
-        size_read: if out_shape is None it uses this to compute the size to read that maintains the aspect ratio
-        indexes: 1-based channels to read
-        window: window to read
-        out_shape: shape of the output to be readed. Conceptually, the function resizes the output to this shape
-        fill_value_default: if the object is rasterio.DatasetReader and nodata is None it will use this value for the
-            corresponding GeoTensor
+        reader (Union[RasterioReader, rasterio.DatasetReader]): Source raster
+            to read from. Can be a RasterioReader or native rasterio dataset.
+        size_read (Optional[int], optional): Target size for the longest dimension.
+            Aspect ratio is preserved. Ignored if `out_shape` is provided.
+            Defaults to None.
+        indexes (Optional[Union[List[int], int]], optional): Band indices to read
+            (1-based). None reads all bands. Defaults to None.
+        window (Optional[rasterio.windows.Window], optional): Window to read from.
+            None reads full extent. Defaults to None.
+        out_shape (Optional[Tuple[int, int]], optional): Target (height, width)
+            for resampling. Overrides `size_read`. Defaults to None.
+        fill_value_default (int, optional): Fill value when nodata is not set
+            in the source. Defaults to 0.
 
     Returns:
-        GeoTensor with geo metadata
+        GeoTensor: Resampled data with updated transform reflecting new resolution.
 
+    Raises:
+        AssertionError: If both `out_shape` and `size_read` are None.
+
+    Examples:
+        Read at reduced resolution for preview::
+
+            >>> reader = RasterioReader("large_image.tif")
+            >>> print(reader.shape)  # (4, 10000, 10000)
+            (4, 10000, 10000)
+            >>>
+            >>> # Read with max dimension = 512 pixels
+            >>> preview = read_out_shape(reader, size_read=512)
+            >>> print(preview.shape)
+            (4, 512, 512)
+
+        Read with explicit output shape::
+
+            >>> gt = read_out_shape(reader, out_shape=(256, 256))
+            >>> print(gt.shape)
+            (4, 256, 256)
+
+        Read specific bands resampled::
+
+            >>> rgb = read_out_shape(reader, size_read=1024, indexes=[1, 2, 3])
+            >>> print(rgb.shape)
+            (3, 1024, 1024)
+
+        Read window at reduced resolution::
+
+            >>> window = rasterio.windows.Window(0, 0, 5000, 5000)
+            >>> subset = read_out_shape(reader, window=window, size_read=256)
+            >>> print(subset.shape)
+            (4, 256, 256)
+
+    Note:
+        - Transform is automatically adjusted for the resampled resolution
+        - For COGs, this efficiently uses internal overviews
+        - Resolution scaling is uniform (same factor for x and y)
+
+    See Also:
+        RasterioReader.read: Low-level read with out_shape parameter.
+        get_out_shape: Calculate aspect-preserving output shape.
     """
 
     if window is None:
@@ -823,6 +1532,44 @@ def read_out_shape(reader:Union[RasterioReader, rasterio.DatasetReader],
 
 
 def get_out_shape(shape:Tuple[int, int], size_read:int) -> Tuple[int, int]:
+    """
+    Calculate aspect-preserving output shape.
+
+    Given an input shape and target size for the longest dimension, computes
+    the output shape that preserves the aspect ratio. If the target size is
+    larger than both dimensions, returns None (no resampling needed).
+
+    Args:
+        shape (Tuple[int, int]): Input (height, width) dimensions.
+        size_read (int): Target size for the longest dimension.
+
+    Returns:
+        Tuple[int, int]: Output (height, width), or None if no resize needed.
+
+    Examples:
+        Square image::
+
+            >>> get_out_shape((1000, 1000), 512)
+            (512, 512)
+
+        Landscape image::
+
+            >>> get_out_shape((1000, 2000), 512)
+            (256, 512)
+
+        Portrait image::
+
+            >>> get_out_shape((2000, 1000), 512)
+            (512, 256)
+
+        Target larger than input::
+
+            >>> get_out_shape((400, 300), 512)
+            None  # No resize needed
+
+    See Also:
+        read_out_shape: Uses this to compute resampled reads.
+    """
     if (size_read >= shape[0]) and (size_read >= shape[1]):
         out_shape = None
     elif shape[0] > shape[1]:
@@ -834,6 +1581,47 @@ def get_out_shape(shape:Tuple[int, int], size_read:int) -> Tuple[int, int]:
 
 def needs_boundless(window_data:rasterio.windows.Window,
                     window_read:rasterio.windows.Window) -> bool:
+    """
+    Check if a read window requires boundless mode.
+
+    Determines whether reading `window_read` from a raster with extent
+    `window_data` requires boundless reading (i.e., the read window extends
+    beyond the valid data extent).
+
+    Args:
+        window_data (rasterio.windows.Window): Window representing the valid
+            data extent of the raster.
+        window_read (rasterio.windows.Window): Window to be read.
+
+    Returns:
+        bool: True if boundless read is needed (window_read extends beyond
+            window_data), False otherwise.
+
+    Examples:
+        Window within bounds::
+
+            >>> data_window = rasterio.windows.Window(0, 0, 1000, 1000)
+            >>> read_window = rasterio.windows.Window(100, 100, 500, 500)
+            >>> needs_boundless(data_window, read_window)
+            False
+
+        Window extends beyond bounds::
+
+            >>> data_window = rasterio.windows.Window(0, 0, 1000, 1000)
+            >>> read_window = rasterio.windows.Window(900, 900, 200, 200)
+            >>> needs_boundless(data_window, read_window)
+            True
+
+        Window completely outside::
+
+            >>> data_window = rasterio.windows.Window(0, 0, 1000, 1000)
+            >>> read_window = rasterio.windows.Window(2000, 2000, 100, 100)
+            >>> needs_boundless(data_window, read_window)
+            True
+
+    See Also:
+        get_slice_pad: Get slice and padding for boundless reads.
+    """
     try:
         slice_, pad = get_slice_pad(window_data, window_read)
         return any(x != 0 for x in pad["x"]+pad["y"])

@@ -1,7 +1,167 @@
+"""
+GeoTensor: A NumPy ndarray subclass with geospatial metadata.
+
+This module provides the core data structure for georeader - a numpy array subclass
+that carries geospatial metadata (CRS, transform, fill value) through all operations.
+GeoTensor enables numpy-style array operations while preserving georeferencing.
+
+Memory Layout & Dimensions
+--------------------------
+
+GeoTensor supports 2D, 3D, and 4D arrays. The last two dimensions are always spatial::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                     GEOTENSOR DIMENSION CONVENTIONS                     │
+    ├─────────────────────────────────────────────────────────────────────────┤
+    │                                                                         │
+    │  2D: (H, W)           Single-band raster (e.g., DEM, mask)              │
+    │                       shape = (height, width)                           │
+    │                                                                         │
+    │  3D: (C, H, W)        Multi-band raster (e.g., RGB, multispectral)      │
+    │                       shape = (channels, height, width)                 │
+    │                                                                         │
+    │  4D: (T, C, H, W)     Time-series cube (e.g., satellite time stack)     │
+    │                       shape = (time, channels, height, width)           │
+    │                                                                         │
+    │  Dimension names:  dims = ("y", "x") or ("band", "y", "x") or           │
+    │                          ("time", "band", "y", "x")                     │
+    │                                                                         │
+    │  Note: "y" decreases downward (row index), "x" increases rightward      │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+Coordinate Systems & Transform
+------------------------------
+
+GeoTensor uses an affine transform to map pixel coordinates to geographic coordinates::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │              AFFINE TRANSFORM: PIXEL ↔ GEOGRAPHIC COORDINATES           │
+    ├─────────────────────────────────────────────────────────────────────────┤
+    │                                                                         │
+    │  Pixel Space (row, col)              Geographic Space (x, y)            │
+    │  ┌───┬───┬───┬───┬───┐              ┌─────────────────────────┐         │
+    │  │0,0│0,1│0,2│0,3│...│              │OriginX ──────────────►  │         │
+    │  ├───┼───┼───┼───┼───┤     ═══►     │OriginY                  │         │
+    │  │1,0│1,1│   │   │   │   Transform  │   │                     │         │
+    │  ├───┼───┼───┼───┼───┤              │   ▼                     │         │
+    │  │2,0│   │   │   │   │              │        (CRS units)      │         │
+    │  └───┴───┴───┴───┴───┘              └─────────────────────────┘         │
+    │                                                                         │
+    │  Affine Transform:  | a  b  c |    x_geo = a * col + b * row + c        │
+    │                     | d  e  f |    y_geo = d * col + e * row + f        │
+    │                                                                         │
+    │  Typical (north-up):  a = pixel_width (positive)                        │
+    │                       e = -pixel_height (negative, y decreases down)    │
+    │                       c = origin_x (upper-left corner)                  │
+    │                       f = origin_y (upper-left corner)                  │
+    │                       b, d = 0 (no rotation/shear)                      │
+    │                                                                         │
+    │  Resolution:  res = (|a|, |e|) in CRS units (e.g., meters, degrees)     │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+NumPy Subclass Behavior
+-----------------------
+
+GeoTensor inherits from np.ndarray, so all numpy operations work natively::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                    NUMPY OPERATIONS PRESERVE GEOSPATIAL INFO            │
+    ├─────────────────────────────────────────────────────────────────────────┤
+    │                                                                         │
+    │  Arithmetic:     gt + 1, gt * 2, gt1 + gt2 (same extent required)       │
+    │  Comparison:     gt > 0, gt == other                                    │
+    │  Ufuncs:         np.sqrt(gt), np.log(gt), np.clip(gt, 0, 1)             │
+    │  Aggregation:    gt.mean(), gt.sum(axis=0)  # Returns scalar/array      │
+    │  Slicing:        gt[0], gt[:, 10:20, 10:20]  # Updates transform        │
+    │                                                                         │
+    │  Important: Operations that change spatial dimensions (slicing)         │
+    │  automatically update the transform to maintain georeferencing!         │
+    │                                                                         │
+    │  Example:                                                               │
+    │    gt_subset = gt[:, 100:200, 100:200]                                  │
+    │    # gt_subset.transform origin shifted by (100*res_x, 100*res_y)       │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+Key Attributes
+--------------
+
+===============  ============================================================
+Attribute        Description
+===============  ============================================================
+values           View of underlying numpy array data
+transform        rasterio.Affine mapping pixels to geographic coordinates
+crs              Coordinate reference system (EPSG code or WKT)
+fill_value_default  Value used for out-of-bounds reads (default: 0)
+bounds           Geographic bounds (minx, miny, maxx, maxy) in CRS units
+res              Pixel resolution as (x_res, y_res) tuple
+shape            Array shape (always ends with height, width)
+dims             Dimension names tuple ("band", "y", "x") etc.
+attrs            Optional metadata dictionary
+===============  ============================================================
+
+Quick Start
+-----------
+
+Creating a GeoTensor::
+
+    import numpy as np
+    import rasterio
+    from georeader.geotensor import GeoTensor
+
+    # Create from scratch
+    data = np.random.rand(3, 100, 100)  # 3 bands, 100x100 pixels
+    transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)  # 10m resolution
+    gt = GeoTensor(data, transform=transform, crs="EPSG:32630")
+
+    # Access properties
+    print(gt.bounds)      # (500000.0, 4649000.0, 501000.0, 4650000.0)
+    print(gt.res)         # (10.0, 10.0)
+    print(gt.shape)       # (3, 100, 100)
+
+Array operations::
+
+    # Arithmetic (preserves geospatial info)
+    gt_scaled = gt * 10000
+    gt_offset = gt + 0.1
+
+    # Band math (NDVI example)
+    red, nir = gt[0], gt[1]
+    ndvi = (nir - red) / (nir + red + 1e-10)
+
+    # Spatial slicing (automatically updates transform)
+    subset = gt[:, 50:100, 50:100]  # 50x50 subset
+    print(subset.bounds)  # Different from gt.bounds!
+
+Module Functions
+----------------
+
+===================  ============================================================
+Function             Description
+===================  ============================================================
+GeoTensor            Core class - numpy array with geospatial metadata
+_vsi_path            Convert cloud URLs to GDAL VSI paths
+get_rio_options_path Configure rasterio environment options
+===================  ============================================================
+
+See Also
+--------
+georeader.read : Functions to subset GeoTensors from polygons or windows.
+georeader.save : Functions to save GeoTensors to GeoTIFF files.
+georeader.rasterio_reader : RasterioReader class for lazy file access.
+georeader.abstract_reader : GeoData protocol that GeoTensor implements.
+
+References
+----------
+- Rasterio Affine transforms: https://rasterio.readthedocs.io/en/latest/topics/transforms.html
+- NumPy subclassing: https://numpy.org/doc/stable/user/basics.subclassing.html
+"""
 import numpy as np
-from typing import Any, Dict, Union, Tuple, Optional, List
 import rasterio
 import rasterio.windows
+from numpy.typing import ArrayLike, NDArray
+from shapely.geometry import MultiPolygon, Polygon
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 from georeader import window_utils
 from georeader.window_utils import window_bounds
 from numpy.typing import ArrayLike
@@ -70,15 +230,13 @@ def get_rio_options_path(options: dict, path: str) -> Dict[str, str]:
 
 class GeoTensor(np.ndarray):
     """
-    This class is a wrapper around a numpy tensor with geospatial information.
-    It can store 2D, 3D or 4D tensors. The last two dimensions are the spatial dimensions.
-
-    Args:
-        values (Tensor): numpy or torch tensor (2D, 3D or 4D).
-        transform (rasterio.Affine): affine geospatial transform
-        crs (Any): coordinate reference system
-        fill_value_default (Optional[Union[int, float]], optional): Value to fill when
-            reading out of bounds. Could be None. Defaults to 0.
+    A numpy ndarray subclass with geospatial metadata.
+    
+    GeoTensor wraps numpy arrays with geospatial information including coordinate
+    reference system (CRS), affine transform, and fill value. It supports 2D, 3D,
+    or 4D tensors where the last two dimensions are always spatial (y, x).
+    
+    Use :meth:`__new__` to create instances with values, transform, and CRS.
 
     Attributes:
         values (NDArray): numpy or torch tensor
@@ -163,7 +321,7 @@ class GeoTensor(np.ndarray):
         if hasattr(obj, "attrs"):
             self.attrs = getattr(obj, "attrs", None)
 
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs) -> Union["GeoTensor", NDArray]:
         """
         Handle NumPy universal functions applied to this GeoTensor.
 
@@ -172,14 +330,14 @@ class GeoTensor(np.ndarray):
         back to GeoTensor objects with the same geospatial metadata.
 
         Args:
-            ufunc (np.ufunc): The NumPy universal function being applied
-            method (str): The method of the ufunc ('__call__', 'reduce', etc.)
-            *inputs: The input arrays to the ufunc
-            **kwargs: Additional keyword arguments to the ufunc
+            ufunc (np.ufunc): The NumPy universal function being applied.
+            method (str): The method of the ufunc ('__call__', 'reduce', etc.).
+            inputs (tuple): The input arrays to the ufunc.
+            kwargs (dict): Additional keyword arguments to the ufunc.
 
         Returns:
             Union[GeoTensor, NDArray]: If the result is an array, returns a new GeoTensor with the same
-                                  geospatial attributes. Otherwise, returns the original result.
+                geospatial attributes. Otherwise, returns the original result.
         """
         # Normal processing for most operations
         inputs_arr = tuple(
@@ -369,7 +527,7 @@ class GeoTensor(np.ndarray):
             self.transform,
         )
 
-    def set_dtype(self, dtype):
+    def set_dtype(self, dtype: np.dtype) -> None:
         """Set the dtype of the GeoTensor in-place.
         
         .. deprecated::
@@ -377,7 +535,7 @@ class GeoTensor(np.ndarray):
             This method modifies the array in place which can be confusing.
         
         Args:
-            dtype: Target data type for the array.
+            dtype (np.dtype): Target data type for the array.
             
         Raises:
             RuntimeError: If the dtype cannot be changed in-place (due to numpy subclass limitations).
@@ -466,17 +624,64 @@ class GeoTensor(np.ndarray):
 
     def __add__(self, other: Union[numbers.Number, NDArray, Self]) -> Self:
         """
-        Add two GeoTensors. The georeferencing must match.
-
+        Add a value or array to this GeoTensor element-wise.
+        
+        Supports broadcasting with scalars, numpy arrays, or other GeoTensors.
+        When adding two GeoTensors, they must have the same spatial extent
+        (matching transform, CRS, and spatial dimensions).
+        
+        Broadcasting Rules:
+        - Scalar: Added to every pixel
+        - Array: Must be broadcastable to self.values shape
+        - GeoTensor: Must have identical georeferencing (same_extent)
+        
         Args:
-            other (GeoTensor): GeoTensor to add.
-
-        Raises:
-            ValueError: if the georeferencing does not match.
-            TypeError: if other is not a GeoTensor.
-
+            other (Union[numbers.Number, np.ndarray, GeoTensor]): Value to add. Can be:
+                - Scalar (int, float): Added to all pixels
+                - np.ndarray: Must be broadcastable with self.values
+                - GeoTensor: Must have same spatial extent
+        
         Returns:
-            GeoTensor: GeoTensor with the result of the addition.
+            GeoTensor: New GeoTensor with same transform, CRS, and fill_value_default.
+                Shape matches self.shape (or broadcast result for arrays).
+        
+        Raises:
+            ValueError: If other is a GeoTensor and georeferencing doesn't match.
+        
+        Examples:
+            >>> import numpy as np
+            >>> import rasterio
+            >>> from georeader import GeoTensor
+            >>>
+            >>> # Create sample GeoTensor (3 bands, 100x100 pixels)
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
+            >>> data = np.random.rand(3, 100, 100)
+            >>> gt = GeoTensor(data, transform, crs="EPSG:32630")
+            >>>
+            >>> # Add scalar to all pixels
+            >>> gt_offset = gt + 0.1
+            >>> print(gt_offset.shape)  # (3, 100, 100)
+            >>>
+            >>> # Add per-band offset using broadcasting
+            >>> band_offsets = np.array([0.1, 0.2, 0.3])[:, None, None]  # Shape: (3, 1, 1)
+            >>> gt_adjusted = gt + band_offsets
+            >>>
+            >>> # Add two GeoTensors (must have same extent)
+            >>> gt2 = GeoTensor(np.random.rand(3, 100, 100), transform, crs="EPSG:32630")
+            >>> gt_sum = gt + gt2
+            >>>
+            >>> # Error case: mismatched georeferencing
+            >>> gt_different = GeoTensor(data, rasterio.Affine(20, 0, 0, 0, -20, 0), crs="EPSG:4326")
+            >>> # gt + gt_different  # Raises ValueError
+        
+        Note:
+            - Result inherits transform, CRS, and fill_value_default from self
+            - For GeoTensor addition, use `read.read_reproject_like(other, self)`
+              to align georeferencing before adding
+        
+        See Also:
+            - `same_extent`: Check if two GeoTensors have matching georeferencing
+            - `read.read_reproject_like`: Reproject one GeoTensor to match another
         """
         if isinstance(other, GeoTensor):
             if self.same_extent(other):
@@ -500,18 +705,49 @@ class GeoTensor(np.ndarray):
 
     def __sub__(self, other: Union[numbers.Number, NDArray, Self]) -> Self:
         """
-        Substract two GeoTensors. The georeferencing must match.
-
+        Subtract a value or array from this GeoTensor element-wise.
+        
+        Supports broadcasting with scalars, numpy arrays, or other GeoTensors.
+        When subtracting two GeoTensors, they must have the same spatial extent
+        (matching transform, CRS, and spatial dimensions).
+        
         Args:
-            other (GeoTensor): GeoTensor to add.
-
-        Raises:
-            ValueError: if the georeferencing does not match.
-            TypeError: if other is not a GeoTensor.
+            other (Union[numbers.Number, np.ndarray, GeoTensor]): Value to subtract. Can be:
+                - Scalar (int, float): Subtracted from all pixels
+                - np.ndarray: Must be broadcastable with self.values
+                - GeoTensor: Must have same spatial extent
 
         Returns:
-            GeoTensor: GeoTensor with the result of the substraction.
+            GeoTensor: New GeoTensor with same transform, CRS, and fill_value_default.
 
+        Raises:
+            ValueError: If other is a GeoTensor and georeferencing doesn't match.
+
+        Examples:
+            >>> import numpy as np
+            >>> import rasterio
+            >>> from georeader import GeoTensor
+            >>>
+            >>> # Create sample GeoTensor
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
+            >>> data = np.random.rand(3, 100, 100)
+            >>> gt = GeoTensor(data, transform, crs="EPSG:32630")
+            >>>
+            >>> # Subtract scalar (e.g., remove baseline offset)
+            >>> gt_adjusted = gt - 0.1
+            >>>
+            >>> # Change detection: subtract two GeoTensors
+            >>> gt_before = GeoTensor(np.random.rand(3, 100, 100), transform, crs="EPSG:32630")
+            >>> gt_after = GeoTensor(np.random.rand(3, 100, 100), transform, crs="EPSG:32630")
+            >>> change = gt_after - gt_before  # Positive = increase, negative = decrease
+            >>>
+            >>> # Center data by subtracting mean per band
+            >>> band_means = gt.values.mean(axis=(1, 2), keepdims=True)
+            >>> gt_centered = gt - band_means
+
+        See Also:
+            - `same_extent`: Check if two GeoTensors have matching georeferencing
+            - `read.read_reproject_like`: Reproject one GeoTensor to match another
         """
         if isinstance(other, GeoTensor):
             if self.same_extent(other):
@@ -535,17 +771,54 @@ class GeoTensor(np.ndarray):
 
     def __mul__(self, other: Union[numbers.Number, NDArray, Self]) -> Self:
         """
-        Multiply two GeoTensors. The georeferencing must match.
-
+        Multiply this GeoTensor by a value or array element-wise.
+        
+        Supports broadcasting with scalars, numpy arrays, or other GeoTensors.
+        Common uses include scaling, applying masks, and band math operations.
+        
         Args:
-            other (GeoTensor): GeoTensor to add.
-
-        Raises:
-            ValueError: if the georeferencing does not match.
-            TypeError: if other is not a GeoTensor.
+            other (Union[numbers.Number, np.ndarray, GeoTensor]): Value to multiply. Can be:
+                - Scalar (int, float): Multiplies all pixels
+                - np.ndarray: Must be broadcastable with self.values
+                - GeoTensor: Must have same spatial extent
 
         Returns:
-            GeoTensor: GeoTensor with the result of the multiplication.
+            GeoTensor: New GeoTensor with result of multiplication.
+        
+        Raises:
+            ValueError: If other is a GeoTensor and georeferencing doesn't match.
+        
+        Examples:
+            >>> import numpy as np
+            >>> import rasterio
+            >>> from georeader import GeoTensor
+            >>>
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
+            >>> data = np.random.rand(3, 100, 100)
+            >>> gt = GeoTensor(data, transform, crs="EPSG:32630")
+            >>>
+            >>> # Scale all values (e.g., unit conversion)
+            >>> gt_scaled = gt * 10000  # Reflectance [0-1] to [0-10000]
+            >>>
+            >>> # Apply per-band gain coefficients
+            >>> gains = np.array([1.1, 1.0, 0.95])[:, None, None]  # Shape: (3, 1, 1)
+            >>> gt_calibrated = gt * gains
+            >>>
+            >>> # Apply binary mask (mask out invalid pixels)
+            >>> mask = np.random.rand(100, 100) > 0.5  # Boolean mask
+            >>> gt_masked = gt * mask  # Broadcasts mask to all bands
+            >>>
+            >>> # Element-wise product of two rasters
+            >>> gt2 = GeoTensor(np.random.rand(3, 100, 100), transform, crs="EPSG:32630")
+            >>> gt_product = gt * gt2
+        
+        Note:
+            - For masking, consider using `gt[mask] = fill_value` for in-place updates
+            - Result inherits georeferencing from self
+        
+        See Also:
+            - `__truediv__`: Division operation
+            - `__setitem__`: In-place value assignment with masks
         """
         if isinstance(other, GeoTensor):
             if self.same_extent(other):
@@ -569,17 +842,57 @@ class GeoTensor(np.ndarray):
 
     def __truediv__(self, other: Union[numbers.Number, NDArray, Self]) -> Self:
         """
-        Divide two GeoTensors. The georeferencing must match.
-
+        Divide this GeoTensor by a value or array element-wise.
+        
+        Supports broadcasting with scalars, numpy arrays, or other GeoTensors.
+        Common uses include normalization, ratio calculations, and index computation.
+        
         Args:
-            other (GeoTensor): GeoTensor to add.
-
-        Raises:
-            ValueError: if the georeferencing does not match.
-            TypeError: if other is not a GeoTensor.
+            other (Union[numbers.Number, np.ndarray, GeoTensor]): Divisor. Can be:
+                - Scalar (int, float): Divides all pixels
+                - np.ndarray: Must be broadcastable with self.values
+                - GeoTensor: Must have same spatial extent
 
         Returns:
-            GeoTensor: GeoTensor with the result of the division.
+            GeoTensor: New GeoTensor with result of division.
+        
+        Raises:
+            ValueError: If other is a GeoTensor and georeferencing doesn't match.
+        
+        Note:
+            Division by zero produces inf or nan (numpy behavior).
+            Consider adding small epsilon for numerical stability: ``gt / (other + 1e-10)``
+        
+        Examples:
+            >>> import numpy as np
+            >>> import rasterio
+            >>> from georeader import GeoTensor
+            >>>
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
+            >>> data = np.random.rand(3, 100, 100)
+            >>> gt = GeoTensor(data, transform, crs="EPSG:32630")
+            >>>
+            >>> # Normalize to [0, 1] range
+            >>> gt_norm = gt / gt.values.max()
+            >>>
+            >>> # Per-band normalization
+            >>> band_maxes = gt.values.max(axis=(1, 2))[:, None, None] + 1e-10
+            >>> gt_normalized = gt / band_maxes
+            >>>
+            >>> # Compute NDVI-like ratio: (NIR - Red) / (NIR + Red)
+            >>> # Assuming band 0 = Red, band 1 = NIR
+            >>> red = gt.values[0]
+            >>> nir = gt.values[1]
+            >>> ndvi_values = (nir - red) / (nir + red + 1e-10)  # Add epsilon
+            >>> ndvi = GeoTensor(ndvi_values, gt.transform, gt.crs)
+            >>>
+            >>> # Ratio of two rasters
+            >>> gt2 = GeoTensor(np.random.rand(3, 100, 100) + 0.1, transform, crs="EPSG:32630")
+            >>> ratio = gt / gt2
+        
+        See Also:
+            - `__mul__`: Multiplication operation
+            - `clip`: Clip values to valid range after division
         """
         if isinstance(other, GeoTensor):
             if self.same_extent(other):
@@ -984,12 +1297,12 @@ class GeoTensor(np.ndarray):
             attrs=self.attrs,
         )
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: Any) -> "GeoTensor":
         """
         Get the values of the GeoTensor using the given key.
 
         Args:
-            key: Key to index the GeoTensor.
+            key (Any): Key to index the GeoTensor (int, slice, tuple of slices, etc.).
 
         Returns:
             GeoTensor: GeoTensor with the selected values.
@@ -1016,17 +1329,95 @@ class GeoTensor(np.ndarray):
 
     def isel(self, sel: Dict[str, Union[slice, list, int]]) -> Self:
         """
-        Slicing with dict. Spatial dimensions can only be sliced with slices.
+        Select data using dimension-based indexing (xarray-style interface).
+
+        Index into the GeoTensor using named dimensions rather than positional
+        indices. Automatically updates the geotransform when slicing spatial
+        dimensions (x, y) to maintain correct georeferencing.
+
+        This method provides xarray-compatible syntax while preserving full
+        geospatial metadata. Spatial slices shift the transform origin and
+        optionally rescale resolution if step > 1.
+
+        Dimension Mapping::
+
+            Standard dimension names for 3D GeoTensor (C, H, W):
+            ┌──────────┬────────────────┬────────────────────┐
+            │ Dim name │ Array axis      │ Description        │
+            ├──────────┼────────────────┼────────────────────┤
+            │ "band"   │ axis 0 (C)      │ Spectral bands     │
+            │ "y"      │ axis 1 (H)      │ Rows (north-south) │
+            │ "x"      │ axis 2 (W)      │ Cols (east-west)   │
+            └──────────┴────────────────┴────────────────────┘
 
         Args:
-            sel: Dict with slice selection; i.e. `{"x": slice(10, 20), "y": slice(20, 340)}`.
+            sel (Dict[str, Union[slice, list, int]]): Selection dictionary mapping
+                dimension names to slice objects, lists of indices, or integers.
+                For spatial dimensions ("x", "y"), only slice objects are allowed.
+                
+                Common patterns:
+                - `{"x": slice(10, 110)}`: Columns 10-109 (100 cols)
+                - `{"y": slice(20, 120)}`: Rows 20-119 (100 rows)
+                - `{"band": 0}`: Select first band (reduces dimensionality)
+                - `{"band": [0, 2, 3]}`: Select bands by list
+                - `{"x": slice(0, 100, 2)}`: Every other column (step=2)
 
         Returns:
-            GeoTensor: GeoTensor with the sliced values.
+            GeoTensor: Sliced GeoTensor with:
+                - Updated transform: origin shifted to slice start
+                - Updated transform: resolution scaled if step > 1
+                - Same CRS and fill_value_default
+
+        Raises:
+            NotImplementedError: If dimension name not in self.dims.
+            NotImplementedError: If spatial dimension uses non-slice indexing.
 
         Examples:
-            >>> gt = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
-            >>> gt.isel({"x": slice(10, 20), "y": slice(20, 340)})
+            >>> import numpy as np
+            >>> import rasterio
+            >>> from georeader import GeoTensor
+            >>>
+            >>> # Create 3-band 100x100 GeoTensor
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
+            >>> data = np.random.rand(3, 100, 100).astype(np.float32)
+            >>> gt = GeoTensor(data, transform, crs="EPSG:32630")
+            >>> print(f"Original: {gt.shape}, origin: ({gt.transform.c}, {gt.transform.f})")
+            Original: (3, 100, 100), origin: (500000, 4650000)
+            >>>
+            >>> # Slice spatial subset (maintains bands)
+            >>> subset = gt.isel({"x": slice(20, 80), "y": slice(10, 60)})
+            >>> print(f"Subset: {subset.shape}")
+            Subset: (3, 50, 60)
+            >>> # Transform shifted: new origin at pixel (20, 10)
+            >>> print(f"New origin: ({subset.transform.c}, {subset.transform.f})")
+            New origin: (500200.0, 4649900.0)
+            >>>
+            >>> # Downsample with step (every 2nd pixel)
+            >>> downsampled = gt.isel({"x": slice(0, 100, 2), "y": slice(0, 100, 2)})
+            >>> print(f"Downsampled: {downsampled.shape}")
+            Downsampled: (3, 50, 50)
+            >>> # Resolution doubled (10m -> 20m)
+            >>> print(f"Resolution: {downsampled.res}")
+            Resolution: (20.0, 20.0)
+            >>>
+            >>> # Select single band (reduces to 2D)
+            >>> red_band = gt.isel({"band": 0})
+            >>> print(f"Red band: {red_band.shape}")
+            Red band: (100, 100)
+            >>>
+            >>> # Combined: subset + band selection
+            >>> roi = gt.isel({
+            ...     "band": [1, 2],  # Green and blue
+            ...     "x": slice(25, 75),
+            ...     "y": slice(25, 75)
+            ... })
+            >>> print(f"ROI: {roi.shape}")
+            ROI: (2, 50, 50)
+
+        See Also:
+            - `__getitem__`: Positional indexing with tuple syntax: `gt[0, 10:60, 20:80]`
+            - `read_from_window`: Slice using rasterio Window objects
+            - `pad`: Add padding to spatial dimensions
         """
         for k in sel:
             if k not in self.dims:
@@ -1088,14 +1479,78 @@ class GeoTensor(np.ndarray):
         """Returns the footprint of the GeoTensor as a Polygon.
 
         Args:
-            crs (Optional[str], optional): Coordinate reference system. Defaults to None.
+            crs (Optional[str], optional): Target coordinate reference system for the footprint.
+                If None, returns footprint in the GeoTensor's native CRS. Common formats:
+                "EPSG:4326" (WGS84), "EPSG:32630" (UTM), CRS object, or WKT string.
+                Use "EPSG:4326" for compatibility with web mapping and GeoJSON.
+                Defaults to None.
 
         Returns:
-            Polygon: footprint of the GeoTensor.
+            Polygon: Shapely Polygon with exactly 5 vertices (4 corners + closing point)
+                representing the rectangular footprint. Coordinates are in the specified
+                CRS (or native CRS if crs=None).
 
         Examples:
-            >>> gt = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
-            >>> gt.footprint(crs="EPSG:4326") # returns a Polygon in WGS84
+            >>> import rasterio
+            >>> from georeader import GeoTensor
+            >>> import numpy as np
+            >>>
+            >>> # Example 1: Get footprint in native CRS
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)  # UTM transform
+            >>> data = np.random.rand(3, 100, 100)
+            >>> gt = GeoTensor(data, transform, crs="EPSG:32630")
+            >>> footprint_utm = gt.footprint()
+            >>> print(f"Bounds (UTM): {footprint_utm.bounds}")
+            >>> # (xmin, ymin, xmax, ymax) in UTM meters: (500000, 4649000, 501000, 4650000)
+
+            >>> # Example 2: Transform footprint to WGS84 for web mapping
+            >>> footprint_wgs84 = gt.footprint(crs="EPSG:4326")
+            >>> print(f"Bounds (WGS84): {footprint_wgs84.bounds}")
+            >>> # (lon_min, lat_min, lon_max, lat_max) in degrees
+            >>> # Can be used directly in Leaflet, Google Maps, etc.
+
+            >>> # Example 3: Check if rasters overlap
+            >>> gt1 = GeoTensor.load_file('image1.tif')
+            >>> gt2 = GeoTensor.load_file('image2.tif')
+            >>> # Get footprints in common CRS
+            >>> fp1 = gt1.footprint(crs="EPSG:4326")
+            >>> fp2 = gt2.footprint(crs="EPSG:4326")
+            >>> if fp1.intersects(fp2):
+            ...     print("Rasters overlap!")
+            ...     overlap_area = fp1.intersection(fp2).area
+            ...     print(f"Overlap area: {overlap_area} square degrees")
+
+            >>> # Example 4: Export footprint as GeoJSON
+            >>> from shapely.geometry import mapping
+            >>> import json
+            >>> footprint = gt.footprint(crs="EPSG:4326")
+            >>> geojson = {
+            ...     "type": "Feature",
+            ...     "geometry": mapping(footprint),
+            ...     "properties": {"name": "Raster extent"}
+            ... }
+            >>> with open('footprint.geojson', 'w') as f:
+            ...     json.dump(geojson, f)
+
+            >>> # Example 5: Check if point is within raster extent
+            >>> from shapely.geometry import Point
+            >>> point_of_interest = Point(-3.7038, 40.4168)  # Madrid coordinates
+            >>> footprint = gt.footprint(crs="EPSG:4326")
+            >>> if footprint.contains(point_of_interest):
+            ...     print("Point is within raster extent")
+
+            >>> # Example 6: Calculate raster area in square kilometers
+            >>> footprint_utm = gt.footprint()  # In UTM (meters)
+            >>> area_sqm = footprint_utm.area
+            >>> area_sqkm = area_sqm / 1_000_000
+            >>> print(f"Raster covers {area_sqkm:.2f} km²")
+
+        Note:
+            - Footprint represents the full raster extent, including nodata regions
+            - For actual data coverage (excluding nodata), use valid_footprint()
+            - Polygon always has rectangular shape (4 corners) even for rotated rasters
+            - CRS transformation is performed if target CRS differs from native CRS
+            - Footprint is cached-free (computed on-demand from transform and shape)
         """
         pol = window_utils.window_polygon(
             rasterio.windows.Window(
@@ -1166,21 +1621,120 @@ class GeoTensor(np.ndarray):
         self,
         pad_width: Union[Dict[str, Tuple[int, int]], List[Tuple[int, int]]],
         mode: str = "constant",
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> "GeoTensor":
         """
-        Pad the GeoTensor.
+        Add padding around the GeoTensor, updating georeferencing.
+
+        Expands the spatial dimensions of the GeoTensor by adding pixels on each
+        side, while automatically updating the geotransform to maintain correct
+        geographic positioning. The new pixels are filled according to the
+        specified mode.
+
+        Padding is essential for:
+        - CNN inference requiring fixed input sizes
+        - Avoiding edge artifacts in convolution operations
+        - Creating uniform tile sizes for batch processing
+
+        Padding behavior::
+
+            pad_width = {"x": (2, 3), "y": (1, 4)}
+
+            Original (5×5):           Padded (10×10):
+            ┌─────────────┐           ┌ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐
+            │ █ █ █ █ █ │           │   ← 1 row top           │
+            │ █ █ █ █ █ │    →      │ ┌─────────────┐          │
+            │ █ █ █ █ █ │           │ │ █ █ █ █ █ │          │
+            │ █ █ █ █ █ │           │ │ █ █ █ █ █ │          │
+            │ █ █ █ █ █ │           │ │ █ █ █ █ █ │          │
+            └─────────────┘           │ │ █ █ █ █ █ │          │
+                                      │ │ █ █ █ █ █ │          │
+                                      │ └─────────────┘          │
+                                      │   ← 4 rows bottom       │
+                                      └ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
+                                        ↑           ↑
+                                        2 cols      3 cols
+                                        left        right
 
         Args:
             pad_width (Union[Dict[str, Tuple[int, int]], List[Tuple[int, int]]]):
-                dictionary with Tuple to pad for each dimension
-                `{"x": (pad_x_0, pad_x_1), "y": (pad_y_0, pad_y_1)}` or list of tuples
-                `[(pad_x_0, pad_x_1), (pad_y_0, pad_y_1)]`.
-            mode (str, optional): pad mode (see np.pad or torch.nn.functional.pad). Defaults to "constant".
-            kwargs: additional arguments for the pad function.
+                Padding specification. Can be:
+
+                - Dict: Dimension names to (before, after) padding::
+
+                    {"x": (left, right), "y": (top, bottom)}
+                    {"x": (10, 10), "y": (5, 5), "band": (0, 0)}
+
+                - List/Tuple: Padding per dimension in order of self.dims::
+
+                    # For 3D GeoTensor with dims (band, y, x):
+                    [(band_before, band_after), (y_before, y_after), (x_before, x_after)]
+
+            mode (str, optional): Padding mode (see numpy.pad). Options:
+
+                - "constant": Fill with constant value (default)
+                - "edge": Replicate edge pixels
+                - "reflect": Mirror reflection at edges
+                - "wrap": Wrap around (toroidal)
+
+                Defaults to "constant".
+
+            **kwargs: Additional arguments passed to np.pad:
+
+                - constant_values: Fill value for "constant" mode.
+                  Defaults to self.fill_value_default.
 
         Returns:
-            GeoTensor: padded GeoTensor.
+            GeoTensor: Padded GeoTensor with:
+                - Updated transform: origin shifted by padding amount
+                - Shape: increased by sum of padding in each dimension
+                - Same CRS and fill_value_default
+
+        Raises:
+            ValueError: If list-style pad_width has wrong length.
+
+        Examples:
+            >>> import numpy as np
+            >>> import rasterio
+            >>> from georeader import GeoTensor
+            >>>
+            >>> # Create 3-band 100x100 GeoTensor
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
+            >>> data = np.random.rand(3, 100, 100).astype(np.float32)
+            >>> gt = GeoTensor(data, transform, crs="EPSG:32630", fill_value_default=0)
+            >>> print(f"Original: {gt.shape}")
+            Original: (3, 100, 100)
+            >>>
+            >>> # Pad spatial dimensions (dict style)
+            >>> padded = gt.pad({"x": (32, 32), "y": (32, 32)})
+            >>> print(f"Padded: {padded.shape}")
+            Padded: (3, 164, 164)
+            >>> # Transform shifted: origin moved by -32 pixels (320m)
+            >>> print(f"New origin: ({padded.transform.c}, {padded.transform.f})")
+            New origin: (499680.0, 4650320.0)
+            >>>
+            >>> # Pad with list style (must match dims order)
+            >>> padded = gt.pad([(0, 0), (16, 16), (16, 16)])
+            >>> print(f"Padded: {padded.shape}")
+            Padded: (3, 132, 132)
+            >>>
+            >>> # Asymmetric padding for edge tiles
+            >>> edge_padded = gt.pad({"x": (0, 50), "y": (0, 25)})
+            >>> print(f"Edge padded: {edge_padded.shape}")
+            Edge padded: (3, 125, 150)
+            >>>
+            >>> # Edge replication instead of constant fill
+            >>> padded_edge = gt.pad({"x": (10, 10), "y": (10, 10)}, mode="edge")
+
+        Note:
+            - Transform is updated so padded region has correct georeferencing
+            - For CNN inference, also consider `read_from_window` with boundless=True
+            - Use pad_width={("band": (0, 0), "x": ..., "y": ...} to be explicit
+
+        See Also:
+            - `pad_array`: Lower-level method with dict-only interface
+            - `read_from_window`: Read with implicit padding for out-of-bounds
+            - `window_utils.pad_window`: Expand window coordinates
         """
         if isinstance(pad_width, list) or isinstance(pad_width, tuple):
             if len(pad_width) != len(self.dims):
@@ -1535,9 +2089,9 @@ class GeoTensor(np.ndarray):
                 raise NotImplementedError(
                     """Description loading not supported with `fsspec`. This is because
             the `descriptions` attribute cannote be loaded from a byte stream. This is a limitation of `rasterio`.
-            The issue is related to how `rasterio.io.MemoryFile` handles band descriptions 
-            compared to direct file access. This is a known limitation when working 
-            with in-memory file representations in GDAL (which `rasterio` uses under 
+            The issue is related to how `rasterio.io.MemoryFile` handles band descriptions
+            compared to direct file access. This is a known limitation when working
+            with in-memory file representations in GDAL (which `rasterio` uses under
             the hood). If you need to load descriptions, you can use `georeader.rasterio_reader`
             class."""
                 )
@@ -1674,19 +2228,99 @@ class GeoTensor(np.ndarray):
         self, window: rasterio.windows.Window, boundless: bool = True
     ) -> Self:
         """
-        returns a new GeoTensor object with the spatial dimensions sliced
+        Extract a spatial subset using a rasterio Window.
+
+        Reads data from the GeoTensor corresponding to the specified pixel window,
+        with optional boundless reading that pads out-of-bounds regions with the
+        fill value. This method provides the same interface as rasterio's windowed
+        reading, enabling seamless transitions between lazy file readers and
+        in-memory GeoTensors.
+
+        Boundless vs Bounded Reading::
+
+            Window extends beyond data:     boundless=True:      boundless=False:
+            ┌───────────────┐                 ┌─────────┐           ┌─────┐
+            │ ┌─────────┐   │                 │▒▒▒▒▒▒▒▒▒│           │     │
+            │ │  DATA   │   │                 │▒▒▒███▒▒▒│           │ ███ │
+            │ │         │   │  ─────────►    │▒▒▒███▒▒▒│           │ ███ │
+            │ └─────────┘   │                 │▒▒▒▒▒▒▒▒▒│           └─────┘
+            └───────────────┘                 └─────────┘           Returns only
+                 Window                   Padded with            intersection
+                 request                  fill_value
 
         Args:
-            window: window to slice the current GeoTensor
-            boundless: read from window in boundless mode (i.e. if the window is larger or negative it will pad
-                the GeoTensor with `self.fill_value_default`)
-
-        Raises:
-            rasterio.windows.WindowError: if `window` does not intersect the data
+            window (rasterio.windows.Window): Pixel window defining the region
+                to extract. Format: Window(col_off, row_off, width, height).
+                May have negative offsets or extend beyond data bounds if
+                boundless=True.
+            boundless (bool, optional): If True, allows reading windows that
+                extend beyond data boundaries. Out-of-bounds regions are filled
+                with `self.fill_value_default`. If False, returns only the
+                intersection with the data extent. Defaults to True.
 
         Returns:
-            GeoTensor object with the spatial dimensions sliced
+            GeoTensor: Extracted data with:
+                - Shape: (C, window.height, window.width) if boundless=True,
+                  or smaller if boundless=False and window exceeds bounds
+                - Transform: Updated to window origin
+                - Same CRS and fill_value_default
 
+        Raises:
+            rasterio.windows.WindowError: If window does not intersect the data
+                at all (no overlap).
+
+        Examples:
+            >>> import numpy as np
+            >>> import rasterio
+            >>> import rasterio.windows
+            >>> from georeader import GeoTensor
+            >>>
+            >>> # Create test GeoTensor
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
+            >>> data = np.arange(300).reshape(3, 10, 10).astype(np.float32)
+            >>> gt = GeoTensor(data, transform, crs="EPSG:32630", fill_value_default=-1)
+            >>> print(f"Data shape: {gt.shape}")
+            Data shape: (3, 10, 10)
+            >>>
+            >>> # Read window fully within data
+            >>> window = rasterio.windows.Window(2, 3, 5, 4)  # col_off, row_off, width, height
+            >>> subset = gt.read_from_window(window)
+            >>> print(f"Subset shape: {subset.shape}")
+            Subset shape: (3, 4, 5)
+            >>>
+            >>> # Boundless read: window extends beyond data
+            >>> window_edge = rasterio.windows.Window(7, 7, 6, 6)  # Extends 3 pixels past edge
+            >>> padded = gt.read_from_window(window_edge, boundless=True)
+            >>> print(f"Padded shape: {padded.shape}")
+            Padded shape: (3, 6, 6)
+            >>> # Corners filled with fill_value_default (-1)
+            >>> print(f"Has padding: {(padded.values == -1).any()}")
+            Has padding: True
+            >>>
+            >>> # Bounded read: only get intersection
+            >>> clipped = gt.read_from_window(window_edge, boundless=False)
+            >>> print(f"Clipped shape: {clipped.shape}")
+            Clipped shape: (3, 3, 3)
+            >>>
+            >>> # CNN tiling: process image in overlapping windows
+            >>> tile_size = 4
+            >>> stride = 2
+            >>> for row in range(0, gt.height, stride):
+            ...     for col in range(0, gt.width, stride):
+            ...         tile_window = rasterio.windows.Window(col, row, tile_size, tile_size)
+            ...         tile = gt.read_from_window(tile_window, boundless=True)
+            ...         # Process tile with CNN...
+
+        Note:
+            - Boundless reading is essential for processing edge tiles in CNNs
+            - Transform is always updated to match the output data origin
+            - Use `get_slice_pad` directly for manual slice/pad control
+            - Compatible with RasterioReader interface for polymorphic code
+
+        See Also:
+            - `isel`: Dictionary-based dimension indexing
+            - `window_utils.get_slice_pad`: Compute slice and padding parameters
+            - `RasterioReader.read_from_window`: Lazy file-based equivalent
         """
 
         window_data = rasterio.windows.Window(
@@ -1722,20 +2356,89 @@ class GeoTensor(np.ndarray):
     @classmethod
     def stack(cls, geotensors: List[Self]) -> Self:
         """
-        Stacks a list of geotensors, assert that all of them has same shape, transform and crs.
+        Stack multiple GeoTensors along a new leading dimension.
+
+        Creates a new GeoTensor with an additional dimension at the front,
+        containing all input GeoTensors. All inputs must have identical
+        georeferencing (transform, CRS) and shape.
+
+        This is useful for:
+        - Creating time-series stacks from multiple acquisitions
+        - Batching for CNN inference
+        - Multi-temporal analysis
+
+        Stacking behavior::
+
+            Input: 3 GeoTensors each (3, H, W)
+
+            gt1: (3, 100, 100)  ─┐
+            gt2: (3, 100, 100)  ─┼──► stacked: (3, 3, 100, 100)
+            gt3: (3, 100, 100)  ─┘     ↑
+                                    new time/batch dim
 
         Args:
-            geotensors: list of geotensors to concat. All with same shape, transform and crs.
+            geotensors (List[GeoTensor]): List of GeoTensors to stack. Requirements:
+
+                - Non-empty list
+                - All must have identical shape
+                - All must have same transform (same_extent)
+                - All must have same CRS
+                - All must have same fill_value_default
 
         Returns:
-            geotensor with extra dim at the front: (len(geotensors),) + shape
+            GeoTensor: Stacked GeoTensor with:
+
+                - Shape: (len(geotensors),) + original_shape
+                - Transform: Same as input GeoTensors
+                - CRS: Same as input GeoTensors
+                - fill_value_default: Same as input GeoTensors
+                - attrs: Copied from first GeoTensor
+
+        Raises:
+            AssertionError: If list is empty.
+            AssertionError: If GeoTensors have different extents.
+            AssertionError: If GeoTensors have different shapes.
+            AssertionError: If GeoTensors have different fill_value_default.
 
         Examples:
-            >>> gt1 = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
-            >>> gt2 = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
-            >>> gt3 = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
-            >>> gt = stack([gt1, gt2, gt3])
-            >>> assert gt.shape == (3, 3, 100, 100)
+            >>> import numpy as np
+            >>> import rasterio
+            >>> from georeader import GeoTensor
+            >>>
+            >>> # Create multiple GeoTensors (e.g., different dates)
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
+            >>> gt_jan = GeoTensor(np.random.rand(3, 100, 100), transform, "EPSG:32630")
+            >>> gt_feb = GeoTensor(np.random.rand(3, 100, 100), transform, "EPSG:32630")
+            >>> gt_mar = GeoTensor(np.random.rand(3, 100, 100), transform, "EPSG:32630")
+            >>>
+            >>> # Stack into time series
+            >>> time_series = GeoTensor.stack([gt_jan, gt_feb, gt_mar])
+            >>> print(f"Time series shape: {time_series.shape}")
+            Time series shape: (3, 3, 100, 100)
+            >>> # dims: (time, band, y, x)
+            >>>
+            >>> # Access individual time steps
+            >>> jan_data = time_series[0]  # Returns GeoTensor with shape (3, 100, 100)
+            >>>
+            >>> # Compute temporal median (across time dimension)
+            >>> median = np.nanmedian(time_series.values, axis=0)
+            >>> # median shape: (3, 100, 100)
+            >>>
+            >>> # Stack single GeoTensor (adds dimension)
+            >>> single_stacked = GeoTensor.stack([gt_jan])
+            >>> print(f"Single stacked: {single_stacked.shape}")
+            Single stacked: (1, 3, 100, 100)
+
+        Note:
+            - All GeoTensors must have identical georeferencing
+            - Use `concatenate` to join along existing dimension instead
+            - For memory efficiency with large stacks, consider lazy loading
+            - The first GeoTensor's attrs are preserved
+
+        See Also:
+            - `concatenate`: Join along existing axis (no new dimension)
+            - `same_extent`: Check if GeoTensors have matching georeferencing
+            - `numpy.stack`: Underlying operation for values
         """
         assert len(geotensors) > 0, "Empty list provided can't concat"
 

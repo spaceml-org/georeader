@@ -1,3 +1,97 @@
+"""
+Module to read PRISMA (PRecursore IperSpettrale della Missione Applicativa) hyperspectral images.
+
+PRISMA is an Italian Space Agency (ASI) Earth observation satellite launched in 2019,
+carrying a hyperspectral imaging spectrometer that captures data in 239 spectral bands
+from 400 to 2500 nm with a 30m spatial resolution.
+
+Data Format Overview
+--------------------
+PRISMA data is distributed in HDF5 format (HE5 extension) with a specific structure:
+
+    PRISMA HDF5 File Structure:
+    ┌─────────────────────────────────────────────────────────┐
+    │  /HDFEOS/SWATHS/PRS_L1_HCO/                             │
+    │  ├── Data Fields/                                        │
+    │  │   ├── VNIR_Cube: (bands, crosstrack, downtrack)      │
+    │  │   │   └── 400-1010 nm, ~66 bands                     │
+    │  │   └── SWIR_Cube: (bands, crosstrack, downtrack)      │
+    │  │       └── 920-2500 nm, ~173 bands                    │
+    │  ├── Geolocation Fields/                                 │
+    │  │   ├── Latitude_SWIR, Longitude_SWIR                  │
+    │  │   └── Latitude_VNIR, Longitude_VNIR                  │
+    │  └── Attributes (solar/view angles, timing, etc.)       │
+    │                                                          │
+    │  /KDP_AUX/                                               │
+    │  ├── Cw_Vnir_Matrix, Cw_Swir_Matrix (wavelengths)       │
+    │  └── Fwhm_Vnir_Matrix, Fwhm_Swir_Matrix                 │
+    └─────────────────────────────────────────────────────────┘
+
+Unlike EMIT, PRISMA data is NOT orthorectified. The geolocation arrays provide
+lat/lon coordinates for each pixel, requiring gridding for visualization.
+
+Dual-Sensor Configuration
+-------------------------
+PRISMA uses two separate sensors for VNIR and SWIR:
+
+    VNIR Sensor                          SWIR Sensor
+    ┌────────────────────┐               ┌────────────────────┐
+    │ 400 - 1010 nm      │               │ 920 - 2500 nm      │
+    │ ~66 bands          │               │ ~173 bands         │
+    │ ~10 nm sampling    │               │ ~10 nm sampling    │
+    │                    │               │                    │
+    │ Shared 30m GSD     │               │ Shared 30m GSD     │
+    └────────────────────┘               └────────────────────┘
+              │                                    │
+              └──────────── Overlap ───────────────┘
+                         920-1010 nm
+                         
+The VNIR and SWIR sensors have overlapping wavelength coverage in the 920-1010 nm
+region, which can be used for cross-calibration.
+
+Radiometric Units
+-----------------
+- L1 Radiance: mW/(m²·sr·nm) - milliwatts per square meter per steradian per nanometer
+  (equivalent to W/(m²·sr·μm))
+- Scale factors and offsets are applied during loading to convert from DN to radiance
+
+Spectral Characteristics
+------------------------
+- Total bands: ~239 (66 VNIR + 173 SWIR, minus flagged bands)
+- Spectral sampling: ~10 nm (varies slightly)
+- FWHM: ~10-12 nm
+- SNR: >200 for VNIR, >100 for SWIR
+
+Examples
+--------
+Basic usage::
+
+    from georeader.readers.prisma import PRISMA
+    
+    # Load PRISMA image
+    prisma = PRISMA('/path/to/PRS_L1_STD_*.he5')
+    
+    # Load specific wavelengths as reflectance
+    bands = prisma.load_wavelengths([850, 1600, 2200], as_reflectance=True)
+    
+    # Load RGB composite
+    rgb = prisma.load_rgb(as_reflectance=True)
+    
+    # Get georeferenced output (reprojected to UTM)
+    rgb_geo = prisma.load_rgb(as_reflectance=True, raw=False)
+
+See Also
+--------
+georeader.readers.emit : EMIT hyperspectral reader
+georeader.readers.enmap : EnMAP hyperspectral reader
+georeader.griddata : Utilities for gridding non-orthorectified data
+
+References
+----------
+- ASI PRISMA Mission: https://www.asi.it/en/earth-science/prisma/
+- PRISMA User Guide: https://prisma.asi.it/
+
+"""
 import numpy as np
 from numpy.typing import NDArray
 from typing import Optional, Union, List, Any, Tuple
@@ -31,49 +125,150 @@ HE5_COORDS = {
 
 class PRISMA:
     """
-    PRISMA (PRecursore IperSpettrale della Missione Applicativa) image reader.
+    Reader for PRISMA (PRecursore IperSpettrale della Missione Applicativa) hyperspectral images.
 
-    This class provides functionality to read and manipulate PRISMA satellite imagery products.
-    It handles the specific format and metadata of PRISMA HDF5 files, supporting operations
-    like loading specific wavelengths, RGB composites, and converting to reflectance.
+    This class provides comprehensive functionality to read and manipulate PRISMA satellite 
+    imagery products from the Italian Space Agency (ASI). It handles the dual-sensor
+    (VNIR + SWIR) data format, supporting operations like:
+    
+    - Loading radiance or reflectance data at specific wavelengths
+    - Automatic handling of VNIR/SWIR sensor selection based on wavelength
+    - Converting radiance to reflectance using solar irradiance
+    - Georeferencing raw data to projected coordinate systems
+    
+    PRISMA Data Model
+    -----------------
+    PRISMA stores data in sensor coordinates with separate lat/lon arrays for geolocation.
+    Unlike EMIT's GLT approach, PRISMA requires gridding/interpolation for orthorectification:
+    
+        Sensor Grid (raw)                  Geographic Grid (output)
+        ┌─────────────────────┐            ┌─────────────────────┐
+        │ pushbroom scan      │            │ regular grid        │
+        │ ┌───┬───┬───┬───┐  │  gridding  │ ┌───┬───┬───┬───┐  │
+        │ │ a │ b │ c │ d │  │  ───────→  │ │ a'│ b'│ c'│ d'│  │
+        │ ├───┼───┼───┼───┤  │            │ ├───┼───┼───┼───┤  │
+        │ │ e │ f │ g │ h │  │            │ │ e'│ f'│ g'│ h'│  │
+        │ └───┴───┴───┴───┘  │            │ └───┴───┴───┴───┘  │
+        │ + lat/lon per pixel│            │ + affine transform  │
+        └─────────────────────┘            └─────────────────────┘
+        
+    Raw methods (raw=True) return sensor coordinates; georeferenced methods
+    (raw=False) apply gridding to regular geographic coordinates.
+    
+    Dual Sensor Architecture
+    ------------------------
+    PRISMA has separate VNIR and SWIR sensors with overlapping coverage:
+    
+        Wavelength Range:
+        ├──────────────────────────────────────────────────────────────┤
+        400nm              1000nm                                 2500nm
+        ├───────── VNIR ──────────┤
+                          ├────────────────── SWIR ───────────────────┤
+                          └─ overlap ─┘
+                          920-1010nm
+    
+    The class automatically selects the appropriate sensor based on requested wavelengths.
 
-    Args:
-        filename (str): Path to the PRISMA HDF5 file.
+    Attributes
+    ----------
+    filename : str
+        Path to the PRISMA HE5 file.
+    lats : np.ndarray
+        Latitude values (H, W) for each pixel in sensor coordinates.
+    lons : np.ndarray
+        Longitude values (H, W) for each pixel in sensor coordinates.
+    attributes_prisma : Dict
+        Dictionary of PRISMA metadata attributes from HDF5 root.
+    nbands_vnir : int
+        Number of valid VNIR bands (excluding flagged bands).
+    vnir_range : Tuple[float, float]
+        Wavelength range (min, max) of VNIR sensor in nm.
+    nbands_swir : int
+        Number of valid SWIR bands (excluding flagged bands).
+    swir_range : Tuple[float, float]
+        Wavelength range (min, max) of SWIR sensor in nm.
+    time_coverage_start : datetime
+        UTC datetime of acquisition start.
+    time_coverage_end : datetime
+        UTC datetime of acquisition end.
+    units : str
+        Radiance units: 'mW/m2/sr/nm'.
+    sza_swir : float
+        Solar zenith angle (degrees) for SWIR sensor.
+    sza_vnir : float
+        Solar zenith angle (degrees) for VNIR sensor.
+    vza_swir : float
+        View zenith angle (degrees) for SWIR sensor.
+    vza_vnir : float
+        View zenith angle (degrees) for VNIR sensor.
+    
+    Lazy-Loaded Attributes
+    ----------------------
+    ltoa_swir : np.ndarray
+        SWIR radiance data (H, W, B), loaded by `load_raw(swir_flag=True)`.
+    ltoa_vnir : np.ndarray
+        VNIR radiance data (H, W, B), loaded by `load_raw(swir_flag=False)`.
+    wavelength_swir : np.ndarray
+        SWIR wavelengths (H, B) - varies slightly across track.
+    wavelength_vnir : np.ndarray
+        VNIR wavelengths (H, B) - varies slightly across track.
+    fwhm_swir : np.ndarray
+        SWIR FWHM values (H, B) - varies slightly across track.
+    fwhm_vnir : np.ndarray
+        VNIR FWHM values (H, B) - varies slightly across track.
+    
+    Examples
+    --------
+    Basic loading::
+    
+        >>> from georeader.readers.prisma import PRISMA
+        >>> 
+        >>> prisma = PRISMA('/path/to/PRS_L1_STD_*.he5')
+        >>> print(prisma)  # View metadata summary
+        >>> print(f"VNIR: {prisma.vnir_range}, SWIR: {prisma.swir_range}")
+    
+    Loading specific wavelengths::
+    
+        >>> # Load NDVI bands (Red at 665nm, NIR at 865nm)
+        >>> bands = prisma.load_wavelengths([665, 865], as_reflectance=True)
+        >>> print(bands.shape)  # (2, H, W) in sensor coordinates
+        >>> 
+        >>> # Load and georeference to UTM
+        >>> bands_geo = prisma.load_wavelengths([665, 865], as_reflectance=True, 
+        ...                                       raw=False, resolution_dst=30)
+        >>> print(type(bands_geo))  # GeoTensor with transform and CRS
+    
+    Loading RGB composite::
+    
+        >>> # Raw sensor coordinates
+        >>> rgb_raw = prisma.load_rgb(as_reflectance=True, raw=True)
+        >>> 
+        >>> # Georeferenced output  
+        >>> rgb_geo = prisma.load_rgb(as_reflectance=True, raw=False)
+        >>> plt.imshow(np.clip(rgb_geo.values.transpose(1,2,0), 0, 0.3) / 0.3)
+    
+    Working with raw data::
+    
+        >>> # Load all SWIR bands
+        >>> prisma.load_raw(swir_flag=True)
+        >>> print(prisma.ltoa_swir.shape)  # (H, W, ~173)
+        >>> print(prisma.wavelength_swir.shape)  # (H, ~173) - wavelengths vary across track
+        >>> 
+        >>> # Load all VNIR bands
+        >>> prisma.load_raw(swir_flag=False)
+        >>> print(prisma.ltoa_vnir.shape)  # (H, W, ~66)
 
-    Attributes:
-        filename (str): Path to the PRISMA file.
-        swir_cube_dat (str): Path to SWIR cube data in HDF5 file.
-        vni_cube_dat (str): Path to VNIR cube data in HDF5 file.
-        lats (numpy.ndarray): Latitude values for each pixel.
-        lons (numpy.ndarray): Longitude values for each pixel.
-        attributes_prisma (Dict): Dictionary of PRISMA metadata attributes.
-        nbands_vnir (int): Number of VNIR bands.
-        vnir_range (Tuple[float, float]): Wavelength range of VNIR bands (min, max).
-        nbands_swir (int): Number of SWIR bands.
-        swir_range (Tuple[float, float]): Wavelength range of SWIR bands (min, max).
-        ltoa_swir (Optional[NDArray]): SWIR radiance data, lazily loaded.
-        ltoa_vnir (Optional[NDArray]): VNIR radiance data, lazily loaded.
-        wavelength_swir (Optional[NDArray]): SWIR wavelengths, lazily loaded.
-        fwhm_swir (Optional[NDArray]): SWIR FWHM (Full Width at Half Maximum), lazily loaded.
-        wavelength_vnir (Optional[NDArray]): VNIR wavelengths, lazily loaded.
-        fwhm_vnir (Optional[NDArray]): VNIR FWHM, lazily loaded.
-        vza_swir (float): Viewing zenith angle for SWIR.
-        vza_vnir (float): Viewing zenith angle for VNIR.
-        sza_swir (float): Solar zenith angle for SWIR.
-        sza_vnir (float): Solar zenith angle for VNIR.
-        time_coverage_start (datetime): Start time of acquisition.
-        time_coverage_end (datetime): End time of acquisition.
-        units (str): Units of radiance data (mW/m2/sr/nm).
-
-    Examples:
-        >>> # Initialize the PRISMA reader with a data path
-        >>> prisma = PRISMA('/path/to/prisma_file.he5')
-        >>> # Load RGB bands
-        >>> rgb = prisma.load_rgb(as_reflectance=True)
-        >>> # Load specific wavelengths
-        >>> bands = prisma.load_wavelengths([850, 1600, 2200], as_reflectance=True)
-        >>> # Get image metadata
-        >>> print(prisma)
+    See Also
+    --------
+    georeader.readers.emit.EMITImage : EMIT hyperspectral reader
+    georeader.readers.enmap.EnMAP : EnMAP hyperspectral reader
+    georeader.griddata : Gridding utilities for non-orthorectified data
+    georeader.reflectance : Radiometric conversion utilities
+    
+    References
+    ----------
+    - ASI PRISMA Mission: https://www.asi.it/en/earth-science/prisma/
+    - PRISMA Data Products: https://prisma.asi.it/
     """
 
     def __init__(self, filename: str) -> None:
