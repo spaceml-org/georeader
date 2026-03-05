@@ -11,7 +11,7 @@ EnMAP data is distributed as separate GeoTIFF files with an XML metadata file:
 
     EnMAP Product Structure:
     ┌─────────────────────────────────────────────────────────────────────┐
-    │  ENMAP01-____L1C-DT0000000000_20220501T101523Z_001_V010110_...     │
+    │  ENMAP01-____L1B-DT0000000000_20220501T101523Z_001_V010110_...     │
     │  ├── *-METADATA.XML           ← Main metadata file (input)         │
     │  ├── *-SPECTRAL_IMAGE_VNIR.TIF   420-1000 nm, ~88 bands            │
     │  ├── *-SPECTRAL_IMAGE_SWIR.TIF   900-2450 nm, ~136 bands           │
@@ -22,7 +22,7 @@ EnMAP data is distributed as separate GeoTIFF files with an XML metadata file:
     │  └── *-QL_PIXELMASK_*.TIF        Per-sensor pixel masks            │
     └─────────────────────────────────────────────────────────────────────┘
 
-Unlike EMIT and PRISMA, EnMAP L1C data is already orthorectified (map-projected) with
+Unlike EMIT and PRISMA, EnMAP L1B data is already orthorectified (map-projected) with
 Rational Polynomial Coefficients (RPCs) stored in the metadata for refined geolocation.
 
 Dual-Sensor Architecture
@@ -44,7 +44,7 @@ The spectral overlap enables cross-calibration between the two detectors.
 
 Radiometric Processing
 ----------------------
-EnMAP L1B/L1C data requires conversion from Digital Numbers (DN) to radiance:
+EnMAP L1B data requires conversion from Digital Numbers (DN) to radiance:
 
     L_λ = DN × GAIN + OFFSET   [W/(m²·sr·nm)]
     
@@ -66,11 +66,10 @@ The reader can apply RPCs during loading for refined geolocation.
 
 Product Levels
 --------------
-- L1B: At-sensor radiance, sensor geometry (unrectified)
-- L1C: At-sensor radiance, orthorectified (map-projected)
+- L1B: At-sensor radiance, sensor geometry
 - L2A: Surface reflectance, atmospheric correction applied
 
-This reader is designed for L1B and L1C products.
+This reader is designed for L1B products.
 
 Examples
 --------
@@ -361,7 +360,7 @@ class EnMAP:
     
     EnMAP Data Model
     ----------------
-    EnMAP L1C products are orthorectified (map-projected) GeoTIFFs with separate files
+    EnMAP L1B products are orthorectified (map-projected) GeoTIFFs with separate files
     for VNIR and SWIR bands:
     
         File Structure:
