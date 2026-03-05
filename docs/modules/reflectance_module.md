@@ -15,23 +15,29 @@ These conversions are essential for:
 ```python
 from georeader import reflectance
 import numpy as np
+from datetime import date
 
 # Convert radiance to ToA reflectance
-# Requires sun-earth distance and solar zenith angle
+# Requires per-band solar_irradiance plus either:
+#   - date_of_acquisition and center_coords, or
+#   - observation_date_corr_factor
 toa_reflectance = reflectance.radiance_to_reflectance(
     radiance_data,
-    solar_irradiance=1360.8,  # W/m²
-    sun_earth_distance=1.0,    # AU
-    solar_zenith_angle=30.0    # degrees
+    solar_irradiance=np.array([1360.8]),  # per-band W/m² (example with a single band)
+    date_of_acquisition=date(2023, 7, 10),
+    center_coords=(12.34, 56.78),  # (longitude, latitude) of the scene center
 )
 
-# Integrate hyperspectral bands to multispectral using SRF
+# Integrate hyperspectral bands to multispectral using an SRF
 # Useful for comparing hyperspectral (EMIT, PRISMA, EnMAP) with Sentinel-2
-integrated = reflectance.integrate_srf(
-    hyperspectral_data,
-    wavelengths,
+s2_srf = reflectance.srf(
     srf_wavelengths,
     srf_response
+)
+integrated = reflectance.transform_to_srf(
+    hyperspectral_data,
+    wavelengths,
+    s2_srf
 )
 ```
 

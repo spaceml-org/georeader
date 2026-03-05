@@ -22,14 +22,15 @@ ee.Initialize()
 ```python
 from georeader.readers import ee_image, ee_query
 from shapely.geometry import box
+from datetime import datetime
 import ee
 
 # Define area of interest
 aoi = box(-122.5, 37.5, -122.0, 38.0)
 
 # Query available Sentinel-2 images
-images = ee_query.query(aoi, "2023-01-01", "2023-12-31", 
-                        collection="COPERNICUS/S2_SR")
+images = ee_query.query(aoi, datetime(2023, 1, 1), datetime(2023, 12, 31), 
+                        producttype="S2_SR")
 
 # Export a single image
 gt = ee_image.export_image(images[0], aoi, scale=10)
