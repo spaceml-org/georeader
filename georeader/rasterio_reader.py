@@ -24,23 +24,23 @@ Choosing between RasterioReader and GeoTensor::
     ┌─────────────────────────────────────────────────────────────────────────┐
     │                 RASTERIOREADER vs GEOTENSOR                             │
     ├─────────────────────────────────────────────────────────────────────────┤
-    │                                                                          │
+    │                                                                         │
     │  RasterioReader (Lazy)              GeoTensor (In-Memory)               │
     │  ─────────────────────              ────────────────────                │
-    │                                                                          │
+    │                                                                         │
     │  • Data on disk/cloud               • Data in RAM                       │
     │  • Read on demand                   • Instant access                    │
     │  • Memory efficient                 • Full numpy API                    │
     │  • Parallel-safe                    • Arithmetic operations             │
     │  • Overview/pyramid support         • Broadcasting                      │
-    │                                                                          │
+    │                                                                         │
     │  Use for:                           Use for:                            │
     │  • Large files                      • Processing pipelines              │
     │  • Cloud data                       • CNN inference                     │
     │  • Tiled processing                 • Index calculations                │
     │  • Quick previews                   • Visualizations                    │
-    │                                                                          │
-    │  Convert: reader.load() ────────────────────────────────► GeoTensor    │
+    │                                                                         │
+    │  Convert: reader.load() ────────────────────────────────► GeoTensor     │
     └─────────────────────────────────────────────────────────────────────────┘
 
 Time Series / Multi-file Reading
@@ -49,21 +49,21 @@ Time Series / Multi-file Reading
 RasterioReader can stack multiple files as a time dimension::
 
     ┌─────────────────────────────────────────────────────────────────────────┐
-    │                    MULTI-FILE READING                                    │
+    │                    MULTI-FILE READING                                   │
     ├─────────────────────────────────────────────────────────────────────────┤
-    │                                                                          │
+    │                                                                         │
     │  Input: List of paths                Output array shape                 │
     │  ────────────────────                ──────────────────                 │
-    │                                                                          │
+    │                                                                         │
     │  paths = [                                                              │
-    │    "2023-01.tif",   ─────┐                                             │
-    │    "2023-02.tif",   ─────┼──────► stack=True:  (T, C, H, W)            │
-    │    "2023-03.tif"    ─────┘                      (3, 4, 1000, 1000)     │
-    │  ]                                                                       │
-    │                                                                          │
-    │  Each file: (4, 1000, 1000)        stack=False: (T×C, H, W)            │
+    │    "2023-01.tif",   ─────┐                                              │
+    │    "2023-02.tif",   ─────┼──────► stack=True:  (T, C, H, W)             │
+    │    "2023-03.tif"    ─────┘                      (3, 4, 1000, 1000)      │
+    │  ]                                                                      │
+    │                                                                         │
+    │  Each file: (4, 1000, 1000)        stack=False: (T×C, H, W)             │
     │  4 bands, 1000×1000 pixels                       (12, 1000, 1000)       │
-    │                                                                          │
+    │                                                                         │
     │  Requirements for multi-file:                                           │
     │  • Same CRS                                                             │
     │  • Same transform (resolution, origin)                                  │
@@ -76,25 +76,25 @@ Window Focus
 set_window() creates a "view" into the raster for efficient subsetting::
 
     ┌─────────────────────────────────────────────────────────────────────────┐
-    │                    WINDOW FOCUS CONCEPT                                  │
+    │                    WINDOW FOCUS CONCEPT                                 │
     ├─────────────────────────────────────────────────────────────────────────┤
-    │                                                                          │
+    │                                                                         │
     │  Full raster (10000 × 10000)                                            │
     │  ┌────────────────────────────────────────────────────────────────┐     │
     │  │                                                                │     │
     │  │                                                                │     │
-    │  │        ┌─────────────────────┐                                │     │
-    │  │        │    window_focus     │  ← reader.set_window(...)      │     │
-    │  │        │    (2000 × 2000)    │                                │     │
-    │  │        │                     │  After set_window:             │     │
-    │  │        │  ┌───────────┐      │  • reader.shape → (C, 2000, 2000)│   │
-    │  │        │  │ read()    │      │  • reader.bounds → window bounds│   │
+    │  │        ┌─────────────────────┐                                 │     │
+    │  │        │    window_focus     │  ← reader.set_window(...)       │     │
+    │  │        │    (2000 × 2000)    │                                 │     │
+    │  │        │                     │  After set_window:              │     │
+    │  │        │  ┌───────────┐      │  • reader.shape → (C, 2000, 2000)│    │
+    │  │        │  │ read()    │      │  • reader.bounds → window bounds│     │
     │  │        │  │ window    │      │  • read(window=...) is relative │     │
     │  │        │  └───────────┘      │    to window_focus              │     │
-    │  │        └─────────────────────┘                                │     │
+    │  │        └─────────────────────┘                                 │     │
     │  │                                                                │     │
     │  └────────────────────────────────────────────────────────────────┘     │
-    │                                                                          │
+    │                                                                         │
     │  Benefits: • Work with large files efficiently                          │
     │            • Coordinates/bounds reflect the focused region              │
     │            • Tiled processing with consistent interface                 │
@@ -105,11 +105,6 @@ Module Contents
 
 Classes:
     - :class:`RasterioReader`: Main lazy reader class
-
-Functions:
-    - :func:`read_out_shape`: Read with resampling to target shape
-    - :func:`get_out_shape`: Calculate output shape preserving aspect ratio
-    - :func:`needs_boundless`: Check if window extends beyond data bounds
 
 Quick Start
 -----------

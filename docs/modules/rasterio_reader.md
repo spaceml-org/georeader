@@ -29,11 +29,6 @@ gt = reader.load()
 # Read a specific window (row_off, col_off, height, width)
 window = rasterio.windows.Window(0, 0, 512, 512)
 gt_window = reader.read_from_window(window)
-
-# Read at a specific bounding box
-from shapely.geometry import box
-bbox = box(-122.5, 37.5, -122.0, 38.0)
-gt_bbox = reader.read_from_polygon(bbox, crs="EPSG:4326")
 ```
 
 ## Key Properties
@@ -53,7 +48,6 @@ gt_bbox = reader.read_from_polygon(bbox, crs="EPSG:4326")
 |--------|-------------|
 | `load()` | Load entire raster as GeoTensor |
 | `read_from_window()` | Read a specific window |
-| `read_from_polygon()` | Read data within a polygon boundary |
 | `isel()` | Select bands by index |
 
 ---

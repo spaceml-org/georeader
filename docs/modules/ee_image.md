@@ -52,7 +52,7 @@ cube = ee_image.export_cube(images[:5], aoi, scale=10)
 
 | Function | Description |
 |----------|-------------|
-| `query` | Query any GEE image collection |
+| `query` | Query Sentinel-2 or Landsat-8/9 image collection |
 | `query_s1` | Query Sentinel-1 SAR imagery |
 | `query_landsat_457` | Query Landsat 4, 5, 7 imagery |
 

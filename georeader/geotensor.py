@@ -11,21 +11,21 @@ Memory Layout & Dimensions
 GeoTensor supports 2D, 3D, and 4D arrays. The last two dimensions are always spatial::
 
     ┌─────────────────────────────────────────────────────────────────────────┐
-    │                     GEOTENSOR DIMENSION CONVENTIONS                      │
+    │                     GEOTENSOR DIMENSION CONVENTIONS                     │
     ├─────────────────────────────────────────────────────────────────────────┤
-    │                                                                          │
+    │                                                                         │
     │  2D: (H, W)           Single-band raster (e.g., DEM, mask)              │
-    │                       shape = (height, width)                            │
-    │                                                                          │
+    │                       shape = (height, width)                           │
+    │                                                                         │
     │  3D: (C, H, W)        Multi-band raster (e.g., RGB, multispectral)      │
-    │                       shape = (channels, height, width)                  │
-    │                                                                          │
+    │                       shape = (channels, height, width)                 │
+    │                                                                         │
     │  4D: (T, C, H, W)     Time-series cube (e.g., satellite time stack)     │
-    │                       shape = (time, channels, height, width)            │
-    │                                                                          │
+    │                       shape = (time, channels, height, width)           │
+    │                                                                         │
     │  Dimension names:  dims = ("y", "x") or ("band", "y", "x") or           │
-    │                          ("time", "band", "y", "x")                      │
-    │                                                                          │
+    │                          ("time", "band", "y", "x")                     │
+    │                                                                         │
     │  Note: "y" decreases downward (row index), "x" increases rightward      │
     └─────────────────────────────────────────────────────────────────────────┘
 
@@ -35,9 +35,9 @@ Coordinate Systems & Transform
 GeoTensor uses an affine transform to map pixel coordinates to geographic coordinates::
 
     ┌─────────────────────────────────────────────────────────────────────────┐
-    │              AFFINE TRANSFORM: PIXEL ↔ GEOGRAPHIC COORDINATES            │
+    │              AFFINE TRANSFORM: PIXEL ↔ GEOGRAPHIC COORDINATES           │
     ├─────────────────────────────────────────────────────────────────────────┤
-    │                                                                          │
+    │                                                                         │
     │  Pixel Space (row, col)              Geographic Space (x, y)            │
     │  ┌───┬───┬───┬───┬───┐              ┌─────────────────────────┐         │
     │  │0,0│0,1│0,2│0,3│...│              │OriginX ──────────────►  │         │
@@ -46,16 +46,16 @@ GeoTensor uses an affine transform to map pixel coordinates to geographic coordi
     │  ├───┼───┼───┼───┼───┤              │   ▼                     │         │
     │  │2,0│   │   │   │   │              │        (CRS units)      │         │
     │  └───┴───┴───┴───┴───┘              └─────────────────────────┘         │
-    │                                                                          │
+    │                                                                         │
     │  Affine Transform:  | a  b  c |    x_geo = a * col + b * row + c        │
     │                     | d  e  f |    y_geo = d * col + e * row + f        │
-    │                                                                          │
+    │                                                                         │
     │  Typical (north-up):  a = pixel_width (positive)                        │
     │                       e = -pixel_height (negative, y decreases down)    │
     │                       c = origin_x (upper-left corner)                  │
     │                       f = origin_y (upper-left corner)                  │
     │                       b, d = 0 (no rotation/shear)                      │
-    │                                                                          │
+    │                                                                         │
     │  Resolution:  res = (|a|, |e|) in CRS units (e.g., meters, degrees)     │
     └─────────────────────────────────────────────────────────────────────────┘
 
@@ -65,19 +65,19 @@ NumPy Subclass Behavior
 GeoTensor inherits from np.ndarray, so all numpy operations work natively::
 
     ┌─────────────────────────────────────────────────────────────────────────┐
-    │                    NUMPY OPERATIONS PRESERVE GEOSPATIAL INFO             │
+    │                    NUMPY OPERATIONS PRESERVE GEOSPATIAL INFO            │
     ├─────────────────────────────────────────────────────────────────────────┤
-    │                                                                          │
+    │                                                                         │
     │  Arithmetic:     gt + 1, gt * 2, gt1 + gt2 (same extent required)       │
     │  Comparison:     gt > 0, gt == other                                    │
-    │  Ufuncs:         np.sqrt(gt), np.log(gt), np.clip(gt, 0, 1)            │
-    │  Aggregation:    gt.mean(), gt.sum(axis=0)  # Returns scalar/array     │
-    │  Slicing:        gt[0], gt[:, 10:20, 10:20]  # Updates transform       │
-    │                                                                          │
+    │  Ufuncs:         np.sqrt(gt), np.log(gt), np.clip(gt, 0, 1)             │
+    │  Aggregation:    gt.mean(), gt.sum(axis=0)  # Returns scalar/array      │
+    │  Slicing:        gt[0], gt[:, 10:20, 10:20]  # Updates transform        │
+    │                                                                         │
     │  Important: Operations that change spatial dimensions (slicing)         │
     │  automatically update the transform to maintain georeferencing!         │
-    │                                                                          │
-    │  Example:                                                                │
+    │                                                                         │
+    │  Example:                                                               │
     │    gt_subset = gt[:, 100:200, 100:200]                                  │
     │    # gt_subset.transform origin shifted by (100*res_x, 100*res_y)       │
     └─────────────────────────────────────────────────────────────────────────┘
@@ -145,10 +145,10 @@ get_rio_options_path Configure rasterio environment options
 
 See Also
 --------
-georeader.read : Functions to read GeoTensors from files with reprojection
-georeader.save : Functions to save GeoTensors to GeoTIFF files
-georeader.rasterio_reader : RasterioReader class for lazy file access
-georeader.abstract_reader : GeoData protocol that GeoTensor implements
+georeader.read : Functions to subset GeoTensors from polygons or windows.
+georeader.save : Functions to save GeoTensors to GeoTIFF files.
+georeader.rasterio_reader : RasterioReader class for lazy file access.
+georeader.abstract_reader : GeoData protocol that GeoTensor implements.
 
 References
 ----------
