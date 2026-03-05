@@ -2,13 +2,7 @@
 Irregular Grid Interpolation and Georeferencing Module.
 
 This module provides functions for interpolating scattered (non-gridded) geographic
-data onto regular grids, and for applying geolocation lookup tables (GLT). These
-operations are essential when working with:
-
-- Hyperspectral sensors that provide per-pixel lat/lon coordinates (EMIT, PRISMA)
-- Swath-based satellite data with irregular sampling (pushbroom sensors)
-- Point observations (weather stations, field measurements)
-- Aircraft data with varying flight paths
+data onto regular grids, and for applying geolocation lookup tables (GLT). 
 
 Coordinate Systems & Grid Types
 -------------------------------
@@ -99,7 +93,7 @@ GLT Operations:
 Example Workflow
 ---------------
 
-Orthorectify EMIT-style data with per-pixel coordinates::
+Orthorectify PRISMA-style data with per-pixel coordinates::
 
     import numpy as np
     from georeader.griddata import read_to_crs
@@ -122,6 +116,7 @@ Orthorectify EMIT-style data with per-pixel coordinates::
 See Also
 --------
 georeader.readers.emit : EMIT reader with built-in GLT handling
+georeader.readers.prisma : PRISMA reader with built-in interpolation handling
 georeader.read : Regular grid reprojection (for already-gridded data)
 
 References

@@ -15,23 +15,23 @@ remote sensing:
 ::
 
     ┌─────────────────────────────────────────────────────────────────────────┐
-    │                    RADIOMETRIC UNIT CONVERSION FLOW                      │
+    │                    RADIOMETRIC UNIT CONVERSION FLOW                     │
     ├─────────────────────────────────────────────────────────────────────────┤
-    │                                                                          │
+    │                                                                         │
     │   Raw DN ──────►  Radiance ──────────────────────────►  Reflectance     │
     │   (counts)        (W/m²/sr/nm)                          (unitless 0-1)  │
-    │                                                                          │
-    │   Supported radiance units:                                              │
+    │                                                                         │
+    │   Supported radiance units:                                             │
     │   ┌────────────────────────────────────────────────────────────────┐    │
     │   │  Unit              │  Factor to W/m²/sr/nm                     │    │
-    │   ├────────────────────┼──────────────────────────────────────────┤    │
-    │   │  W/m²/sr/nm        │  1.0         (no conversion)             │    │
-    │   │  mW/m²/sr/nm       │  ÷ 1000      (milli → base)              │    │
-    │   │  µW/cm²/sr/nm      │  ÷ 100       (micro/cm² → base/m²)       │    │
-    │   └────────────────────┴──────────────────────────────────────────┘    │
-    │                                                                          │
+    │   ├────────────────────┼───────────────────────────────────────────┤    │
+    │   │  W/m²/sr/nm        │  1.0         (no conversion)              │    │
+    │   │  mW/m²/sr/nm       │  ÷ 1000      (milli → base)               │    │
+    │   │  µW/cm²/sr/nm      │  ÷ 100       (micro/cm² → base/m²)        │    │
+    │   └────────────────────┴───────────────────────────────────────────┘    │
+    │                                                                         │
     │   Solar Irradiance: W/m²/nm or mW/m²/nm (at TOA, perpendicular)         │
-    │                                                                          │
+    │                                                                         │
     └─────────────────────────────────────────────────────────────────────────┘
 
 Physics of ToA Reflectance Conversion
@@ -62,27 +62,27 @@ Earth-Sun Distance Variation
 
 ::
 
-    ┌──────────────────────────────────────────────────────────────────┐
-    │       Earth-Sun Distance Throughout the Year                      │
+    ┌────────────────────────────────────────────────────────────────────┐
+    │       Earth-Sun Distance Throughout the Year                       │
     │                                                                    │
     │  Distance   ▲                                                      │
     │  (AU)       │     Aphelion (~July 4)                               │
     │             │          ╭───────╮                                   │
     │  1.017 ─────┼─────────╱         ╲─────────────────────────         │
     │             │        ╱           ╲                                 │
-    │  1.000 ─────┼───────╱─────────────╲──────────────────────         │
+    │  1.000 ─────┼───────╱─────────────╲──────────────────────          │
     │             │      ╱               ╲                               │
-    │  0.983 ─────┼─────╱─────────────────╲────────────────────         │
+    │  0.983 ─────┼─────╱─────────────────╲────────────────────          │
     │             │    ╱    Perihelion     ╲                             │
     │             │   ╱     (~Jan 3)        ╲                            │
     │             └───┴──────────────────────┴────────────────► Day      │
     │                 0    91   182   273   365                          │
     │                Jan  Apr   Jul   Oct   Jan                          │
     │                                                                    │
-    │  d = 1 - 0.01673 × cos(0.0172 × (day_of_year - 4))                │
+    │  d = 1 - 0.01673 × cos(0.0172 × (day_of_year - 4))                 │
     │                                                                    │
-    │  Impact: ~6.5% variation in irradiance (d² factor)                │
-    └──────────────────────────────────────────────────────────────────┘
+    │  Impact: ~6.5% variation in irradiance (d² factor)                 │
+    └────────────────────────────────────────────────────────────────────┘
 
 Spectral Response Functions (SRF)
 --------------------------------
@@ -132,40 +132,6 @@ Spectral Integration:
 Solar Irradiance Data:
     - :func:`load_thuillier_irradiance`: Standard TOA irradiance (200-2400 nm)
 
-Example Workflow
----------------
-
-Complete conversion from EMIT radiance to Sentinel-2 reflectance bands::
-
-    import numpy as np
-    from datetime import datetime
-    from georeader.reflectance import (
-        radiance_to_reflectance,
-        transform_to_srf,
-        load_thuillier_irradiance,
-        srf
-    )
-    
-    # 1. Load hyperspectral radiance (µW/cm²/sr/nm)
-    emit_radiance = ...  # shape: (285, 1242, 1280)
-    emit_wavelengths = np.linspace(380, 2500, 285)  # nm
-    emit_fwhm = np.full(285, 7.5)  # nm
-    
-    # 2. Build Sentinel-2 SRF (example for Band 4, Red ~665nm)
-    s2_center = [665.0]  # nm
-    s2_fwhm = [30.0]     # nm
-    wavelengths_fine = np.arange(380, 2501, 1)  # 1nm resolution
-    s2_response = srf(s2_center, s2_fwhm, wavelengths_fine)  # (2121, 1)
-    
-    # 3. Convert hyperspectral radiance to multispectral reflectance
-    s2_reflectance = transform_to_srf(
-        emit_radiance,
-        srf=pd.DataFrame(s2_response, index=wavelengths_fine, columns=['B4']),
-        wavelengths_hyperspectral=emit_wavelengths,
-        as_reflectance=True,
-        date_of_acquisition=datetime(2024, 6, 15, 10, 30),
-        units="uW/cm^2/SR/nm"
-    )
 
 References
 ----------
@@ -541,28 +507,6 @@ def srf(center_wavelengths:ArrayLike, fwhm:ArrayLike, wavelengths:ArrayLike) -> 
         R_k(λ) = exp(-(λ - λ_k)² / (2σ_k²)) / √(2πσ_k²)
 
         Then normalized so that: Σ R_k(λ) = 1 over all λ
-
-    ASCII Visualization
-    -------------------
-    ::
-
-        ┌───────────────────────────────────────────────────────────────┐
-        │  Gaussian SRF Bands (example: RGB)                            │
-        │                                                                │
-        │  Response  ▲                                                   │
-        │            │        Blue         Green         Red             │
-        │  1.0 ──────┼──────╱╲────────────╱╲────────────╱╲────────      │
-        │            │     ╱  ╲          ╱  ╲          ╱  ╲             │
-        │  0.5 ──────┼────╱────╲────────╱────╲────────╱────╲────       │
-        │            │   ╱      ╲      ╱      ╲      ╱      ╲          │
-        │  0.0 ──────┼──╱────────╲────╱────────╲────╱────────╲────     │
-        │            └──┴─────────┴───┴─────────┴───┴─────────┴──► λ   │
-        │              450       490 520       570 620       680       │
-        │                                                                │
-        │  ◄──FWHM──►  = Full Width at Half Maximum                     │
-        │                                                                │
-        │  The response drops to 50% at λ_center ± FWHM/2              │
-        └───────────────────────────────────────────────────────────────┘
 
     Args:
         center_wavelengths: Band center wavelengths in nm. Shape (K,) where
