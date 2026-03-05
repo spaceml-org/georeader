@@ -141,6 +141,5 @@ result = mosaic.spatial_mosaic(
 
 ## See Also
 
-- [`read.read_reproject`](read_module.md): Underlying reprojection function
-- [`window_utils`](window_utils_module.md): Window manipulation utilities
+- [`read.read_reproject`](../modules/read_module.md): Underlying reprojection function
 - [`slices`](slices_module.md): Tiling utilities for windowed processing
