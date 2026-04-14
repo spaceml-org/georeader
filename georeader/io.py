@@ -54,10 +54,10 @@ def safe_open_netcdf(
         IOError: If all engines fail to open the file.
     
     Example:
-        >>> ds = safe_open_netcdf("path/to/file.nc")
-        >>> ds = safe_open_netcdf(azure_blob_file_object)
-        >>> ds = safe_open_netcdf("https://opendap.server/data.nc")
-        >>> ds_location = safe_open_netcdf("path/to/file.nc", group="location")
+        >>> ds = safe_open_netcdf("path/to/file.nc") # doctest: +SKIP
+        >>> ds = safe_open_netcdf(azure_blob_file_object) # doctest: +SKIP
+        >>> ds = safe_open_netcdf("https://opendap.server/data.nc") # doctest: +SKIP
+        >>> ds_location = safe_open_netcdf("path/to/file.nc", group="location") # doctest: +SKIP
     """
     if not HAS_XARRAY:
         raise ImportError("xarray is required to use safe_open_netcdf. Please install it with: pip install xarray")

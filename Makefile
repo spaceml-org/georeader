@@ -18,6 +18,11 @@ test: ## Test the code with pytest (requires tutorial group: poetry install --wi
 	@echo "🚀 Testing code: Running pytest"
 	@poetry run pytest tests/ -v
 
+.PHONY: test-doctest
+test-doctest: ## Run doctests in core modules
+	@echo "🚀 Running doctests"
+	@poetry run pytest --doctest-modules georeader/geotensor.py georeader/rasterio_reader.py georeader/io.py -v
+
 .PHONY: build
 build: clean-build ## Build wheel file using poetry
 	@echo "🚀 Creating wheel file"
