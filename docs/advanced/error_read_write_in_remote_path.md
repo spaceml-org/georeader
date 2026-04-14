@@ -226,13 +226,24 @@ data_rst
 fs.delete(filepath)
 ```
 
-Adding option  `read_with_CPL_VSIL_CURL_NON_CACHED` fixes the problem, we see that after the second copy the raster has 1 channel instead of 3.
+Adding option `invalidate_cache_before_open` fixes the problem by calling `rasterio.cache.invalidate()` before each open. After the second copy the raster has 1 channel instead of 3.
 
 
 ```python
 from georeader import rasterio_reader
-rasterio_reader.RIO_ENV_OPTIONS_DEFAULT["read_with_CPL_VSIL_CURL_NON_CACHED"] = True
+rasterio_reader.RIO_ENV_OPTIONS_DEFAULT["invalidate_cache_before_open"] = True
 ```
+
+You can also invalidate the cache explicitly on a reader instance:
+
+```python
+rst = RasterioReader(filepath)
+rst.invalidate_cache()  # clears cache for this reader's paths
+data = rst.load()
+```
+
+!!! note
+    The deprecated `read_with_CPL_VSIL_CURL_NON_CACHED` option still works but will emit a `DeprecationWarning`.
 
 
 ```python

@@ -663,3 +663,47 @@ class TestRasterioReaderCopy:
         assert copy.window_focus == reader.window_focus
         assert copy.width == 100
         assert copy.height == 100
+
+
+class TestCacheInvalidation:
+    """Tests for rasterio.cache integration (issue #44)."""
+
+    def test_deprecated_option_warns(self, test_raster_path):
+        """read_with_CPL_VSIL_CURL_NON_CACHED emits DeprecationWarning."""
+        import pytest
+        from georeader.geotensor import RIO_ENV_OPTIONS_DEFAULT
+
+        options = dict(RIO_ENV_OPTIONS_DEFAULT)
+        options["read_with_CPL_VSIL_CURL_NON_CACHED"] = True
+
+        with pytest.warns(DeprecationWarning, match="invalidate_cache_before_open"):
+            rasterio_reader.RasterioReader(test_raster_path, rio_env_options=options)
+
+    def test_new_option_local_file(self, test_raster_path):
+        """invalidate_cache_before_open works (no-op) for local files."""
+        from georeader.geotensor import RIO_ENV_OPTIONS_DEFAULT
+
+        options = dict(RIO_ENV_OPTIONS_DEFAULT)
+        options["invalidate_cache_before_open"] = True
+        reader = rasterio_reader.RasterioReader(test_raster_path, rio_env_options=options)
+        data = reader.load()
+        assert data.shape == (15, 200, 250)
+
+    def test_option_stripped_from_env(self, test_raster_path):
+        """Custom keys are removed before passing to rasterio.Env."""
+        from georeader.geotensor import _maybe_invalidate_cache, RIO_ENV_OPTIONS_DEFAULT
+
+        options = dict(RIO_ENV_OPTIONS_DEFAULT)
+        options["invalidate_cache_before_open"] = True
+        clean = _maybe_invalidate_cache(options, test_raster_path)
+        assert "invalidate_cache_before_open" not in clean
+        assert "read_with_CPL_VSIL_CURL_NON_CACHED" not in clean
+
+    def test_invalidate_cache_method(self, test_raster_path):
+        """invalidate_cache() is callable without error on local paths."""
+        reader = rasterio_reader.RasterioReader(test_raster_path)
+        reader.invalidate_cache()
+
+    def test_invalidate_cache_all_method(self):
+        """invalidate_cache_all() is callable."""
+        rasterio_reader.RasterioReader.invalidate_cache_all()

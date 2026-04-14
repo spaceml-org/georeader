@@ -1,4 +1,5 @@
 import rasterio
+import rasterio.cache
 import rasterio.windows
 import numpy as np
 from typing import Tuple, Dict, List, Optional, Union, Any
@@ -15,12 +16,12 @@ from georeader.read import WEB_MERCATOR_CRS, SIZE_DEFAULT, window_from_tile, rea
 from numpy.typing import NDArray
 
 
-# CPL_VSIL_CURL_NON_CACHED configuration option can be set to values like 
-# /vsicurl/http://example.com/foo.tif:/vsicurl/http://example.com/some_directory, so that at file handle closing, 
-# all cached content related to the mentioned file(s) is no longer cached.
-# https://github.com/rasterio/rasterio/issues/1877
-# VSICurlClearCache()
-# https://github.com/rasterio/rasterio/blob/main/rasterio/_path.py
+# GDAL caches HTTP responses in a global LRU. When remote files are modified
+# externally, cached data can become stale, causing read errors or returning
+# old data. rasterio.cache.invalidate(path) clears cached responses for a
+# specific path. Set rio_env_options["invalidate_cache_before_open"] = True
+# to clear automatically before every open, or call reader.invalidate_cache().
+# See: https://rasterio.readthedocs.io/en/latest/api/rasterio.cache.html
 
 
 RIO_ENV_OPTIONS_DEFAULT = geotensor.RIO_ENV_OPTIONS_DEFAULT
@@ -58,7 +59,8 @@ class RasterioReader:
         Check all paths are OK.
     - rio_env_options : `Optional[Dict[str, str]]`
         GDAL options for reading. Defaults to: `RIO_ENV_OPTIONS_DEFAULT`. If you read rasters that might change
-        from a remote source, you might want to set `read_with_CPL_VSIL_CURL_NON_CACHED` to True.
+        from a remote source, set ``invalidate_cache_before_open`` to ``True`` to clear the HTTP cache before
+        each open, or call ``invalidate_cache()`` explicitly when needed.
 
     Attributes
     -------------------
@@ -309,15 +311,27 @@ class RasterioReader:
         return tags
 
     def _get_rio_options_path(self, path:str) -> Dict[str, str]:
-        options = self.rio_env_options
-        return geotensor.get_rio_options_path(options=options, path=path)
+        return geotensor._maybe_invalidate_cache(options=self.rio_env_options, path=path)
     
-    # This function does not work for e.g. returning the descriptions of the bands
-    # @contextmanager
-    # def _rio_open(self, path:str, mode:str="r", overview_level:Optional[int]=None) -> rasterio.DatasetReader:
-    #     with rasterio.Env(**self._get_rio_options_path(path)):
-    #         with rasterio.open(path, mode=mode, overview_level=overview_level) as src:
-    #             yield src
+    def invalidate_cache(self) -> None:
+        """Invalidate the HTTP cache for all paths in this reader.
+
+        Calls ``rasterio.cache.invalidate()`` for each remote path, clearing
+        any stale cached HTTP responses. Use this when remote files have changed
+        and you want to force fresh reads.
+        """
+        for p in self.paths:
+            if "://" in p:
+                rasterio.cache.invalidate(p)
+
+    @staticmethod
+    def invalidate_cache_all() -> None:
+        """Invalidate all HTTP cached responses globally.
+
+        Calls ``rasterio.cache.invalidate_all()``, clearing the entire
+        GDAL VSIL curl cache.
+        """
+        rasterio.cache.invalidate_all()
 
     @property
     def descriptions(self) -> Union[List[List[str]], List[str]]:

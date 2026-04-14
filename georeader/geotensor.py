@@ -2,6 +2,7 @@
 import numpy as np
 from typing import Any, Dict, Union, Tuple, Optional, List
 import rasterio
+import rasterio.cache
 import rasterio.windows
 from georeader import window_utils
 from georeader.window_utils import window_bounds
@@ -36,38 +37,40 @@ RIO_ENV_OPTIONS_DEFAULT = dict(
     GDAL_HTTP_MULTIPLEX="YES"
 )
 
-def _vsi_path(path:str)->str:
-    """
-    Function to convert a path to a VSI path. We use this function to try re-reading the image 
-    disabling the VSI cache. This fixes the error when the remote file is modified from another
-    program.
+def _maybe_invalidate_cache(options:dict, path:str) -> Dict[str, str]:
+    """Process cache invalidation options and return clean GDAL options.
+
+    If ``invalidate_cache_before_open`` is True, calls
+    ``rasterio.cache.invalidate(path)`` to clear cached HTTP responses
+    for the given path before opening.
+
+    Also handles the deprecated ``read_with_CPL_VSIL_CURL_NON_CACHED`` key.
 
     Args:
-        - path: path to convert to VSI path
-    
+        options: Dict of rasterio.Env options.
+        path: The file path to potentially invalidate cache for.
+
     Returns:
-        VSI path
+        Copy of options with cache-control keys removed, safe to pass
+        to ``rasterio.Env``.
     """
-    if not "://" in path:
-        return path
-    
-    protocol, remainder_path = path.split("://")
-    
-    if path.startswith("http"):
-        return f"/vsicurl/{path}"
-    elif protocol in ["s3", "gs", "az", "oss"]:
-        return f"/vsi{protocol}/{remainder_path}"
-    else:
-        warnings.warn(f"Protocol {protocol} not recognized. Returning the original path")
-        return path
+    options = options.copy()
 
-
-def get_rio_options_path(options:dict, path:str) -> Dict[str, str]:
     if "read_with_CPL_VSIL_CURL_NON_CACHED" in options:
-        options = options.copy()
-        if options["read_with_CPL_VSIL_CURL_NON_CACHED"]:
-            options["CPL_VSIL_CURL_NON_CACHED"] = _vsi_path(path)
+        warnings.warn(
+            "'read_with_CPL_VSIL_CURL_NON_CACHED' is deprecated. "
+            "Use 'invalidate_cache_before_open' instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        if "invalidate_cache_before_open" not in options:
+            options["invalidate_cache_before_open"] = options["read_with_CPL_VSIL_CURL_NON_CACHED"]
         del options["read_with_CPL_VSIL_CURL_NON_CACHED"]
+
+    if options.pop("invalidate_cache_before_open", False):
+        if "://" in path:
+            rasterio.cache.invalidate(path)
+
     return options
 
 class GeoTensor:
@@ -704,7 +707,7 @@ class GeoTensor:
         tags = None
         descriptions = None
         rio_env_options = RIO_ENV_OPTIONS_DEFAULT if rio_env_options is None else rio_env_options
-        with rasterio.Env(**get_rio_options_path(rio_env_options, path)):
+        with rasterio.Env(**_maybe_invalidate_cache(rio_env_options, path)):
             with rasterio.open(path) as src:                
                 data = src.read()
                 transform = src.transform
