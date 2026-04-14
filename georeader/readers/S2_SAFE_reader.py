@@ -1,21 +1,4 @@
-"""
-Sentinel-2 reader inherited from https://github.com/IPL-UV/DL-L8S2-UV.
-
-Authors: Gonzalo Mateo-García, Dan Lopez-Puigdollers
-
-It has several enhancements:
-
-* Support for S2L2A images
-* It can read directly images from a GCP bucket (for example data from  [here](https://cloud.google.com/storage/docs/public-datasets/sentinel-2))
-* Windowed read and read and reproject in the same function (see `load_bands_bbox`)
-* Creation of the image only involves reading one metadata file (`xxx.SAFE/MTD_{self.producttype}.xml`)
-* Compatible with `georeader.read` functions
-* It can read from the pyramid if available.
-
-
-[Sentinel-2 docs](https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/document-library)
-
-"""
+"""Sentinel-2 SAFE format reader. See `full documentation <https://spaceml-org.github.io/georeader/modules/readers_module/#sentinel-2-reader>`_."""
 
 from shapely.geometry import Polygon
 import xml.etree.ElementTree as ET

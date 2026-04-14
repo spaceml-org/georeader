@@ -15,6 +15,8 @@ Readers available:
 
 ## Sentinel-2 Reader
 
+*Inherited from [DL-L8S2-UV](https://github.com/IPL-UV/DL-L8S2-UV). Authors: Gonzalo Mateo-García, Dan Lopez-Puigdollers. [Sentinel-2 docs](https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/document-library).*
+
 The Sentinel-2 reader provides functionality for reading Sentinel-2 L1C and L2A products in SAFE format. It supports:
 
 - Direct reading from local files or cloud storage (Google Cloud Storage)
@@ -43,6 +45,8 @@ The Sentinel-2 reader provides functionality for reading Sentinel-2 L1C and L2A 
 
 ## Proba-V Reader
 
+*Author: Gonzalo Mateo-García. Based on the [Proba-V user manual](https://publications.vito.be/2017-1333-probav-products-user-manual.pdf).*
+
 The Proba-V reader enables access to Proba-V Level 2A and Level 3 products. It handles:
 
 - Reading TOA reflectance from HDF5 files
@@ -63,6 +67,8 @@ The Proba-V reader enables access to Proba-V Level 2A and Level 3 products. It h
         - ProbaVSM
 
 ## SPOT-VGT Reader
+
+*Authors: Dan Lopez-Puigdollers, Gonzalo Mateo-García. Based on the [SPOT VGT user manual](https://docs.terrascope.be/DataProducts/SPOT-VGT/references/SPOT_VGT_PUM_v1.3.pdf).*
 
 The SPOT-VGT reader provides functionality for reading SPOT-VGT products. Features include:
 
@@ -106,6 +112,8 @@ Key features:
         - PRISMA
 
 ## EMIT Reader
+
+*Based in part on the official [EMIT repo](https://github.com/emit-sds/emit-utils/).*
 
 The EMIT (Earth Surface Mineral Dust Source Investigation) reader provides access to NASA's imaging spectrometer data from the International Space Station. This reader works with Level 1B calibrated radiance data (not atmospherically corrected).
 

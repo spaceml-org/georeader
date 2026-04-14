@@ -1,11 +1,4 @@
-"""
-Proba-V reader
-
-Unnoficial Proba-V reader. This reader is based in the Proba-V user manual:
-https://publications.vito.be/2017-1333-probav-products-user-manual.pdf
-
-Author:  Gonzalo Mateo-García
-"""
+"""Proba-V reader. See `full documentation <https://spaceml-org.github.io/georeader/modules/readers_module/#proba-v-reader>`_."""
 
 import numpy as np
 

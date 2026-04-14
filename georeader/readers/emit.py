@@ -1,12 +1,4 @@
-"""
-Module to read EMIT images.
-
-Requires: xarray
-pip install xarray
-
-Some of the functions of this module are based on the official EMIT repo: https://github.com/emit-sds/emit-utils/
-
-"""
+"""EMIT image reader. Requires ``xarray``. See `full documentation <https://spaceml-org.github.io/georeader/modules/readers_module/#emit-reader>`_."""
 import os
 import json
 from typing import Tuple, Optional, Any, Union, Dict

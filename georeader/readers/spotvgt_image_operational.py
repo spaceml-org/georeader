@@ -1,11 +1,4 @@
-"""
-SPOT VGT reader
-
-Unofficial reader for SPOT VGT products. The reader is based on the user manual:
-https://docs.terrascope.be/DataProducts/SPOT-VGT/references/SPOT_VGT_PUM_v1.3.pdf
-
-Authors: Dan Lopez-Puigdollers, Gonzalo Mateo-García
-"""
+"""SPOT VGT reader. See `full documentation <https://spaceml-org.github.io/georeader/modules/readers_module/#spot-vgt-reader>`_."""
 
 import os
 import re
