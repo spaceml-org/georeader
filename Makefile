@@ -55,6 +55,11 @@ test-cov: ## Run tests with coverage report
 	@echo "🧪 Running tests with coverage"
 	@poetry run pytest tests/ -v --cov=georeader --cov-report=term-missing --cov-report=html
 
+.PHONY: test-doctest
+test-doctest: ## Run doctests in core modules
+	@echo "🧪 Running doctests"
+	@poetry run pytest --doctest-modules georeader/geotensor.py -v
+
 .PHONY: build
 build: clean-build ## Build wheel file using poetry
 	@echo "📦 Building wheel file"

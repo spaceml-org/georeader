@@ -79,6 +79,7 @@ show_error_codes = "True"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+doctest_optionflags = ["ELLIPSIS", "NORMALIZE_WHITESPACE"]
 
 [tool.ruff]
 target-version = "py39"

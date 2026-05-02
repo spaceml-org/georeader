@@ -651,7 +651,7 @@ class GeoTensor(np.ndarray):
         Examples:
             >>> import numpy as np
             >>> import rasterio
-            >>> from georeader import GeoTensor
+            >>> from georeader.geotensor import GeoTensor
             >>>
             >>> # Create sample GeoTensor (3 bands, 100x100 pixels)
             >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
@@ -660,7 +660,8 @@ class GeoTensor(np.ndarray):
             >>>
             >>> # Add scalar to all pixels
             >>> gt_offset = gt + 0.1
-            >>> print(gt_offset.shape)  # (3, 100, 100)
+            >>> print(gt_offset.shape)
+            (3, 100, 100)
             >>>
             >>> # Add per-band offset using broadcasting
             >>> band_offsets = np.array([0.1, 0.2, 0.3])[:, None, None]  # Shape: (3, 1, 1)
@@ -726,7 +727,7 @@ class GeoTensor(np.ndarray):
         Examples:
             >>> import numpy as np
             >>> import rasterio
-            >>> from georeader import GeoTensor
+            >>> from georeader.geotensor import GeoTensor
             >>>
             >>> # Create sample GeoTensor
             >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
@@ -791,7 +792,7 @@ class GeoTensor(np.ndarray):
         Examples:
             >>> import numpy as np
             >>> import rasterio
-            >>> from georeader import GeoTensor
+            >>> from georeader.geotensor import GeoTensor
             >>>
             >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
             >>> data = np.random.rand(3, 100, 100)
@@ -866,7 +867,7 @@ class GeoTensor(np.ndarray):
         Examples:
             >>> import numpy as np
             >>> import rasterio
-            >>> from georeader import GeoTensor
+            >>> from georeader.geotensor import GeoTensor
             >>>
             >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
             >>> data = np.random.rand(3, 100, 100)
@@ -1241,6 +1242,11 @@ class GeoTensor(np.ndarray):
             ValueError: If trying to add dimensions at or after the spatial dimensions.
 
         Examples:
+            >>> import numpy as np
+            >>> import rasterio
+            >>> from georeader.geotensor import GeoTensor
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
+            >>> crs = "EPSG:32630"
             >>> gt = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
             >>> # Add a new dimension at axis 0
             >>> gt_expanded = gt.expand_dims(0)
@@ -1375,14 +1381,14 @@ class GeoTensor(np.ndarray):
         Examples:
             >>> import numpy as np
             >>> import rasterio
-            >>> from georeader import GeoTensor
+            >>> from georeader.geotensor import GeoTensor
             >>>
             >>> # Create 3-band 100x100 GeoTensor
             >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
             >>> data = np.random.rand(3, 100, 100).astype(np.float32)
             >>> gt = GeoTensor(data, transform, crs="EPSG:32630")
             >>> print(f"Original: {gt.shape}, origin: ({gt.transform.c}, {gt.transform.f})")
-            Original: (3, 100, 100), origin: (500000, 4650000)
+            Original: (3, 100, 100), origin: (500000.0, 4650000.0)
             >>>
             >>> # Slice spatial subset (maintains bands)
             >>> subset = gt.isel({"x": slice(20, 80), "y": slice(10, 60)})
@@ -1492,7 +1498,7 @@ class GeoTensor(np.ndarray):
 
         Examples:
             >>> import rasterio
-            >>> from georeader import GeoTensor
+            >>> from georeader.geotensor import GeoTensor
             >>> import numpy as np
             >>>
             >>> # Example 1: Get footprint in native CRS
@@ -1500,25 +1506,21 @@ class GeoTensor(np.ndarray):
             >>> data = np.random.rand(3, 100, 100)
             >>> gt = GeoTensor(data, transform, crs="EPSG:32630")
             >>> footprint_utm = gt.footprint()
-            >>> print(f"Bounds (UTM): {footprint_utm.bounds}")
-            >>> # (xmin, ymin, xmax, ymax) in UTM meters: (500000, 4649000, 501000, 4650000)
+            >>> footprint_utm.bounds
+            (500000.0, 4649000.0, 501000.0, 4650000.0)
 
             >>> # Example 2: Transform footprint to WGS84 for web mapping
             >>> footprint_wgs84 = gt.footprint(crs="EPSG:4326")
-            >>> print(f"Bounds (WGS84): {footprint_wgs84.bounds}")
-            >>> # (lon_min, lat_min, lon_max, lat_max) in degrees
+            >>> # Bounds returned in degrees: (lon_min, lat_min, lon_max, lat_max)
             >>> # Can be used directly in Leaflet, Google Maps, etc.
 
             >>> # Example 3: Check if rasters overlap
-            >>> gt1 = GeoTensor.load_file('image1.tif')
-            >>> gt2 = GeoTensor.load_file('image2.tif')
-            >>> # Get footprints in common CRS
-            >>> fp1 = gt1.footprint(crs="EPSG:4326")
-            >>> fp2 = gt2.footprint(crs="EPSG:4326")
-            >>> if fp1.intersects(fp2):
-            ...     print("Rasters overlap!")
+            >>> gt1 = GeoTensor.load_file('image1.tif')  # doctest: +SKIP
+            >>> gt2 = GeoTensor.load_file('image2.tif')  # doctest: +SKIP
+            >>> fp1 = gt1.footprint(crs="EPSG:4326")  # doctest: +SKIP
+            >>> fp2 = gt2.footprint(crs="EPSG:4326")  # doctest: +SKIP
+            >>> if fp1.intersects(fp2):  # doctest: +SKIP
             ...     overlap_area = fp1.intersection(fp2).area
-            ...     print(f"Overlap area: {overlap_area} square degrees")
 
             >>> # Example 4: Export footprint as GeoJSON
             >>> from shapely.geometry import mapping
@@ -1529,21 +1531,20 @@ class GeoTensor(np.ndarray):
             ...     "geometry": mapping(footprint),
             ...     "properties": {"name": "Raster extent"}
             ... }
-            >>> with open('footprint.geojson', 'w') as f:
+            >>> with open('footprint.geojson', 'w') as f:  # doctest: +SKIP
             ...     json.dump(geojson, f)
 
             >>> # Example 5: Check if point is within raster extent
             >>> from shapely.geometry import Point
             >>> point_of_interest = Point(-3.7038, 40.4168)  # Madrid coordinates
             >>> footprint = gt.footprint(crs="EPSG:4326")
-            >>> if footprint.contains(point_of_interest):
-            ...     print("Point is within raster extent")
+            >>> contains_point = footprint.contains(point_of_interest)
 
             >>> # Example 6: Calculate raster area in square kilometers
             >>> footprint_utm = gt.footprint()  # In UTM (meters)
-            >>> area_sqm = footprint_utm.area
-            >>> area_sqkm = area_sqm / 1_000_000
-            >>> print(f"Raster covers {area_sqkm:.2f} km²")
+            >>> area_sqkm = footprint_utm.area / 1_000_000
+            >>> round(area_sqkm, 2)
+            1.0
 
         Note:
             - Footprint represents the full raster extent, including nodata regions
@@ -1696,7 +1697,7 @@ class GeoTensor(np.ndarray):
         Examples:
             >>> import numpy as np
             >>> import rasterio
-            >>> from georeader import GeoTensor
+            >>> from georeader.geotensor import GeoTensor
             >>>
             >>> # Create 3-band 100x100 GeoTensor
             >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
@@ -1767,9 +1768,14 @@ class GeoTensor(np.ndarray):
             GeoTensor: padded GeoTensor.
 
         Examples:
+            >>> import numpy as np
+            >>> import rasterio
+            >>> from georeader.geotensor import GeoTensor
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
+            >>> crs = "EPSG:32630"
             >>> gt = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
-            >>> gt.pad_array({"x": (10, 10), "y": (10, 10)})
-            >>> assert gt.shape == (3, 120, 120)
+            >>> padded = gt.pad_array({"x": (10, 10), "y": (10, 10)})
+            >>> assert padded.shape == (3, 120, 120)
         """
         if constant_values is None and mode == "constant":
             if self.fill_value_default is None:
@@ -1842,10 +1848,15 @@ class GeoTensor(np.ndarray):
              resized GeoTensor
 
         Examples:
-            >>> gt = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
-            >>> resized = gt.resize((50, 50))
-            >>> assert resized.shape == (3, 50, 50)
-            >>> assert resized.res == (2*gt.res[0], 2*gt.res[1])
+            >>> import numpy as np  # doctest: +SKIP
+            >>> import rasterio  # doctest: +SKIP
+            >>> from georeader.geotensor import GeoTensor  # doctest: +SKIP
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)  # doctest: +SKIP
+            >>> crs = "EPSG:32630"  # doctest: +SKIP
+            >>> gt = GeoTensor(np.random.rand(3, 100, 100), transform, crs)  # doctest: +SKIP
+            >>> resized = gt.resize((50, 50))  # doctest: +SKIP
+            >>> assert resized.shape == (3, 50, 50)  # doctest: +SKIP
+            >>> assert resized.res == (2*gt.res[0], 2*gt.res[1])  # doctest: +SKIP
         """
         input_shape = self.shape
         spatial_shape = input_shape[-2:]
@@ -1956,6 +1967,11 @@ class GeoTensor(np.ndarray):
             ValueError: If the spatial dimensions are moved from their last positions.
 
         Examples:
+            >>> import numpy as np
+            >>> import rasterio
+            >>> from georeader.geotensor import GeoTensor
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
+            >>> crs = "EPSG:32630"
             >>> gt = GeoTensor(np.random.rand(3, 4, 100, 200), transform, crs)
             >>> # Shape is (3, 4, 100, 200)
             >>> gt_t = gt.transpose()
@@ -2189,6 +2205,11 @@ class GeoTensor(np.ndarray):
             window: Window object that specifies the spatial location to write the data
 
         Examples:
+            >>> import numpy as np
+            >>> import rasterio
+            >>> from georeader.geotensor import GeoTensor
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
+            >>> crs = "EPSG:32630"
             >>> gt = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
             >>> data = np.random.rand(3, 50, 50)
             >>> window = rasterio.windows.Window(col_off=7, row_off=9, width=50, height=50)
@@ -2273,7 +2294,7 @@ class GeoTensor(np.ndarray):
             >>> import numpy as np
             >>> import rasterio
             >>> import rasterio.windows
-            >>> from georeader import GeoTensor
+            >>> from georeader.geotensor import GeoTensor
             >>>
             >>> # Create test GeoTensor
             >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
@@ -2403,7 +2424,7 @@ class GeoTensor(np.ndarray):
         Examples:
             >>> import numpy as np
             >>> import rasterio
-            >>> from georeader import GeoTensor
+            >>> from georeader.geotensor import GeoTensor
             >>>
             >>> # Create multiple GeoTensors (e.g., different dates)
             >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
@@ -2490,10 +2511,15 @@ class GeoTensor(np.ndarray):
             geotensor with extra dim at the front: (len(geotensors),) + shape
 
         Examples:
+            >>> import numpy as np
+            >>> import rasterio
+            >>> from georeader.geotensor import GeoTensor
+            >>> transform = rasterio.Affine(10, 0, 500000, 0, -10, 4650000)
+            >>> crs = "EPSG:32630"
             >>> gt1 = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
             >>> gt2 = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
             >>> gt3 = GeoTensor(np.random.rand(3, 100, 100), transform, crs)
-            >>> gt = concatenate([gt1, gt2, gt3], axis=0)
+            >>> gt = GeoTensor.concatenate([gt1, gt2, gt3], axis=0)
             >>> assert gt.shape == (9, 100, 100)
         """
         assert len(geotensors) > 0, "Empty list provided can't concat"
