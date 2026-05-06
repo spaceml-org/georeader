@@ -41,6 +41,9 @@ nav:
       - PRISMA: simultaneous_prisma_emit.ipynb
       - EnMAP: enmap_with_cloudsen12.ipynb
       - PRISMA cloud detection: prisma_with_cloudsen12.ipynb
+    - Carbon Mapper:
+      - API + typed models: carbonmapper/api_explore.ipynb
+      - Raster wrappers: carbonmapper/rasters_explore.ipynb
     - Advanced:
       - VSIL cache problem: advanced/error_read_write_in_remote_path.md
 plugins:

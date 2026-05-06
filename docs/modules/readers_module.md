@@ -12,6 +12,7 @@ Readers available:
 * [EMIT](#emit-reader)
 * [PRISMA](#prisma-reader)
 * [EnMAP](#enmap-reader)
+* [Carbon Mapper](#carbon-mapper-reader)
 
 ## Sentinel-2 Reader
 
@@ -162,3 +163,85 @@ Key features:
     options:
       members:
         - EnMAP
+
+## Carbon Mapper Reader
+
+The Carbon Mapper reader provides typed access to the [Carbon Mapper](https://carbonmapper.org) STAC catalogue and plume API — atmospheric methane / carbon-dioxide retrievals from the Tanager-1, EMIT, AVIRIS, and GAO instruments. Carbon Mapper publishes:
+
+- **L2B scenes** (per-pixel CH4 column-matched-filter, RGB, uncertainty, artifact-mask) addressed by ``scene_id`` in the ``l2b-ch4-mfa-v3a`` STAC collection.
+- **L3A per-plume rasters** (alpha-banded delineated plume mask) addressed by ``plume_id`` in the ``l3a`` collection.
+- **Source records** — DBSCAN clusters of plumes detected at the same physical site, addressed by deterministic ``source_name``.
+
+Key features:
+
+- Token-aware HTTP client (`obtain_token`, `refresh_token`, `download_asset`) with file-based persistence (`CarbonMapperConfig`).
+- Typed query layer (`CMTileItem`, `CMRawPlume`, `CMSource`, exception hierarchy) — never returns raw dicts.
+- Lazy raster wrappers (`CMImageRaster`, `CMPlumeRaster`) backed by `RasterioReader`. `CMPlumeRaster.polygon()` extracts the authoritative plume polygon from the L3A `plume_tif` band-4 alpha mask — the upstream source of truth for plume geometry.
+- Cross-resolution helpers: `get_tile_for_plume`, `get_source_for_plume`, `list_tiles_for_source`, `list_plumes_for_tile`.
+
+**Optional install:** the reader is gated behind the `[carbonmapper]` extra to keep the base install minimal:
+
+```bash
+pip install 'georeader-spaceml[carbonmapper]'
+```
+
+This pulls in `pydantic` (for `CMRawPlume`) and `requests` (for the API client). Azure SDK is intentionally **not** included — downstream consumers can layer keyvault-backed token loading on top of `CarbonMapperConfig`.
+
+### API Reference
+
+::: georeader.readers.carbonmapper.api_queries
+    options:
+      members:
+        - CMTileItem
+        - CMAPIError
+        - CMPlumeNotFound
+        - CMSceneNotPublished
+        - CMSourceNotFound
+        - get_tile
+        - get_plume
+        - get_source
+        - get_tile_for_plume
+        - get_source_for_plume
+        - get_plume_context
+        - list_tiles
+        - list_plumes
+        - list_sources
+        - list_plumes_for_tile
+        - list_plumes_for_source
+        - list_tiles_for_source
+
+::: georeader.readers.carbonmapper.plume
+    options:
+      members:
+        - CMRawPlume
+        - decompose_wind
+        - CARBONMAPPER_INSTRUMENTS
+        - CM_INSTRUMENT_TO_SATELLITE
+
+::: georeader.readers.carbonmapper.source
+    options:
+      members:
+        - CMSource
+
+::: georeader.readers.carbonmapper.rasters
+    options:
+      members:
+        - CMImageRaster
+        - CMPlumeRaster
+        - CM_L2B_BANDS
+        - DEFAULT_L2B_RGB_COLLECTION
+
+::: georeader.readers.carbonmapper.config
+    options:
+      members:
+        - CarbonMapperConfig
+
+::: georeader.readers.carbonmapper.download
+    options:
+      members:
+        - obtain_token
+        - refresh_token
+        - download_asset
+        - download_plume_assets
+        - stac_search
+        - stac_get_items
