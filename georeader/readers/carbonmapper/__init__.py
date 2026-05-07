@@ -90,6 +90,11 @@ from georeader.readers.carbonmapper.rasters import (
     CMPlumeRaster,
 )
 from georeader.readers.carbonmapper.source import CMSource
+from georeader.readers.carbonmapper.sources_raster import (
+    CMSourceRaster,
+    rasterize_sources,
+    rasterize_sources_like,
+)
 
 __all__ = [
     "CARBONMAPPER_INSTRUMENTS",
@@ -104,6 +109,7 @@ __all__ = [
     "CMSceneNotPublished",
     "CMSource",
     "CMSourceNotFound",
+    "CMSourceRaster",
     "CMTileItem",
     "CarbonMapperConfig",
     "CarbonMapperPlumeRaw",
@@ -132,6 +138,8 @@ __all__ = [
     "list_tiles_for_source",
     "obtain_token",
     "paginate_plumes",
+    "rasterize_sources",
+    "rasterize_sources_like",
     "refresh_token",
     "stac_get_catalog",
     "stac_get_collection",

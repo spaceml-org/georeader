@@ -231,6 +231,13 @@ This pulls in `pydantic` (for `CMRawPlume`) and `requests` (for the API client).
         - CM_L2B_BANDS
         - DEFAULT_L2B_RGB_COLLECTION
 
+::: georeader.readers.carbonmapper.sources_raster
+    options:
+      members:
+        - CMSourceRaster
+        - rasterize_sources
+        - rasterize_sources_like
+
 ::: georeader.readers.carbonmapper.config
     options:
       members:
