@@ -77,21 +77,17 @@ CARBONMAPPER_PLUME_PARAMS = [
 ]
 
 #: Human-readable instrument names indexed by Carbon Mapper short code.
+#: Keys are lowercase to match the prefix convention used by ``plume_id``
+#: / ``scene_id`` and :data:`CM_INSTRUMENT_TO_SATELLITE`. Lookups via
+#: :attr:`CMRawPlume.instrument_name` lowercase the key defensively, so
+#: any upstream variant in case (``"GAO"`` etc.) still resolves.
 CARBONMAPPER_INSTRUMENTS: dict[str, str] = {
     "emi": "EMIT",
     "tan": "Tanager-1",
     "ang": "AVIRIS-NG",
-    "GAO": "Global Airborne Observatory",
+    "gao": "Global Airborne Observatory",
     "av3": "AVIRIS-3",
 }
-
-description_plume_name = """
-A unique identifier for each plume in the format {platform}{YYYYMMDD}{HHMMSS}-{part}.
-The first three characters represent the platform (e.g., GAO for Global Airborne Observatory),
-followed by the acquisition date and time in ISO 8601 UTC format. The part suffix
-(e.g., "p0000-A") retains key information from the original radiance filename and
-indicates the order of multiple plumes detected in the same image.
-"""
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -670,10 +666,18 @@ class CMRawPlume(BaseModel):
 
     @property
     def instrument_name(self) -> str | None:
-        """Human-readable instrument name from :data:`CARBONMAPPER_INSTRUMENTS`."""
+        """Human-readable instrument name from :data:`CARBONMAPPER_INSTRUMENTS`.
+
+        The lookup is case-insensitive — upstream payloads occasionally
+        report ``"GAO"`` while ``plume_id`` prefixes are lowercase, so
+        the table key is normalised at lookup time rather than relying
+        on every caller to lowercase first.
+        """
         if self.instrument is None:
             return None
-        return CARBONMAPPER_INSTRUMENTS.get(self.instrument, self.instrument)
+        return CARBONMAPPER_INSTRUMENTS.get(
+            self.instrument.lower(), self.instrument,
+        )
 
     # ------------------------------------------------------------------ #
     # Serialisation                                                        #

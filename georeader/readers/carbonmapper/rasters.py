@@ -231,23 +231,26 @@ class CMImageRaster:
                 out[band] = None
                 continue
             reader = self._open(band)
-            try:
-                # `read_from_polygon` returns ``GeoData | NDArray``;
-                # with the default ``return_only_data=False`` the GeoData
-                # arm is the one we always hit. ``RasterioReader``
-                # satisfies the ``GeoData`` protocol structurally, but
-                # ty doesn't currently infer that — cast for clarity.
-                out[band] = cast(
-                    GeoData,
-                    read.read_from_polygon(
-                        cast(GeoData, reader),
-                        polygon=polygon,
-                        crs_polygon=crs_polygon,
-                    ),
-                )
-            except Exception:
-                # Zero overlap (e.g., artifact-mask outside its strip) → None.
-                out[band] = None
+            # `boundless=False` makes `read_from_polygon` return `None`
+            # for windows that don't intersect the raster (e.g. an
+            # artifact-mask whose un-orthorectified strip falls outside
+            # the requested AOI), instead of allocating a fill-valued
+            # tensor the size of the requested window. Real CRS / I/O
+            # errors are left to propagate — the prior bare
+            # `except Exception` swallowed those silently.
+            #
+            # `read_from_polygon` returns ``GeoData | NDArray``; with
+            # ``return_only_data=False`` the GeoData arm is the one we
+            # always hit. ``RasterioReader`` satisfies the ``GeoData``
+            # protocol structurally, but ty doesn't currently infer
+            # that — cast for clarity.
+            result = read.read_from_polygon(
+                cast(GeoData, reader),
+                polygon=polygon,
+                crs_polygon=crs_polygon,
+                boundless=False,
+            )
+            out[band] = cast(GeoData, result) if result is not None else None
         return out
 
     def read_window(
@@ -366,7 +369,15 @@ class CMPlumeRaster:
         catalog object); add it via :meth:`with_outline` if fetched
         separately.
         """
-        urls = _filter_raster_keys(plume_dict)
+        # Pull `plume_tif` only — `ime_outline_geojson` is sourced via
+        # `with_outline()` from the L3A STAC item, not the catalog
+        # response. Keeps `from_plume_dict` and `from_cmrawplume`
+        # symmetric and prevents an outline that happened to be on the
+        # catalog dict from sneaking in.
+        urls: dict[str, PathLike] = {}
+        v = plume_dict.get("plume_tif")
+        if v:
+            urls["plume_tif"] = v
         return cls(plume_id=str(plume_dict.get("plume_id", "")), urls=urls)
 
     @classmethod
@@ -440,10 +451,21 @@ class CMPlumeRaster:
             merged, crs_polygon=str(geo.crs), dst_crs="EPSG:4326",
         )
 
-    def polygon_from_geojson(self) -> Optional[BaseGeometry]:
+    def polygon_from_geojson(
+        self, *, http_timeout: float = 30.0,
+    ) -> Optional[BaseGeometry]:
         """Use ``ime_outline_geojson`` directly (preferred — no rasterio).
 
-        Returns ``None`` if the outline URL was not provided.
+        Args:
+            http_timeout: Per-request timeout in seconds for remote
+                outline URLs. A slow / hung server otherwise blocks
+                indefinitely on `urllib.request.urlopen`, which is
+                problematic for notebooks and ETL pipelines. Defaults
+                to 30s.
+
+        Returns:
+            The plume outline as a shapely geometry, or ``None`` if
+            the outline URL was not provided.
         """
         url = self.urls.get("ime_outline_geojson")
         if url is None:
@@ -458,7 +480,7 @@ class CMPlumeRaster:
         path = str(url)
         if path.startswith(("http://", "https://")):
             import urllib.request
-            with urllib.request.urlopen(path) as resp:
+            with urllib.request.urlopen(path, timeout=http_timeout) as resp:
                 data = json.load(resp)
         else:
             with open(path, "r") as fh:
@@ -522,16 +544,6 @@ class CMPlumeRaster:
             crs=geo.crs,
             fill_value_default=False,
         )
-
-
-def _filter_raster_keys(d: Mapping) -> dict[str, PathLike]:
-    """Pick only the GeoTIFF / GeoJSON keys this module cares about."""
-    out: dict[str, PathLike] = {}
-    for key in _PLUME_RASTER_KEYS:
-        v = d.get(key)
-        if v:
-            out[key] = v
-    return out
 
 
 __all__ = [
