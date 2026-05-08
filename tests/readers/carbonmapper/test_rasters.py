@@ -15,7 +15,6 @@ from georeader.readers.carbonmapper.api_queries import CMTileItem
 from georeader.readers.carbonmapper.rasters import (
     CM_L2B_BANDS,
     CMImageRaster,
-    CMPlumeRaster,
 )
 
 
@@ -143,20 +142,24 @@ class TestCMImageRasterReadHelpers:
 
     def test_read_window_uses_bbox(self, tmp_path):
         ir = CMImageRaster.from_local(_make_l2b_dir(tmp_path))
-        # Bounds in scene CRS just to keep the test simple.
+        # `read_window` interprets bounds as EPSG:4326 (W, S, E, N).
+        # Pick a bbox in lon/lat that overlaps the synthetic scene's
+        # UTM-13N footprint (centred near western Texas).
         crops = ir.read_window(
-            (510_000, 3_510_000, 520_000, 3_520_000),
+            (-104.5, 31.5, -104.0, 32.0),
             bands=("cmf",),
         )
-        # NOTE: read_window applies EPSG:4326 by default — this test
-        # reads through the reproject path. We just assert no crash and
-        # the band is present (None if zero overlap is acceptable).
+        # NOTE: this reads through the reproject path; we just assert
+        # no crash and the band is present (None if zero overlap is
+        # acceptable).
         assert "cmf" in crops
 
 
 class TestCMImageRasterFromCmTileItem:
-    def test_from_cm_tile_item_strips_tif_extensions(self):
-        """STAC asset keys carry ``.tif`` extensions in live responses."""
+    def test_from_cm_tile_item_retains_all_loadable_assets(self):
+        """STAC asset keys carry ``.tif`` (or ``.txt``) extensions; the
+        constructor strips them and retains every key in
+        ``CM_L2B_BANDS`` plus ``uas`` (text sidecar)."""
         item = CMTileItem(
             scene_id="tan-foo",
             collection="l2b-ch4-mfa-v3a",
@@ -168,17 +171,24 @@ class TestCMImageRasterFromCmTileItem:
             geometry=box(0, 0, 1, 1),
             asset_urls={
                 "cmf.tif": "https://x/cmf.tif",
+                "cmf-unortho.tif": "https://x/cmfu.tif",
                 "uncertainty.tif": "https://x/unc.tif",
+                "uncertainty-unortho.tif": "https://x/uncu.tif",
                 "artifact-mask.tif": "https://x/am.tif",
-                "uas.txt": "https://x/uas.txt",          # ignored
-                "cmf-unortho.tif": "https://x/cmfu.tif", # ignored
+                "uas.txt": "https://x/uas.txt",
             },
             properties={},
             raw={},
         )
         ir = CMImageRaster.from_cm_tile_item(item)
-        assert set(ir.asset_paths) == {"cmf", "uncertainty", "artifact-mask"}
+        assert set(ir.asset_paths) == {
+            "cmf", "cmf-unortho",
+            "uncertainty", "uncertainty-unortho",
+            "artifact-mask", "uas",
+        }
         assert ir.asset_paths["cmf"] == "https://x/cmf.tif"
+        assert ir.asset_paths["cmf-unortho"] == "https://x/cmfu.tif"
+        assert ir.asset_paths["uas"] == "https://x/uas.txt"
 
     def test_with_rgb_merges_sibling_collection(self):
         """Compose CH4 + RGB siblings (separate STAC collections,
@@ -244,152 +254,80 @@ class TestCMImageRasterFromCmTileItem:
         assert ir.asset_paths["cmf"].endswith("cmf.tif")
 
 
-# ─── L3A per-plume raster tests ─────────────────────────────────────
+# ─── New L2B properties (cmf_unortho / uncertainty_unortho / uas) ───
 
 
-def _write_4band_plume(path, *, mask_box=(30, 70)):
-    """Write a 4-band uint8 GeoTIFF with band 4 = alpha mask in [mask_box]."""
-    arr = np.zeros((4, 100, 100), dtype="uint8")
-    arr[3, mask_box[0]:mask_box[1], mask_box[0]:mask_box[1]] = 1
-    transform = t_from_bounds(-100, 30, -99, 31, 100, 100)
-    with rasterio.open(
-        str(path), "w", driver="GTiff", count=4, dtype="uint8",
-        width=100, height=100, transform=transform, crs="EPSG:4326",
-    ) as dst:
-        dst.write(arr)
+class TestCMImageRasterUnorthoAndUas:
+    """L2B exposes raw-frame retrieval variants and a UAS sidecar that
+    weren't previously loadable through the wrapper."""
 
+    def test_cmf_unortho_property_opens_when_present(self, tmp_path):
+        d = tmp_path / "scene"
+        d.mkdir()
+        for band in ("cmf", "cmf-unortho", "uncertainty"):
+            _write_synthetic_band(d / f"{band}.tif")
+        ir = CMImageRaster.from_local(d)
+        assert isinstance(ir.cmf_unortho, RasterioReader)
 
-class TestCMPlumeRasterLazyAccess:
-    def test_lazy_open(self, tmp_path):
-        plume_tif = tmp_path / "plume.tif"
-        _write_4band_plume(plume_tif)
-        pr = CMPlumeRaster(plume_id="tan-foo-A",
-                           urls={"plume_tif": str(plume_tif)})
-        assert isinstance(pr.plume_tif, RasterioReader)
+    def test_cmf_unortho_returns_none_when_absent(self, tmp_path):
+        # Older mfm-v1-style scene with only orthorectified rasters
+        d = tmp_path / "scene"
+        d.mkdir()
+        _write_synthetic_band(d / "cmf.tif")
+        ir = CMImageRaster.from_local(d)
+        assert ir.cmf_unortho is None
 
-    def test_plume_tif_none_when_missing(self):
-        pr = CMPlumeRaster(plume_id="tan-foo-A", urls={})
-        assert pr.plume_tif is None
+    def test_uncertainty_unortho_property_opens_when_present(self, tmp_path):
+        d = tmp_path / "scene"
+        d.mkdir()
+        for band in ("cmf", "uncertainty", "uncertainty-unortho"):
+            _write_synthetic_band(d / f"{band}.tif")
+        ir = CMImageRaster.from_local(d)
+        assert isinstance(ir.uncertainty_unortho, RasterioReader)
 
-    def test_ignores_non_geotiff_keys(self):
-        # con_tif / rgb_png keys are accepted as data on the urls
-        # mapping (we don't filter at construction here — only the
-        # factories filter), but no accessors surface them.
-        pr = CMPlumeRaster(
-            plume_id="tan-foo-A",
-            urls={"con_tif": "ignored", "rgb_png": "ignored",
-                  "plume_png": "ignored"},
-        )
-        assert pr.plume_tif is None
-        assert not hasattr(pr, "con_tif")
-        assert not hasattr(pr, "rgb_png")
+    def test_uas_property_reads_sidecar_text(self, tmp_path):
+        d = tmp_path / "scene"
+        d.mkdir()
+        _write_synthetic_band(d / "cmf.tif")
+        (d / "uas.txt").write_text("instrument: tan\nplatform: Tanager-1\n")
+        ir = CMImageRaster.from_local(d)
+        assert ir.uas is not None
+        assert "Tanager-1" in ir.uas
 
+    def test_uas_returns_none_when_absent(self, tmp_path):
+        d = tmp_path / "scene"
+        d.mkdir()
+        _write_synthetic_band(d / "cmf.tif")
+        ir = CMImageRaster.from_local(d)
+        assert ir.uas is None
 
-class TestCMPlumeRasterPolygon:
-    def test_polygon_from_alpha_returns_4326(self, tmp_path):
-        path = tmp_path / "plume.tif"
-        _write_4band_plume(path)
-        pr = CMPlumeRaster(plume_id="tan-foo-A",
-                           urls={"plume_tif": str(path)})
-        poly = pr.polygon_from_alpha()
-        assert poly is not None
-        # mask centred in [-100, -99] × [30, 31]
-        assert -100 <= poly.bounds[0] <= -99
-        assert 30 <= poly.bounds[1] <= 31
-
-    def test_polygon_from_alpha_none_when_no_pixels(self, tmp_path):
-        path = tmp_path / "plume.tif"
-        # Empty mask
-        arr = np.zeros((4, 100, 100), dtype="uint8")
-        transform = t_from_bounds(-100, 30, -99, 31, 100, 100)
-        with rasterio.open(
-            str(path), "w", driver="GTiff", count=4, dtype="uint8",
-            width=100, height=100, transform=transform, crs="EPSG:4326",
-        ) as dst:
-            dst.write(arr)
-        pr = CMPlumeRaster(plume_id="x", urls={"plume_tif": str(path)})
-        assert pr.polygon_from_alpha() is None
-
-    def test_polygon_prefers_geojson_when_present(self, tmp_path, monkeypatch):
-        pr = CMPlumeRaster(
-            plume_id="tan-foo-A",
-            urls={"plume_tif": "x", "ime_outline_geojson": "y"},
-        )
-        monkeypatch.setattr(
-            type(pr), "polygon_from_geojson", lambda self: box(0, 0, 1, 1),
-        )
-        monkeypatch.setattr(
-            type(pr), "polygon_from_alpha",
-            lambda self: pytest.fail("alpha path must not run"),
-        )
-        assert pr.polygon().area == 1.0
-
-    def test_polygon_falls_back_to_alpha(self, tmp_path):
-        path = tmp_path / "plume.tif"
-        _write_4band_plume(path)
-        pr = CMPlumeRaster(plume_id="x", urls={"plume_tif": str(path)})
-        # No outline → falls through to alpha extraction.
-        poly = pr.polygon()
-        assert poly is not None
-        assert -100 <= poly.bounds[0] <= -99
-
-
-class TestCMPlumeRasterDirectLoads:
-    def test_load_alpha_mask_returns_boolean_geotensor(self, tmp_path):
-        path = tmp_path / "plume.tif"
-        _write_4band_plume(path)
-        pr = CMPlumeRaster(plume_id="x", urls={"plume_tif": str(path)})
-        m = pr.load_alpha_mask()
-        assert isinstance(m, GeoTensor)
-        assert m.values.dtype == bool
-        # Mask covers the inner [30:70, 30:70] block of a 100×100 raster.
-        assert m.values.sum() == 40 * 40
-
-
-class TestCMPlumeRasterFactories:
-    def test_from_plume_dict_drops_non_geotiff(self):
-        pr = CMPlumeRaster.from_plume_dict({
-            "plume_id": "tan-foo-A",
-            "plume_tif": "https://x/.tif",
-            "con_tif": "https://x/con.tif",       # ignored
-            "rgb_png": "https://x/.png",          # ignored
-            "plume_png": "https://x/.png",        # ignored
-            "plume_rgb_png": "https://x/.png",    # ignored
-            "rgb_tif": None,                      # ignored (None)
-        })
-        assert pr.plume_id == "tan-foo-A"
-        assert "plume_tif" in pr.urls
-        for dropped in ("con_tif", "rgb_png", "plume_png",
-                        "plume_rgb_png", "rgb_tif"):
-            assert dropped not in pr.urls
-
-    def test_from_cmrawplume_pulls_only_plume_tif(self):
-        from georeader.readers.carbonmapper.plume import CMRawPlume
-        raw = CMRawPlume(
-            plume_id="tan-foo-A",
-            plume_tif="https://x/.tif",
-            con_tif="https://x/con.tif",
-            rgb_png="https://x/rgb.png",
-        )
-        pr = CMPlumeRaster.from_cmrawplume(raw)
-        assert pr.plume_id == "tan-foo-A"
-        assert pr.urls == {"plume_tif": "https://x/.tif"}
-
-    def test_with_outline_returns_copy(self):
-        pr = CMPlumeRaster(plume_id="x", urls={"plume_tif": "p.tif"})
-        pr2 = pr.with_outline("outline.geojson")
-        assert pr2 is not pr
-        assert pr2.urls["plume_tif"] == "p.tif"
-        assert pr2.urls["ime_outline_geojson"] == "outline.geojson"
-        # Original unchanged
-        assert "ime_outline_geojson" not in pr.urls
+    def test_read_polygon_skips_uas(self, tmp_path):
+        """`uas` is text, not a raster — read_polygon must not try to
+        open it as a band even if it's in the requested bands list."""
+        d = tmp_path / "scene"
+        d.mkdir()
+        _write_synthetic_band(d / "cmf.tif")
+        (d / "uas.txt").write_text("xyz")
+        ir = CMImageRaster.from_local(d)
+        # Default bands now includes more entries; no error from `uas`
+        clip = box(500_500, 3_500_500, 559_500, 3_559_500)
+        out = ir.read_polygon(clip, crs_polygon="EPSG:32613")
+        # cmf returned; uas not tried
+        assert out["cmf"] is not None
+        assert "uas" not in out
 
 
 # ─── Bands constant ─────────────────────────────────────────────────
 
 
 def test_cm_l2b_bands_constant():
-    assert CM_L2B_BANDS == ("cmf", "rgb", "uncertainty", "artifact-mask")
+    """Widened from the original 4-band tuple to include the unortho
+    variants of cmf and uncertainty."""
+    assert CM_L2B_BANDS == (
+        "cmf", "cmf-unortho",
+        "uncertainty", "uncertainty-unortho",
+        "artifact-mask", "rgb",
+    )
 
 
 # ─── __repr__ / __str__ ─────────────────────────────────────────────
@@ -426,35 +364,3 @@ class TestCMImageRasterRepr:
     def test_str_equals_repr(self, tmp_path):
         ir = CMImageRaster.from_local(_make_l2b_dir(tmp_path))
         assert str(ir) == repr(ir)
-
-
-class TestCMPlumeRasterRepr:
-    def test_repr_present_absent_states(self):
-        pr = CMPlumeRaster(plume_id="tan-A", urls={"plume_tif": "p.tif"})
-        text = repr(pr)
-        assert text.startswith("CMPlumeRaster")
-        assert "tan-A" in text
-        assert "plume_tif:      present" in text
-        assert "ime_outline:    absent" in text
-
-    def test_repr_outline_present(self):
-        pr = CMPlumeRaster(
-            plume_id="tan-A",
-            urls={"plume_tif": "p.tif", "ime_outline_geojson": "o.geojson"},
-        )
-        text = repr(pr)
-        assert "ime_outline:    present" in text
-
-    def test_repr_flags_ignored_keys(self):
-        pr = CMPlumeRaster(
-            plume_id="tan-A",
-            urls={"plume_tif": "p.tif", "con_tif": "x", "rgb_png": "x"},
-        )
-        text = repr(pr)
-        assert "ignored keys" in text
-        assert "con_tif" in text
-        assert "rgb_png" in text
-
-    def test_str_equals_repr(self):
-        pr = CMPlumeRaster(plume_id="tan-A", urls={"plume_tif": "p.tif"})
-        assert str(pr) == repr(pr)

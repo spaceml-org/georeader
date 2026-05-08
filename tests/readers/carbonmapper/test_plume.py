@@ -10,6 +10,9 @@ from georeader.readers.carbonmapper.plume import (
     CARBONMAPPER_INSTRUMENTS,
     CMRawPlume,
     CarbonMapperPlumeRaw,
+    Collection,
+    Gas,
+    Instrument,
     _parse_iso_datetime,
     _to_float,
     decompose_wind,
@@ -336,3 +339,123 @@ class TestRepr:
     def test_repr_contains_plume_id(self):
         plume = CMRawPlume.from_raw(_json_raw())
         assert "emi20240420t101448p07050-A" in repr(plume)
+
+
+# ---------------------------------------------------------------------------
+# scene_id / scene_uuid / version derived properties
+# ---------------------------------------------------------------------------
+
+
+class TestSceneIdProperty:
+    """`scene_id` is derived from `plume_id` (not the API's UUID field)."""
+
+    def test_scene_id_strips_part_suffix(self):
+        plume = CMRawPlume.from_raw(_json_raw())
+        # "emi20240420t101448p07050-A" → "emi20240420t101448p07050"
+        assert plume.scene_id == "emi20240420t101448p07050"
+
+    def test_scene_id_for_tanager(self):
+        plume = CMRawPlume.from_raw(_csv_raw(
+            plume_id="tan20251212t185057c20s4001-E",
+        ))
+        assert plume.scene_id == "tan20251212t185057c20s4001"
+
+    def test_scene_id_handles_two_hyphens(self):
+        """If the plume_id ever gains an extra hyphen segment, rsplit
+        only strips the last one."""
+        plume = CMRawPlume.from_raw(_csv_raw(
+            plume_id="tan20251212t185057c20s4001-foo-A",
+        ))
+        assert plume.scene_id == "tan20251212t185057c20s4001-foo"
+
+    def test_scene_uuid_holds_api_uuid(self):
+        """The API's `scene_id` (UUID) lands on the renamed `scene_uuid`
+        field via the `alias`."""
+        plume = CMRawPlume.from_raw(_json_raw(
+            scene_id="64a51834-5fe5-40e0-aadd-e0c5944850c3",
+        ))
+        assert plume.scene_uuid == "64a51834-5fe5-40e0-aadd-e0c5944850c3"
+        # And the property returns the parseable form, not the UUID
+        assert plume.scene_id == "emi20240420t101448p07050"
+
+
+class TestVersionProperty:
+    def test_version_re_exposes_emission_version(self):
+        plume = CMRawPlume.from_raw(_json_raw(emission_version="v3a"))
+        assert plume.version == "v3a"
+
+    def test_version_v3c(self):
+        plume = CMRawPlume.from_raw(_json_raw(emission_version="v3c"))
+        assert plume.version == "v3c"
+
+    def test_version_none_when_absent(self):
+        plume = CMRawPlume.from_raw(_csv_raw())   # no emission_version
+        assert plume.version is None
+
+
+# ---------------------------------------------------------------------------
+# Enums (Gas / Instrument / Collection)
+# ---------------------------------------------------------------------------
+
+
+class TestGasEnum:
+    def test_members(self):
+        assert Gas.CH4.value == "CH4"
+        assert Gas.CO2.value == "CO2"
+
+    def test_str_serialises_to_value(self):
+        assert str(Gas.CH4) == "CH4"
+
+    def test_construct_from_string(self):
+        assert Gas("CH4") is Gas.CH4
+
+    def test_satisfies_str_protocol(self):
+        # StrEnum inherits from str — usable as a string anywhere
+        assert isinstance(Gas.CH4, str)
+        assert "CH4".startswith(Gas.CH4)
+
+
+class TestInstrumentEnum:
+    def test_members(self):
+        assert Instrument.TANAGER.value == "tan"
+        assert Instrument.EMIT.value == "emi"
+        assert Instrument.AVIRIS_NG.value == "ang"
+        assert Instrument.AVIRIS_3.value == "av3"
+        assert Instrument.GAO.value == "GAO"   # upstream uppercase
+
+    def test_case_insensitive_lookup(self):
+        # Both lowercase and uppercase free-form strings resolve to the
+        # canonical member via the `_missing_` hook
+        assert Instrument("tan") is Instrument.TANAGER
+        assert Instrument("TAN") is Instrument.TANAGER
+        assert Instrument("Tan") is Instrument.TANAGER
+
+    def test_gao_normalises_both_cases(self):
+        assert Instrument("GAO") is Instrument.GAO
+        assert Instrument("gao") is Instrument.GAO
+
+    def test_unknown_raises(self):
+        with pytest.raises(ValueError):
+            Instrument("not-an-instrument")
+
+
+class TestCollectionEnum:
+    def test_v3a_is_stac_resident(self):
+        assert Collection.L3A_VIS_V3A.is_stac_resident
+        assert Collection.L3A_IME_V3A.is_stac_resident
+        assert Collection.L2B_V3A.is_stac_resident
+        assert Collection.L2B_RGB_V3A.is_stac_resident
+
+    def test_v3c_is_not_stac_resident(self):
+        assert not Collection.L3A_VIS_V3C.is_stac_resident
+        assert not Collection.L3A_IME_V3C.is_stac_resident
+
+    def test_version_property(self):
+        assert Collection.L3A_VIS_V3A.version == "v3a"
+        assert Collection.L3A_VIS_V3C.version == "v3c"
+        assert Collection.L2B_V3A.version == "v3a"
+
+    def test_string_value(self):
+        assert Collection.L3A_VIS_V3A.value == "l3a-vis-ch4-mfa-v3a"
+        assert Collection.L3A_IME_V3C.value == "l3a-ime-ch4-mfa-v3c"
+        assert Collection.L2B_RGB_V3A.value == "l2b-rgb-v3a"

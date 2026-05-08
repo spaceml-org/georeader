@@ -76,7 +76,7 @@ from shapely.geometry import shape
 from shapely.geometry.base import BaseGeometry
 
 from georeader.readers.carbonmapper import download as _dl
-from georeader.readers.carbonmapper.plume import CMRawPlume
+from georeader.readers.carbonmapper.plume import CMRawPlume, Gas
 from georeader.readers.carbonmapper.source import CMSource, _strip_query_suffix
 
 BBox = tuple[float, float, float, float]   # (W, S, E, N) WGS-84
@@ -473,7 +473,7 @@ def list_plumes(
     instruments: list[str] | None = None,
     datetime_min: datetime | None = None,
     datetime_max: datetime | None = None,
-    gas: str = "CH4",
+    gas: Gas | Literal["CH4"] = Gas.CH4,
     limit: int = 1_000,
 ) -> list[CMRawPlume]:
     """Materialised list of plumes matching filters.
@@ -491,11 +491,15 @@ def list_plumes(
     sectors:
         IPCC sector codes — e.g. ``["1B2", "6A"]``.
     instruments:
-        Instrument short codes — e.g. ``["emi", "tan"]``.
+        Instrument short codes — e.g. ``["emi", "tan"]`` or
+        :class:`Instrument` members like ``[Instrument.EMIT, Instrument.TANAGER]``.
     datetime_min, datetime_max:
         Optional UTC bounds — combined into an RFC 3339 interval.
     gas:
-        ``"CH4"`` (default) or ``"CO2"``.
+        :data:`Gas.CH4` (default). **CH4-only for this PR**;
+        ``Gas.CO2`` lands in a follow-up. Typed as
+        ``Gas | Literal["CH4"]`` so plain string call-sites
+        (``gas="CH4"``) continue to type-check.
     limit:
         Max rows returned in this call. The API caps at 1 000 per page.
 
@@ -521,7 +525,7 @@ def list_plumes(
     """
     dt_range = _build_datetime_range(datetime_min, datetime_max)
     result = _dl.get_plumes_annotated(
-        plume_gas=gas,
+        plume_gas=str(gas),
         bbox=bbox,
         datetime_range=dt_range,
         sectors=sectors,
@@ -588,7 +592,7 @@ def list_sources(
     *,
     bbox: BBox | None = None,
     sectors: list[str] | None = None,
-    gas: str = "CH4",
+    gas: Gas | Literal["CH4"] = Gas.CH4,
 ) -> list[CMSource]:
     """List Carbon Mapper sources matching filters.
 
@@ -606,7 +610,8 @@ def list_sources(
     sectors:
         IPCC sector codes.
     gas:
-        ``"CH4"`` (default) or ``"CO2"``.
+        :data:`Gas.CH4` (default). **CH4-only for this PR**;
+        ``Gas.CO2`` lands in a follow-up.
 
     Returns
     -------
@@ -628,7 +633,7 @@ def list_sources(
     # `/plumes/annotated` (see its docstring) — the true source listing
     # lives at `/catalog/sources.geojson` and returns a GeoJSON
     # FeatureCollection. Hit it directly with REST repeated-keys bbox.
-    params: list[tuple[str, str]] = [("plume_gas", gas)]
+    params: list[tuple[str, str]] = [("plume_gas", str(gas))]
     if bbox is not None:
         for v in bbox:
             params.append(("bbox", str(v)))
@@ -819,7 +824,7 @@ def list_plumes_for_tile(
     token: str,
     scene_id: str,
     *,
-    gas: str = "CH4",
+    gas: Gas | Literal["CH4"] = Gas.CH4,
 ) -> list[CMRawPlume]:
     """All plumes attributed to a given L2B scene.
 
@@ -834,7 +839,8 @@ def list_plumes_for_tile(
     scene_id:
         L2B scene id, e.g. ``"tan20251212t185057c20s4001"``.
     gas:
-        ``"CH4"`` (default) or ``"CO2"``.
+        :data:`Gas.CH4` (default). **CH4-only for this PR**;
+        ``Gas.CO2`` lands in a follow-up.
 
     Returns
     -------
@@ -856,7 +862,7 @@ def list_plumes_for_tile(
     ['A', 'B', 'C', 'E']
     """
     result = _dl.get_plumes_annotated(
-        plume_gas=gas,
+        plume_gas=str(gas),
         limit=1_000,
         token=token,
     )
@@ -916,7 +922,16 @@ def list_plumes_for_source(
     df = pd.read_csv(io.StringIO(csv_text))
     if limit and len(df) > limit:
         df = df.head(limit)
-    return [CMRawPlume(**row) for row in df.to_dict(orient="records")]
+    # CSV -> dict gives `float('nan')` for empty cells. Pydantic
+    # str-typed fields like `sensitivity_mode` reject NaN; coerce
+    # NaNs to None so optional fields fall back to their defaults.
+    rows = df.to_dict(orient="records")
+    cleaned: list[CMRawPlume] = []
+    for row in rows:
+        sane = {k: (None if isinstance(v, float) and v != v else v)
+                for k, v in row.items()}
+        cleaned.append(CMRawPlume(**sane))
+    return cleaned
 
 
 def list_tiles_for_source(

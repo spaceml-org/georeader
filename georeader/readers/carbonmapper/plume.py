@@ -15,6 +15,21 @@ Handles payloads from **both** Carbon Mapper API formats:
 All fields except ``plume_id`` are optional so that the model can be
 constructed from either format without validation errors.
 
+**CH4 only for this PR.** The catalog model surface is gas-agnostic
+(``CMRawPlume.gas`` returns whatever the API gave us), but query
+helpers in :mod:`api_queries` are typed ``Literal["CH4"]`` to keep
+the supported-product surface explicit. CO2 lands in a follow-up.
+
+**Version timeline.** Carbon Mapper bumps ``emission_version`` per
+processing-software release. ``v3a`` is the canonical STAC-exposed
+version family (in ``/stac/collections``); ``v3c`` is the live
+processing version of newer plumes — reachable via direct asset
+URLs from ``/catalog/plume/{id}`` but **not** registered in STAC.
+The :attr:`CMRawPlume.version` property exposes this so callers can
+branch between STAC-item lookup (v3a) and URL-pattern derivation
+(v3c) — see :class:`~georeader.readers.carbonmapper.image.CMPlumeImage`,
+which handles both transparently.
+
 This module is the **API-side** typed view of a Carbon Mapper plume
 record. Downstream consumers (e.g. UNEP IMEO MARS) may persist the
 record into their own tables / views; field-level docstrings below
@@ -31,11 +46,75 @@ import json
 import math
 import re
 from datetime import datetime, timezone
+from enum import StrEnum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from shapely.geometry import box, shape
 from shapely.geometry.base import BaseGeometry
+
+
+# ---------------------------------------------------------------------------
+# Enums (constrained value sets)
+# ---------------------------------------------------------------------------
+
+
+class Gas(StrEnum):
+    """Gas species in the Carbon Mapper catalog.
+
+    Used as the closed-set type for ``gas`` parameters on the typed
+    query helpers in :mod:`api_queries`. ``CMRawPlume.gas`` stays a
+    plain ``str`` so the model is forgiving of unexpected upstream
+    values.
+
+    >>> Gas.CH4
+    <Gas.CH4: 'CH4'>
+    >>> str(Gas.CH4)
+    'CH4'
+    >>> Gas("CH4") is Gas.CH4
+    True
+    """
+
+    CH4 = "CH4"
+    CO2 = "CO2"
+
+
+class Instrument(StrEnum):
+    """Carbon Mapper instrument short codes.
+
+    Carbon Mapper is **case-sensitive** on these codes upstream:
+    ``tan`` / ``emi`` / ``ang`` / ``av3`` are lowercase; ``GAO`` is
+    uppercase. Filter values must match (e.g. ``instrument=gao``
+    silently returns no results — use ``GAO``). The :meth:`_missing_`
+    hook normalises any case to the canonical upstream form when
+    constructing the enum from a free-form string:
+
+    >>> Instrument("tan") is Instrument.TANAGER
+    True
+    >>> Instrument("TAN") is Instrument.TANAGER  # case-insensitive lookup
+    True
+    >>> Instrument("gao") is Instrument.GAO       # also normalises GAO
+    True
+    >>> str(Instrument.GAO)                       # serialises to upstream form
+    'GAO'
+    """
+
+    TANAGER = "tan"
+    EMIT = "emi"
+    AVIRIS_NG = "ang"
+    AVIRIS_3 = "av3"
+    GAO = "GAO"   # upstream uses uppercase for this one
+
+    @classmethod
+    def _missing_(cls, value: object) -> Instrument | None:
+        """Case-insensitive fallback so upstream variants (``"GAO"`` vs
+        ``"gao"``) all resolve to the canonical member."""
+        if isinstance(value, str):
+            lowered = value.lower()
+            for member in cls:
+                if member.value.lower() == lowered:
+                    return member
+        return None
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -88,6 +167,67 @@ CARBONMAPPER_INSTRUMENTS: dict[str, str] = {
     "gao": "Global Airborne Observatory",
     "av3": "AVIRIS-3",
 }
+
+# ---------------------------------------------------------------------------
+# Active CH4 collection identifiers
+# ---------------------------------------------------------------------------
+
+
+class Collection(StrEnum):
+    """Active CH4 Carbon Mapper collection identifiers.
+
+    Values are the canonical collection IDs used in
+    ``/stac/collections/<id>`` paths and embedded in the asset URLs
+    returned by ``/catalog/plume/{id}``.
+
+    Two version families currently relevant to this reader:
+
+    - ``*_V3A`` — STAC-registered. Plumes from 2023-10 to 2025-12.
+      The canonical "current" for STAC consumers.
+    - ``*_V3C`` — newest data (post 2026-01) but **not** registered
+      in ``/stac/collections``. Assets are reachable only via
+      URL-pattern derivation from the REST catalog (see
+      :class:`~georeader.readers.carbonmapper.image.CMPlumeImage`).
+
+    Use :attr:`is_stac_resident` to branch between STAC-item lookup
+    (v3a) and URL-pattern derivation (v3c) at runtime.
+
+    >>> Collection.L3A_VIS_V3A.value
+    'l3a-vis-ch4-mfa-v3a'
+    >>> Collection.L3A_VIS_V3A.is_stac_resident
+    True
+    >>> Collection.L3A_VIS_V3C.is_stac_resident
+    False
+    >>> Collection.L3A_VIS_V3A.version
+    'v3a'
+    """
+
+    #: L3A vis — per-plume mask + concentrations + outline + RGB
+    L3A_VIS_V3A = "l3a-vis-ch4-mfa-v3a"
+    #: L3A IME — IME-clipped concentration + mask + outline
+    L3A_IME_V3A = "l3a-ime-ch4-mfa-v3a"
+    #: L2B scene — cmf / uncertainty / artifact-mask / unortho variants
+    L2B_V3A = "l2b-ch4-mfa-v3a"
+    #: L2B RGB sibling — true-colour rasters aligned to L2B_V3A scenes
+    L2B_RGB_V3A = "l2b-rgb-v3a"
+    #: L3A vis v3c — REST-only, not in /stac/collections
+    L3A_VIS_V3C = "l3a-vis-ch4-mfa-v3c"
+    #: L3A IME v3c — REST-only, not in /stac/collections
+    L3A_IME_V3C = "l3a-ime-ch4-mfa-v3c"
+
+    @property
+    def is_stac_resident(self) -> bool:
+        """``True`` if the collection is registered in ``/stac/collections``.
+
+        ``False`` for v3c collections — assets reachable only via the
+        URL-pattern fallback in :class:`CMPlumeImage`.
+        """
+        return not self.value.endswith("-v3c")
+
+    @property
+    def version(self) -> str:
+        """Processing version segment (``"v3a"`` / ``"v3c"``)."""
+        return self.value.rsplit("-", 1)[1]
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -288,12 +428,16 @@ class CMRawPlume(BaseModel):
             "``datetime``. Either field may be populated, never both."
         ),
     )
-    scene_id: str | None = Field(
+    scene_uuid: str | None = Field(
         default=None,
+        alias="scene_id",
         description=(
-            "Parent L2B scene id, equivalent to "
-            "``plume_id.rsplit('-', 1)[0]``. Same string used as the "
-            "STAC item id in the ``l2b-ch4-mfa-v3a`` collection."
+            "Internal Carbon Mapper scene UUID — what the API returns "
+            "in the ``scene_id`` JSON field. **Not** the parseable scene "
+            "name (e.g. ``tan20251212t185057c20s4001``); for that, use "
+            "the :attr:`scene_id` property which derives from "
+            "``plume_id.rsplit('-', 1)[0]`` and matches the STAC item id "
+            "in the ``l2b-ch4-mfa-v3a`` collection."
         ),
     )
     published_at_str: str | None = Field(
@@ -679,6 +823,37 @@ class CMRawPlume(BaseModel):
             self.instrument.lower(), self.instrument,
         )
 
+    @property
+    def scene_id(self) -> str:
+        """Parent L2B scene id, derived from ``plume_id``.
+
+        Equivalent to ``plume_id.rsplit('-', 1)[0]`` — same string used
+        as the STAC item id in the ``l2b-ch4-mfa-v3a`` collection. Use
+        this to bridge from a plume to its parent scene without an HTTP
+        round-trip:
+
+        >>> raw.scene_id                       # doctest: +SKIP
+        'tan20251212t185057c20s4001'
+        >>> tile = api_queries.get_tile(token, raw.scene_id)  # doctest: +SKIP
+
+        Distinct from :attr:`scene_uuid`, which is the API's internal
+        UUID for the scene.
+        """
+        return self.plume_id.rsplit("-", 1)[0]
+
+    @property
+    def version(self) -> str | None:
+        """Processing version (``"v3a"`` / ``"v3b"`` / ``"v3c"`` / ...).
+
+        Re-exposes :attr:`emission_version` as a more obvious branch
+        point for STAC-vs-CDN access: ``v3a`` plumes are STAC-resident,
+        ``v3c`` plumes are reachable only via the URL-pattern derivation
+        in :class:`~georeader.readers.carbonmapper.image.CMPlumeImage`.
+        Returns ``None`` if the upstream payload didn't include
+        ``emission_version`` (older CSV exports).
+        """
+        return self.emission_version
+
     # ------------------------------------------------------------------ #
     # Serialisation                                                        #
     # ------------------------------------------------------------------ #
@@ -698,8 +873,10 @@ class CMRawPlume(BaseModel):
             d["datetime"] = self.datetime_str
         if self.scene_timestamp is not None:
             d["scene_timestamp"] = self.scene_timestamp
-        if self.scene_id is not None:
-            d["scene_id"] = self.scene_id
+        # Round-trip the API's `scene_id` (UUID) under its on-the-wire
+        # name; the parseable form is derived via the property.
+        if self.scene_uuid is not None:
+            d["scene_id"] = self.scene_uuid
         if self.published_at_str is not None:
             d["published_at"] = self.published_at_str
         if self.modified_str is not None:

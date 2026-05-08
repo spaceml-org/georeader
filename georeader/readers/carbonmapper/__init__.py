@@ -22,9 +22,14 @@ but is split into multiple files because the surface area is larger:
 - :mod:`~georeader.readers.carbonmapper.source` — :class:`CMSource`
   dataclass for ``/catalog/sources.geojson`` features.
 - :mod:`~georeader.readers.carbonmapper.rasters` —
-  :class:`CMImageRaster` (L2B scene) and :class:`CMPlumeRaster` (L3A
-  per-plume mask). Lazy ``RasterioReader``-backed band accessors that
-  delegate to ``georeader.read``.
+  :class:`CMImageRaster` (L2B scene). Lazy
+  ``RasterioReader``-backed band accessors that delegate to
+  ``georeader.read``.
+- :mod:`~georeader.readers.carbonmapper.image` —
+  :class:`CMPlumeImage` (per-plume L3A product bundle: mask,
+  concentrations, IME-clipped concentrations, RGB, outline). Handles
+  both v3a (STAC-resident) and v3c (CDN-only) plumes via
+  URL-pattern derivation.
 
 Optional install: ``pip install 'georeader-spaceml[carbonmapper]'``
 (adds ``pydantic`` and ``requests`` — both Carbon-Mapper-only).
@@ -75,19 +80,25 @@ from georeader.readers.carbonmapper.download import (
     stac_list_collections,
     stac_search,
 )
+from georeader.readers.carbonmapper.image import (
+    CM_PLUME_IMAGE_ASSETS,
+    CMPlumeImage,
+)
 from georeader.readers.carbonmapper.plume import (
     CARBONMAPPER_INSTRUMENTS,
     CARBONMAPPER_PLUME_PARAMS,
     CM_INSTRUMENT_TO_SATELLITE,
     CMRawPlume,
     CarbonMapperPlumeRaw,
+    Collection,
+    Gas,
+    Instrument,
     decompose_wind,
 )
 from georeader.readers.carbonmapper.rasters import (
     CM_L2B_BANDS,
     DEFAULT_L2B_RGB_COLLECTION,
     CMImageRaster,
-    CMPlumeRaster,
 )
 from georeader.readers.carbonmapper.source import CMSource
 from georeader.readers.carbonmapper.sources_raster import (
@@ -101,10 +112,11 @@ __all__ = [
     "CARBONMAPPER_PLUME_PARAMS",
     "CM_INSTRUMENT_TO_SATELLITE",
     "CM_L2B_BANDS",
+    "CM_PLUME_IMAGE_ASSETS",
     "CMAPIError",
     "CMImageRaster",
+    "CMPlumeImage",
     "CMPlumeNotFound",
-    "CMPlumeRaster",
     "CMRawPlume",
     "CMSceneNotPublished",
     "CMSource",
@@ -113,8 +125,11 @@ __all__ = [
     "CMTileItem",
     "CarbonMapperConfig",
     "CarbonMapperPlumeRaw",
+    "Collection",
     "DEFAULT_L2B_COLLECTION",
     "DEFAULT_L2B_RGB_COLLECTION",
+    "Gas",
+    "Instrument",
     "decompose_wind",
     "download_asset",
     "download_plume_assets",

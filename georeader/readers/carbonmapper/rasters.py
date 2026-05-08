@@ -1,21 +1,22 @@
-"""Carbon Mapper raster wrappers backed by georeader.
+"""Carbon Mapper L2B scene raster wrapper.
 
-Two product families — **GeoTIFF only**:
+:class:`CMImageRaster` exposes every loadable L2B scene asset
+(``cmf`` / ``cmf-unortho`` / ``uncertainty`` /
+``uncertainty-unortho`` / ``artifact-mask`` / ``rgb`` / ``uas``) as
+lazy properties backed by :class:`~georeader.rasterio_reader.RasterioReader`
+(or plain text for the ``uas.txt`` sidecar).
 
-- :class:`CMImageRaster` — L2B scene (``cmf`` / ``rgb`` / ``uncertainty`` /
-  ``artifact-mask``).
-- :class:`CMPlumeRaster` — L3A per-plume mask (``plume_tif`` only).
-
-Both expose lazy :class:`~georeader.rasterio_reader.RasterioReader`
-instances per band and helpers that delegate to ``georeader.read``.
+Per-plume L3A products (mask, concentrations, IME-clipped
+concentrations, RGB, outline) live in
+:mod:`~georeader.readers.carbonmapper.image` —
+:class:`~georeader.readers.carbonmapper.image.CMPlumeImage` is the
+counterpart to this class for plume-level data.
 
 Intentionally NOT wrapped:
 
-- PNG assets (``rgb_png`` / ``plume_png`` / ``plume_rgb_png``) —
-  un-georeferenced; not COGs.
-- Per-plume ``con_tif`` — duplicates a circular crop of the scene's
-  ``cmf``. Crop ``CMImageRaster.cmf`` to the plume polygon to get
-  the same data without the duplicate asset.
+- PNG assets (``rgb_png`` etc.) — un-georeferenced, not COGs.
+- Per-plume ``con_tif`` from the catalog REST surface — duplicates
+  the column-density crop already provided by ``CMPlumeImage``.
 
 Pure raster wrappers — no DB binding, no blob upload. The DB-bound
 classes (``CarbonMapperTile``, ``CarbonMapperLocationImage``) and the
@@ -24,16 +25,17 @@ analyst notebooks consume them.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 from typing import Iterable, Mapping, Optional, cast
 
-import numpy as np
+import requests
 from shapely.geometry import box
 from shapely.geometry.base import BaseGeometry
 
-from georeader import read, window_utils
+from georeader import read
 from georeader.abstract_reader import GeoData
 from georeader.geotensor import GeoTensor
 from georeader.rasterio_reader import RasterioReader
@@ -42,7 +44,6 @@ from georeader.rasterio_reader import RasterioReader
 # both ``RasterioReader`` and ``GeoTensor``).
 
 from georeader.readers.carbonmapper.api_queries import CMTileItem
-from georeader.readers.carbonmapper.plume import CMRawPlume
 
 BBox = tuple[float, float, float, float]   # (W, S, E, N) in WGS-84
 PathLike = str | Path
@@ -52,7 +53,22 @@ PathLike = str | Path
 #  L2B scene raster
 # ─────────────────────────────────────────────────────────────────────
 
-CM_L2B_BANDS: tuple[str, ...] = ("cmf", "rgb", "uncertainty", "artifact-mask")
+#: L2B asset keys exposed as lazy properties on :class:`CMImageRaster`.
+#: Includes the orthorectified retrievals (``cmf`` / ``uncertainty``),
+#: the un-orthorectified raw-frame variants, the ``artifact-mask``
+#: anomaly flag layer, and the ``rgb`` true-colour sibling.
+#: ``uas`` (text sidecar) is intentionally not in this tuple — it's
+#: surfaced via the :attr:`CMImageRaster.uas` property as a plain
+#: string, not as a raster band.
+CM_L2B_BANDS: tuple[str, ...] = (
+    "cmf", "cmf-unortho",
+    "uncertainty", "uncertainty-unortho",
+    "artifact-mask", "rgb",
+)
+
+#: Asset keys retained on :class:`CMImageRaster.asset_paths` —
+#: the raster bands above plus the ``uas`` sidecar.
+_CM_L2B_KEYS_ALL: tuple[str, ...] = CM_L2B_BANDS + ("uas",)
 
 #: Default STAC collection for the L2B RGB sibling raster. Carbon Mapper
 #: publishes the surface RGB and the CH4 retrieval as **separate STAC
@@ -91,16 +107,21 @@ class CMImageRaster:
 
         STAC asset keys carry file extensions (``cmf.tif``,
         ``uncertainty.tif``, ``artifact-mask.tif``, ``uas.txt``,
-        ``*-unortho.tif`` variants). This method strips the ``.tif``
-        extension on the canonical bands and ignores everything else
-        (text sidecars, un-orthorectified variants).
+        ``*-unortho.tif`` variants). This method strips the
+        appropriate extension and retains every key listed in
+        :data:`CM_L2B_BANDS` plus ``uas`` (the text sidecar).
         """
         paths: dict[str, PathLike] = {}
         for key, url in item.asset_urls.items():
             if not url:
                 continue
-            stripped = key[:-4] if key.endswith(".tif") else key
-            if stripped in CM_L2B_BANDS:
+            if key.endswith(".tif"):
+                stripped = key[:-4]
+            elif key.endswith(".txt"):
+                stripped = key[:-4]
+            else:
+                stripped = key
+            if stripped in _CM_L2B_KEYS_ALL:
                 paths[stripped] = url
         return cls(scene_id=item.scene_id, asset_paths=paths)
 
@@ -147,9 +168,10 @@ class CMImageRaster:
     def from_local(cls, scene_dir: PathLike) -> "CMImageRaster":
         """Build from a downloaded scene directory.
 
-        Looks for ``cmf.tif`` / ``rgb.tif`` / ``uncertainty.tif`` /
-        ``artifact-mask.tif`` under ``scene_dir``; missing files become
-        absent keys in ``asset_paths``.
+        Picks up every L2B asset present (``cmf.tif`` / ``rgb.tif`` /
+        ``uncertainty.tif`` / ``artifact-mask.tif`` and the
+        un-orthorectified variants), plus the ``uas.txt`` sidecar.
+        Missing files become absent keys in ``asset_paths``.
         """
         d = Path(scene_dir)
         paths: dict[str, PathLike] = {}
@@ -157,20 +179,31 @@ class CMImageRaster:
             p = d / f"{band}.tif"
             if p.exists():
                 paths[band] = str(p)
+        uas_path = d / "uas.txt"
+        if uas_path.exists():
+            paths["uas"] = str(uas_path)
         return cls(scene_id=d.name, asset_paths=paths)
 
     # ---- Lazy band readers --------------------------------------------
 
     @cached_property
     def cmf(self) -> RasterioReader:
-        """CH4 matched-filter retrieval (ppm·m). Always present."""
+        """CH4 matched-filter retrieval, orthorectified (ppm·m).
+        Always present on L2B-CH4 items."""
         return self._open("cmf")
+
+    @cached_property
+    def cmf_unortho(self) -> Optional[RasterioReader]:
+        """CH4 retrieval in raw sensor frame (pre-orthorectification).
+        ``None`` for older collection variants (e.g. ``mfm-v1``) that
+        don't ship the unortho sibling."""
+        return self._open_optional("cmf-unortho")
 
     @cached_property
     def rgb(self) -> Optional[RasterioReader]:
         """3-band uint8 RGB. ``None`` for L2B-CH4 collections (RGB lives
         in a separate STAC collection — fetch and pass via
-        ``asset_paths`` if needed)."""
+        ``asset_paths`` or compose via :meth:`with_rgb`)."""
         return self._open_optional("rgb")
 
     @cached_property
@@ -179,9 +212,47 @@ class CMImageRaster:
         return self._open("uncertainty")
 
     @cached_property
+    def uncertainty_unortho(self) -> Optional[RasterioReader]:
+        """Per-pixel uncertainty in raw sensor frame. ``None`` for
+        older collection variants without the unortho sibling."""
+        return self._open_optional("uncertainty-unortho")
+
+    @cached_property
     def artifact_mask(self) -> Optional[RasterioReader]:
-        """Optional artefact mask (covers ~25% of scene). ``None`` if absent."""
+        """Artefact mask (covers ~25% of scene). Flags un-orthorectified
+        strip pixels and geometric anomalies — **not** a cloud mask.
+        ``None`` if absent."""
         return self._open_optional("artifact-mask")
+
+    @cached_property
+    def uas(self) -> Optional[str]:
+        """UAS sensor-metadata sidecar — raw text from ``uas.txt``.
+
+        Lazy-fetched on first access (one HTTP GET if the path is a
+        URL, or a file read for local paths) and cached as a string.
+        Callers parse the structure as needed; we don't impose a
+        schema. Returns ``None`` if no ``uas`` URL/path was supplied.
+
+        Auth: rasterio's curl session is configured via the
+        ``GDAL_HTTP_HEADERS`` env var (set by the standard reader
+        bootstrap). We re-use that header here so a single
+        ``Authorization: Bearer <token>`` setup applies to every
+        L2B asset, raster or text alike.
+        """
+        path = self.asset_paths.get("uas")
+        if path is None:
+            return None
+        sp = str(path)
+        if sp.startswith(("http://", "https://")):
+            headers: dict[str, str] = {}
+            gdal_hdr = os.environ.get("GDAL_HTTP_HEADERS", "")
+            if gdal_hdr.lower().startswith("authorization:"):
+                headers["Authorization"] = gdal_hdr.split(":", 1)[1].strip()
+            r = requests.get(sp, headers=headers, timeout=30)
+            r.raise_for_status()
+            return r.text
+        with open(sp, "r") as fh:
+            return fh.read()
 
     # ---- Geometric metadata (pulled from cmf as the canonical band) ---
 
@@ -229,6 +300,11 @@ class CMImageRaster:
         for band in bands:
             if self.asset_paths.get(band) is None:
                 out[band] = None
+                continue
+            # `uas` is a text sidecar, not a raster — skip the band
+            # reader path. Callers reading text sidecars use the
+            # `.uas` property directly.
+            if band == "uas":
                 continue
             reader = self._open(band)
             # `boundless=False` makes `read_from_polygon` return `None`
@@ -321,235 +397,9 @@ class CMImageRaster:
     __str__ = __repr__
 
 
-# ─────────────────────────────────────────────────────────────────────
-#  L3A per-plume raster
-# ─────────────────────────────────────────────────────────────────────
-
-
-_PLUME_RASTER_KEYS: tuple[str, ...] = ("plume_tif", "ime_outline_geojson")
-
-
-@dataclass(repr=False)
-class CMPlumeRaster:
-    """L3A per-plume GeoTIFF mask wrapper, backed by georeader.
-
-    Wraps the single per-plume GeoTIFF asset that isn't already a
-    redundant crop of the scene:
-
-    - ``plume_tif`` — RGBA GeoTIFF; band 4 is the binary alpha mask.
-    - ``ime_outline_geojson`` (optional) — plume polygon as GeoJSON;
-      preferred over band-4 extraction when present.
-
-    Out of scope (intentionally not exposed): ``con_tif`` (use
-    :meth:`CMImageRaster.read_polygon` on the parent scene's ``cmf``
-    instead), PNG siblings, ``rgb_tif`` (always ``None`` in live
-    responses today).
-
-    Attributes:
-        plume_id: Carbon Mapper plume_id.
-        urls: Mapping of asset name → URL or local path. Only
-            ``plume_tif`` and (optionally) ``ime_outline_geojson`` are
-            read; other keys are ignored.
-        overview_level: Forwarded to RasterioReader.
-    """
-
-    plume_id: str
-    urls: Mapping[str, PathLike]
-    overview_level: Optional[int] = None
-
-    # ---- Constructors --------------------------------------------------
-
-    @classmethod
-    def from_plume_dict(cls, plume_dict: dict) -> "CMPlumeRaster":
-        """Build from a ``/catalog/plume/{id}`` response dict.
-
-        Reads only ``plume_tif`` from the response. PNG and ``con_tif``
-        keys present on the response are ignored. Does NOT pull
-        ``ime_outline_geojson`` (lives on the L3A STAC item, not the
-        catalog object); add it via :meth:`with_outline` if fetched
-        separately.
-        """
-        # Pull `plume_tif` only — `ime_outline_geojson` is sourced via
-        # `with_outline()` from the L3A STAC item, not the catalog
-        # response. Keeps `from_plume_dict` and `from_cmrawplume`
-        # symmetric and prevents an outline that happened to be on the
-        # catalog dict from sneaking in.
-        urls: dict[str, PathLike] = {}
-        v = plume_dict.get("plume_tif")
-        if v:
-            urls["plume_tif"] = v
-        return cls(plume_id=str(plume_dict.get("plume_id", "")), urls=urls)
-
-    @classmethod
-    def from_cmrawplume(cls, raw: CMRawPlume) -> "CMPlumeRaster":
-        """Build from the typed :class:`CMRawPlume` model.
-
-        Reads ``raw.plume_tif`` only.
-        """
-        urls: dict[str, PathLike] = {}
-        if raw.plume_tif:
-            urls["plume_tif"] = raw.plume_tif
-        return cls(plume_id=raw.plume_id, urls=urls)
-
-    def with_outline(self, geojson_url: PathLike) -> "CMPlumeRaster":
-        """Return a copy with ``ime_outline_geojson`` populated."""
-        new_urls = dict(self.urls)
-        new_urls["ime_outline_geojson"] = geojson_url
-        return CMPlumeRaster(
-            plume_id=self.plume_id,
-            urls=new_urls,
-            overview_level=self.overview_level,
-        )
-
-    # ---- Lazy raster accessor -----------------------------------------
-
-    @cached_property
-    def plume_tif(self) -> Optional[RasterioReader]:
-        """Band 4 alpha = binary plume mask. ``None`` if URL absent."""
-        url = self.urls.get("plume_tif")
-        if url is None:
-            return None
-        return RasterioReader(str(url), overview_level=self.overview_level)
-
-    # ---- Plume polygon — two sources of truth -------------------------
-
-    def polygon_from_alpha(self) -> Optional[BaseGeometry]:
-        """Extract the plume polygon from ``plume_tif`` band 4 alpha.
-
-        Loads the alpha band via georeader, runs
-        :func:`rasterio.features.shapes` on the boolean mask, dissolves,
-        and reprojects to EPSG:4326. Returns ``None`` if ``plume_tif``
-        is unavailable or yields no positive pixels.
-        """
-        reader = self.plume_tif
-        if reader is None:
-            return None
-        geo = reader.load()
-        arr = np.asarray(geo.values)
-        if arr.ndim != 3 or arr.shape[0] < 4:
-            return None
-        alpha = arr[3]
-        mask = (alpha > 0).astype("uint8")
-        if not mask.any():
-            return None
-
-        import rasterio.features
-        from shapely.geometry import shape
-        from shapely.ops import unary_union
-
-        polys = [
-            shape(geom)
-            for geom, val in rasterio.features.shapes(
-                mask, mask=mask.astype(bool), transform=geo.transform,
-            )
-            if val == 1
-        ]
-        if not polys:
-            return None
-        merged = unary_union(polys)
-        return window_utils.polygon_to_crs(
-            merged, crs_polygon=str(geo.crs), dst_crs="EPSG:4326",
-        )
-
-    def polygon_from_geojson(
-        self, *, http_timeout: float = 30.0,
-    ) -> Optional[BaseGeometry]:
-        """Use ``ime_outline_geojson`` directly (preferred — no rasterio).
-
-        Args:
-            http_timeout: Per-request timeout in seconds for remote
-                outline URLs. A slow / hung server otherwise blocks
-                indefinitely on `urllib.request.urlopen`, which is
-                problematic for notebooks and ETL pipelines. Defaults
-                to 30s.
-
-        Returns:
-            The plume outline as a shapely geometry, or ``None`` if
-            the outline URL was not provided.
-        """
-        url = self.urls.get("ime_outline_geojson")
-        if url is None:
-            return None
-
-        import json
-        from shapely.geometry import shape
-        from shapely.ops import unary_union
-
-        # Local file or remote — let rasterio's GDAL-vsicurl-trained env
-        # not be involved here; just open as text via fsspec / urllib.
-        path = str(url)
-        if path.startswith(("http://", "https://")):
-            import urllib.request
-            with urllib.request.urlopen(path, timeout=http_timeout) as resp:
-                data = json.load(resp)
-        else:
-            with open(path, "r") as fh:
-                data = json.load(fh)
-
-        if isinstance(data, dict) and data.get("type") == "FeatureCollection":
-            geoms = [shape(f["geometry"]) for f in data.get("features", [])
-                     if f.get("geometry")]
-        elif isinstance(data, dict) and data.get("type") == "Feature":
-            g = data.get("geometry")
-            geoms = [shape(g)] if g else []
-        elif isinstance(data, dict) and "type" in data and "coordinates" in data:
-            geoms = [shape(data)]
-        else:
-            return None
-        if not geoms:
-            return None
-        return unary_union(geoms)
-
-    def polygon(self) -> Optional[BaseGeometry]:
-        """Best-available polygon: outline GeoJSON if present, else alpha."""
-        return self.polygon_from_geojson() or self.polygon_from_alpha()
-
-    # ---- Direct load --------------------------------------------------
-
-    # ---- Repr ---------------------------------------------------------
-
-    def __repr__(self) -> str:
-        has_tif = "plume_tif" in self.urls and self.urls["plume_tif"]
-        has_outline = (
-            "ime_outline_geojson" in self.urls
-            and self.urls["ime_outline_geojson"]
-        )
-        ignored = sorted(set(self.urls) - set(_PLUME_RASTER_KEYS))
-        ov = self.overview_level if self.overview_level is not None else "full"
-        lines = [
-            "CMPlumeRaster",
-            f"  plume_id:       {self.plume_id}",
-            f"  plume_tif:      {'present' if has_tif else 'absent'}",
-            f"  ime_outline:    {'present' if has_outline else 'absent'}",
-        ]
-        if ignored:
-            lines.append(f"  ignored keys:   {ignored}")
-        lines.append(f"  overview_level: {ov}")
-        return "\n".join(lines)
-
-    __str__ = __repr__
-
-    def load_alpha_mask(self) -> Optional[GeoTensor]:
-        """Load just band 4 of ``plume_tif`` as a boolean GeoTensor."""
-        reader = self.plume_tif
-        if reader is None:
-            return None
-        geo = reader.load()
-        arr = np.asarray(geo.values)
-        if arr.ndim != 3 or arr.shape[0] < 4:
-            return None
-        return GeoTensor(
-            values=(arr[3] > 0),
-            transform=geo.transform,
-            crs=geo.crs,
-            fill_value_default=False,
-        )
-
-
 __all__ = [
     "BBox",
     "CM_L2B_BANDS",
     "CMImageRaster",
-    "CMPlumeRaster",
     "DEFAULT_L2B_RGB_COLLECTION",
 ]

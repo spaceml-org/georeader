@@ -43,7 +43,7 @@ nav:
       - PRISMA cloud detection: prisma_with_cloudsen12.ipynb
     - Carbon Mapper:
       - API + typed models: carbonmapper/api_explore.ipynb
-      - Raster wrappers: carbonmapper/rasters_explore.ipynb
+      - Products: carbonmapper/products_explore.ipynb
     - Advanced:
       - VSIL cache problem: advanced/error_read_write_in_remote_path.md
 plugins:
@@ -83,6 +83,12 @@ theme:
         icon: material/brightness-4
         name: Switch to light mode
 
+extra_javascript:
+  # Render <pre class="mermaid"> blocks emitted by the superfences
+  # custom_fences config below. mkdocs-material 9.x doesn't auto-bundle
+  # mermaid; pulling the UMD bundle from a CDN is the standard recipe.
+  - https://unpkg.com/mermaid@10/dist/mermaid.min.js
+
 extra:
   social:
     - icon: fontawesome/brands/github
@@ -100,10 +106,19 @@ extra:
       content: "https://spaceml-org.github.io/georeader"
 
 markdown_extensions:
-  - pymdownx.superfences
   - pymdownx.highlight
   - pymdownx.inlinehilite
+  # `pymdownx.extra` is a meta-bundle that re-loads `pymdownx.superfences`
+  # without our `custom_fences` config — so we register superfences AFTER
+  # extra so the mermaid fence format sticks.
   - pymdownx.extra
+  - pymdownx.superfences:
+      # Render ```mermaid blocks as <pre class="mermaid"> divs so the
+      # mermaid.js bundle that ships with mkdocs-material picks them up.
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.details
   - pymdownx.tabbed
   - pymdownx.emoji
