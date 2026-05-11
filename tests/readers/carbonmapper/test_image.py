@@ -562,3 +562,189 @@ class TestCollectionUsage:
         urls = _derive_asset_urls(_catalog_response(PID_V3A, vis_coll.value))
         assert vis_coll.value in urls["plume.tif"]
         assert ime_coll.value in urls["ime-cmf-concentrations.tif"]
+
+
+# ─── Tile bridge (Phase 2) ────────────────────────────────────────
+
+
+class TestSceneIdDerivation:
+    """`CMPlumeImage.scene_id` is the parent L2B scene_id derived
+    from the plume_id by trimming the ``-{part}`` suffix."""
+
+    @pytest.mark.parametrize("plume_id, expected_scene", [
+        ("tan20260331t181625c77s4001-A", "tan20260331t181625c77s4001"),
+        ("tan20251212t185057c20s4001-E", "tan20251212t185057c20s4001"),
+        # Multi-hyphen plume id (rsplit keeps everything before the last)
+        ("emi20250515t190623-ext-B", "emi20250515t190623-ext"),
+    ])
+    def test_rsplit_recovers_parent(self, plume_id, expected_scene):
+        img = CMPlumeImage(plume_id=plume_id, urls={})
+        assert img.scene_id == expected_scene
+
+
+class TestTileBridge:
+    """`CMPlumeImage.tile` is the lazy L2B parent raster.
+
+    Wraps ``api_queries.get_image_raster_for_plume`` (Phase 1) so
+    the v3a STAC path and the v3c URL-pattern fallback are both
+    transparent here.
+    """
+
+    def test_tile_requires_token(self):
+        img = CMPlumeImage(plume_id="tan-foo-A", urls={"plume.tif": "x"})
+        with pytest.raises(ValueError, match="no token"):
+            _ = img.tile
+
+    def test_tile_calls_get_image_raster_for_plume(self):
+        from georeader.readers.carbonmapper import api_queries
+
+        sentinel = MagicMock(name="CMImageRaster_sentinel")
+        with patch.object(
+            api_queries, "get_image_raster_for_plume",
+            return_value=sentinel,
+        ) as mock_call:
+            img = CMPlumeImage(
+                plume_id="tan-foo-A", urls={}, token="tok",
+            )
+            result = img.tile
+        assert result is sentinel
+        mock_call.assert_called_once_with("tok", "tan-foo-A")
+
+    def test_tile_is_cached(self):
+        from georeader.readers.carbonmapper import api_queries
+
+        sentinel = MagicMock(name="CMImageRaster_sentinel")
+        with patch.object(
+            api_queries, "get_image_raster_for_plume",
+            return_value=sentinel,
+        ) as mock_call:
+            img = CMPlumeImage(
+                plume_id="tan-foo-A", urls={}, token="tok",
+            )
+            _ = img.tile
+            _ = img.tile
+            _ = img.tile
+        # Cached: only one underlying API call regardless of repeat access.
+        assert mock_call.call_count == 1
+
+    def test_tile_raises_when_unresolved(self):
+        from georeader.readers.carbonmapper import api_queries
+
+        with patch.object(
+            api_queries, "get_image_raster_for_plume", return_value=None,
+        ):
+            img = CMPlumeImage(
+                plume_id="tan-foo-A", urls={}, token="tok",
+            )
+            with pytest.raises(RuntimeError, match="not reachable"):
+                _ = img.tile
+
+
+class TestTileCrop:
+    """`tile_cmf` / `tile_rgb` / `tile_uncertainty` crop the L2B
+    band by the plume outline polygon at full L2B native resolution.
+    """
+
+    @staticmethod
+    def _make_image_with_tile_and_outline(monkeypatch, *, with_rgb=True):
+        """Build a CMPlumeImage with mocked outline + mocked tile + mocked
+        ``read.read_from_polygon``, returning the image and the recorded
+        call-args dict."""
+        from georeader.geotensor import GeoTensor
+        from georeader.readers.carbonmapper import image as _image
+
+        # Fake outline polygon — `tile_*` only checks it's not None.
+        outline_geom = MagicMock(name="outline_polygon")
+
+        # Fake tile with the three bands we want to crop. RasterioReader
+        # objects are duck-typed by `read.read_from_polygon`.
+        fake_tile = MagicMock(name="CMImageRaster")
+        fake_tile.cmf = MagicMock(name="cmf_reader")
+        fake_tile.rgb = MagicMock(name="rgb_reader") if with_rgb else None
+        fake_tile.uncertainty = MagicMock(name="uncertainty_reader")
+        fake_tile.asset_paths = {
+            "cmf": "https://x/cmf.tif",
+            "uncertainty": "https://x/unc.tif",
+            **({"rgb": "https://x/rgb.tif"} if with_rgb else {}),
+        }
+        fake_tile.scene_id = "tan-foo"
+
+        # Recorded crop. `trigger_load=True` so the wrapper sees a
+        # ready-to-return GeoTensor and skips the `.load()` fallback.
+        sentinel_geo = GeoTensor(
+            values=np.zeros((1, 16, 16), dtype="float32"),
+            transform=t_from_bounds(0, 0, 100, 100, 16, 16),
+            crs="EPSG:32613",
+        )
+        captured = {}
+
+        def fake_read_from_polygon(data_in, **kw):
+            captured["data_in"] = data_in
+            captured.update(kw)
+            return sentinel_geo
+
+        monkeypatch.setattr(_image.read, "read_from_polygon", fake_read_from_polygon)
+
+        img = CMPlumeImage(
+            plume_id="tan-foo-A", urls={}, token="tok",
+        )
+        # Inject the mocked tile + outline by populating the
+        # cached_property slots directly.
+        img.__dict__["tile"] = fake_tile
+        img.__dict__["outline"] = outline_geom
+
+        return img, captured, sentinel_geo, fake_tile
+
+    def test_tile_cmf_crops_with_default_pad(self, monkeypatch):
+        img, captured, sentinel_geo, fake_tile = (
+            self._make_image_with_tile_and_outline(monkeypatch)
+        )
+        result = img.tile_cmf()
+        assert result is sentinel_geo
+        # Sourced from the tile's cmf reader.
+        assert captured["data_in"] is fake_tile.cmf
+        # Default pad = 64 on both axes.
+        assert captured["pad_add"] == (64, 64)
+        assert captured["crs_polygon"] == "EPSG:4326"
+        assert captured["boundless"] is False
+
+    def test_tile_rgb_crops_rgb_band(self, monkeypatch):
+        img, captured, _, fake_tile = (
+            self._make_image_with_tile_and_outline(monkeypatch)
+        )
+        img.tile_rgb(pad_px=8)
+        assert captured["data_in"] is fake_tile.rgb
+        assert captured["pad_add"] == (8, 8)
+
+    def test_tile_uncertainty_crops_uncertainty_band(self, monkeypatch):
+        img, captured, _, fake_tile = (
+            self._make_image_with_tile_and_outline(monkeypatch)
+        )
+        img.tile_uncertainty(pad_px=0)
+        assert captured["data_in"] is fake_tile.uncertainty
+        assert captured["pad_add"] == (0, 0)
+
+    def test_tile_rgb_raises_when_sibling_missing(self, monkeypatch):
+        img, _, _, _ = self._make_image_with_tile_and_outline(
+            monkeypatch, with_rgb=False,
+        )
+        with pytest.raises(KeyError, match="no 'rgb' asset"):
+            img.tile_rgb()
+
+    def test_raises_when_outline_none(self, monkeypatch):
+        img, _, _, _ = self._make_image_with_tile_and_outline(monkeypatch)
+        # Override outline back to None.
+        img.__dict__["outline"] = None
+        with pytest.raises(ValueError, match="outline is None"):
+            img.tile_cmf()
+
+    def test_raises_on_zero_overlap(self, monkeypatch):
+        from georeader.readers.carbonmapper import image as _image
+
+        img, _, _, _ = self._make_image_with_tile_and_outline(monkeypatch)
+        # Make read_from_polygon return None (zero-overlap path).
+        monkeypatch.setattr(
+            _image.read, "read_from_polygon", lambda *a, **kw: None,
+        )
+        with pytest.raises(RuntimeError, match="doesn't overlap"):
+            img.tile_cmf()

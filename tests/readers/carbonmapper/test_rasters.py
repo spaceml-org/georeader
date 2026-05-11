@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import numpy as np
 import pytest
 import rasterio
@@ -11,10 +13,18 @@ from shapely.geometry import box
 from georeader.geotensor import GeoTensor
 from georeader.rasterio_reader import RasterioReader
 
-from georeader.readers.carbonmapper.api_queries import CMTileItem
+from georeader.readers.carbonmapper.api_queries import (
+    CMSceneNotPublished,
+    CMTileItem,
+)
+from georeader.readers.carbonmapper import rasters as _rasters
 from georeader.readers.carbonmapper.rasters import (
     CM_L2B_BANDS,
     CMImageRaster,
+    DEFAULT_L2B_CH4_COLLECTION_CANDIDATES,
+    DEFAULT_L2B_RGB_COLLECTION_CANDIDATES,
+    _l2b_asset_url,
+    _parse_scene_date,
 )
 
 
@@ -364,3 +374,249 @@ class TestCMImageRasterRepr:
     def test_str_equals_repr(self, tmp_path):
         ir = CMImageRaster.from_local(_make_l2b_dir(tmp_path))
         assert str(ir) == repr(ir)
+
+
+# ─── URL-pattern helpers ─────────────────────────────────────────────
+
+
+class TestParseSceneDate:
+    """`_parse_scene_date` extracts YYYY/MM/DD from positions [3:11]."""
+
+    @pytest.mark.parametrize(
+        "scene_id, expected",
+        [
+            ("tan20260331t181625c77s4001", ("2026", "03", "31")),
+            ("emi20250515t190623",         ("2025", "05", "15")),
+            ("ang20240615t184217",         ("2024", "06", "15")),
+            ("av320240801t143728",         ("2024", "08", "01")),
+            ("GAO20210820t195716",         ("2021", "08", "20")),
+        ],
+    )
+    def test_parses_known_instruments(self, scene_id, expected):
+        assert _parse_scene_date(scene_id) == expected
+
+    def test_too_short_raises(self):
+        with pytest.raises(ValueError, match="too short"):
+            _parse_scene_date("tan2026")
+
+    def test_non_digit_raises(self):
+        with pytest.raises(ValueError, match="not an 8-digit date"):
+            _parse_scene_date("tan-INVALID-12345")
+
+
+class TestL2BAssetURL:
+    def test_url_pattern_matches_design_doc(self):
+        url = _l2b_asset_url(
+            "l2b-ch4-mfa-v3c", "tan20260331t181625c77s4001", "cmf.tif",
+        )
+        assert url == (
+            "https://api.carbonmapper.org/api/v1/catalog/asset/"
+            "l2b-ch4-mfa-v3c/2026/03/31/"
+            "tan20260331t181625c77s4001/"
+            "tan20260331t181625c77s4001_l2b-ch4-mfa-v3c_cmf.tif"
+        )
+
+    def test_rgb_sibling_url(self):
+        url = _l2b_asset_url(
+            "l2b-rgb-v3c", "tan20260331t181625c77s4001", "rgb.tif",
+        )
+        assert "l2b-rgb-v3c" in url
+        assert url.endswith("_l2b-rgb-v3c_rgb.tif")
+
+
+# ─── from_scene_id ───────────────────────────────────────────────────
+
+
+def _make_probe_response(status_code: int) -> MagicMock:
+    """Build a fake ``requests.get`` return value for the range-GET probe."""
+    resp = MagicMock()
+    resp.status_code = status_code
+    return resp
+
+
+class TestFromSceneIdProbe:
+    """`CMImageRaster.from_scene_id` probes candidate collections in
+    order, taking the first 200/206. Verified URL-pattern from
+    design doc §4.7 — works for v3a (STAC-resident) AND v3c
+    (REST-only, the 2026 L2B version)."""
+
+    def test_v3c_picked_first(self, monkeypatch):
+        """v3c is the default first candidate — single probe + success."""
+        calls: list[str] = []
+
+        def fake_get(url, **kw):
+            calls.append(url)
+            return _make_probe_response(206)
+
+        monkeypatch.setattr(_rasters.requests, "get", fake_get)
+
+        ir = CMImageRaster.from_scene_id(
+            "tan20260331t181625c77s4001", token="dummy", with_rgb=False,
+        )
+        # One probe — first candidate (v3c) wins.
+        assert len(calls) == 1
+        assert "l2b-ch4-mfa-v3c" in calls[0]
+        assert "_cmf.tif" in calls[0]
+
+        # All 6 CH4 asset keys built with the winning collection (v3c).
+        assert set(ir.asset_paths) == {
+            "cmf", "cmf-unortho",
+            "uncertainty", "uncertainty-unortho",
+            "artifact-mask", "uas",
+        }
+        for url in ir.asset_paths.values():
+            assert "l2b-ch4-mfa-v3c" in str(url)
+        assert ir.asset_paths["uas"].endswith(".txt")
+
+    def test_falls_through_to_v3a(self, monkeypatch):
+        """v3c 404 → v3a 206. The 2025 case — STAC would've worked too,
+        but ``from_scene_id`` doesn't go through STAC."""
+        # CH4 probes: v3c=404, v3a=206 → wins.
+        # No rgb probe (with_rgb=False).
+        seq = iter([404, 206])
+
+        def fake_get(url, **kw):
+            return _make_probe_response(next(seq))
+
+        monkeypatch.setattr(_rasters.requests, "get", fake_get)
+
+        ir = CMImageRaster.from_scene_id(
+            "tan20250801t120000c01s4001", token="dummy", with_rgb=False,
+        )
+        for url in ir.asset_paths.values():
+            assert "l2b-ch4-mfa-v3a" in str(url)
+
+    def test_all_candidates_404_raises(self, monkeypatch):
+        """Every CH4 candidate 404s → ``CMSceneNotPublished``."""
+        monkeypatch.setattr(
+            _rasters.requests, "get",
+            lambda url, **kw: _make_probe_response(404),
+        )
+        with pytest.raises(CMSceneNotPublished, match="not published"):
+            CMImageRaster.from_scene_id(
+                "tan20260331t181625c77s4001",
+                token="dummy",
+                with_rgb=False,
+            )
+
+    def test_with_rgb_adds_sibling(self, monkeypatch):
+        """`with_rgb=True` (default) probes RGB sibling candidates after
+        CH4 succeeds."""
+        # CH4 v3c=206 → wins. RGB v3c=206 → wins. 2 probes total.
+        seq = iter([206, 206])
+        calls: list[str] = []
+
+        def fake_get(url, **kw):
+            calls.append(url)
+            return _make_probe_response(next(seq))
+
+        monkeypatch.setattr(_rasters.requests, "get", fake_get)
+
+        ir = CMImageRaster.from_scene_id(
+            "tan20260331t181625c77s4001", token="dummy",
+        )
+        assert len(calls) == 2
+        assert "l2b-ch4-mfa-v3c" in calls[0]
+        assert "l2b-rgb-v3c" in calls[1]
+        assert "rgb" in ir.asset_paths
+        assert "l2b-rgb-v3c" in ir.asset_paths["rgb"]
+
+    def test_with_rgb_tolerates_rgb_404(self, monkeypatch):
+        """CH4 succeeds + every RGB candidate 404s → return CH4-only,
+        no exception. Rare but documented behaviour."""
+        # CH4 v3c=206 → wins. RGB v3c=404, v3a=404 → no rgb URL.
+        seq = iter([206, 404, 404])
+
+        def fake_get(url, **kw):
+            return _make_probe_response(next(seq))
+
+        monkeypatch.setattr(_rasters.requests, "get", fake_get)
+
+        ir = CMImageRaster.from_scene_id(
+            "tan20260331t181625c77s4001", token="dummy",
+        )
+        assert "rgb" not in ir.asset_paths
+        assert "cmf" in ir.asset_paths
+
+    def test_custom_candidates(self, monkeypatch):
+        """Power-user override — historical scenes can be probed against
+        legacy collection variants (``mfm-v1`` etc.)."""
+        calls: list[str] = []
+
+        def fake_get(url, **kw):
+            calls.append(url)
+            return _make_probe_response(206)
+
+        monkeypatch.setattr(_rasters.requests, "get", fake_get)
+
+        ir = CMImageRaster.from_scene_id(
+            "ang20180615t184217",
+            token="dummy",
+            l2b_collection_candidates=("l2b-ch4-mfa-v3", "l2b-ch4-mfm-v1"),
+            with_rgb=False,
+        )
+        # First custom candidate wins; the default v3c isn't probed.
+        assert len(calls) == 1
+        assert "l2b-ch4-mfa-v3" in calls[0]
+        assert "l2b-ch4-mfa-v3c" not in calls[0]
+        assert "l2b-ch4-mfa-v3" in ir.asset_paths["cmf"]
+
+    def test_transport_errors_propagate(self, monkeypatch):
+        """A transport-level failure (timeout / connection error)
+        should NOT be silently treated as "not published" — it's a
+        real error. Surface it so the caller sees what went wrong
+        rather than getting a misleading CMSceneNotPublished."""
+        import requests as _r
+
+        def fake_get(url, **kw):
+            raise _r.ConnectTimeout("simulated")
+
+        monkeypatch.setattr(_rasters.requests, "get", fake_get)
+
+        with pytest.raises(_r.ConnectTimeout):
+            CMImageRaster.from_scene_id(
+                "tan20260331t181625c77s4001", token="dummy", with_rgb=False,
+            )
+
+    def test_429_propagates_not_swallowed(self, monkeypatch):
+        """Rate-limit (HTTP 429) is transient, not a data fact. Must
+        not be silently treated as "scene not published"."""
+        import requests as _r
+
+        resp = MagicMock()
+        resp.status_code = 429
+
+        def boom():
+            err = _r.HTTPError("429 Too Many Requests", response=resp)
+            raise err
+
+        resp.raise_for_status = boom
+
+        def fake_get(url, **kw):
+            return resp
+
+        monkeypatch.setattr(_rasters.requests, "get", fake_get)
+
+        with pytest.raises(_r.HTTPError, match="429"):
+            CMImageRaster.from_scene_id(
+                "tan20260331t181625c77s4001", token="dummy", with_rgb=False,
+            )
+
+
+
+# ─── DEFAULT_*_CANDIDATES constants ──────────────────────────────────
+
+
+def test_default_ch4_candidates_priority():
+    """v3c first — covers 2026 onward (the practical 'live' scenes)."""
+    assert DEFAULT_L2B_CH4_COLLECTION_CANDIDATES == (
+        "l2b-ch4-mfa-v3c",
+        "l2b-ch4-mfa-v3a",
+    )
+
+
+def test_default_rgb_candidates_priority():
+    assert DEFAULT_L2B_RGB_COLLECTION_CANDIDATES == (
+        "l2b-rgb-v3c",
+        "l2b-rgb-v3a",
+    )

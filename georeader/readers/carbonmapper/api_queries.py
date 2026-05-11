@@ -69,7 +69,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Iterable, Literal, Mapping
+from typing import TYPE_CHECKING, Any, Iterable, Literal, Mapping
 
 import requests
 from shapely.geometry import shape
@@ -78,6 +78,13 @@ from shapely.geometry.base import BaseGeometry
 from georeader.readers.carbonmapper import download as _dl
 from georeader.readers.carbonmapper.plume import CMRawPlume, Gas
 from georeader.readers.carbonmapper.source import CMSource, _strip_query_suffix
+
+if TYPE_CHECKING:
+    # Lazy import — `rasters.py` imports `CMSceneNotPublished` and
+    # `CMTileItem` from this module, so we can't import its symbols at
+    # module load without a cycle. `TYPE_CHECKING` keeps the annotation
+    # available to checkers without triggering the runtime import.
+    from georeader.readers.carbonmapper.rasters import CMImageRaster
 
 BBox = tuple[float, float, float, float]   # (W, S, E, N) WGS-84
 
@@ -698,6 +705,140 @@ def get_tile_for_plume(
         return get_tile(token, scene_id, collection=collection)
     except CMSceneNotPublished:
         return None
+
+
+def get_image_raster_for_scene(
+    token: str,
+    scene_id: str,
+    *,
+    collection: str = DEFAULT_L2B_COLLECTION,
+    prefer_url_pattern_fallback: bool = True,
+    with_rgb: bool = True,
+) -> CMImageRaster | None:
+    """Resolve a ``scene_id`` to a :class:`CMImageRaster` with rgb sibling.
+
+    Single entry point for "give me the L2B parent tile as a usable
+    raster object" — handles both STAC-resident scenes (v3a) and
+    URL-pattern-only scenes (v3c, the live 2026 L2B version)
+    transparently:
+
+    1. Try STAC item lookup (cheap when it works — one HTTP call for
+       the CH4 item, one for the RGB sibling). Builds via
+       :meth:`CMImageRaster.from_cm_tile_item` + :meth:`with_rgb`.
+    2. If STAC returns 404 AND ``prefer_url_pattern_fallback`` is
+       ``True`` (default), fall back to
+       :meth:`CMImageRaster.from_scene_id` which probes the verified
+       L2B asset-proxy URL pattern (see design doc §4.7).
+    3. Return ``None`` only if both paths fail.
+
+    This is the helper :class:`CMPlumeImage` will use (Phase 2) to
+    expose ``.tile`` as a lazy property.
+
+    Parameters
+    ----------
+    token:
+        Bearer token.
+    scene_id:
+        L2B scene id (e.g. ``"tan20260331t181625c77s4001"``).
+    collection:
+        STAC collection probed first. Defaults to
+        :data:`DEFAULT_L2B_COLLECTION` (``l2b-ch4-mfa-v3a``).
+    prefer_url_pattern_fallback:
+        When ``True`` (default), fall back to URL-pattern derivation
+        on STAC 404. Set to ``False`` to keep the v3a-only behaviour
+        of :func:`get_tile_for_plume`.
+    with_rgb:
+        When ``True`` (default), attach the RGB sibling raster.
+
+    Returns
+    -------
+    CMImageRaster | None
+        ``None`` when STAC has no item AND either the fallback is
+        disabled or the URL-pattern probes also 404.
+
+    Examples
+    --------
+    >>> tile = get_image_raster_for_scene(  # doctest: +SKIP
+    ...     token, "tan20260331t181625c77s4001",
+    ... )
+    >>> tile.cmf  # doctest: +SKIP
+    <RasterioReader …/l2b-ch4-mfa-v3c/2026/03/31/…/cmf.tif>
+    """
+    # Lazy import to avoid the rasters → api_queries circular import.
+    from georeader.readers.carbonmapper.rasters import CMImageRaster
+
+    # ── 1. STAC path (cheap when it works) ──────────────────────────
+    try:
+        ch4_item = get_tile(token, scene_id, collection=collection)
+        ir = CMImageRaster.from_cm_tile_item(ch4_item)
+        if with_rgb:
+            try:
+                # RGB sibling lives in `l2b-rgb-v3a` (string defined here
+                # rather than imported from rasters.py to avoid the
+                # rasters→api_queries circular import).
+                rgb_item = get_tile(
+                    token, scene_id, collection="l2b-rgb-v3a",
+                )
+                ir = ir.with_rgb(rgb_item)
+            except CMSceneNotPublished:
+                # CH4 item exists but RGB sibling doesn't — keep the
+                # CH4-only raster rather than failing the whole call.
+                pass
+        return ir
+    except CMSceneNotPublished:
+        if not prefer_url_pattern_fallback:
+            return None
+    # Fall through to URL-pattern path.
+
+    # ── 2. URL-pattern fallback (for v3c/v3d scenes not in STAC) ────
+    try:
+        return CMImageRaster.from_scene_id(
+            scene_id, token=token, with_rgb=with_rgb,
+        )
+    except CMSceneNotPublished:
+        return None
+
+
+def get_image_raster_for_plume(
+    token: str,
+    plume_id: str,
+    *,
+    collection: str = DEFAULT_L2B_COLLECTION,
+    prefer_url_pattern_fallback: bool = True,
+    with_rgb: bool = True,
+) -> CMImageRaster | None:
+    """Resolve a plume to its parent :class:`CMImageRaster`.
+
+    Sugar over :func:`get_image_raster_for_scene` that derives the
+    parent ``scene_id`` from ``plume_id`` first. Same STAC-first /
+    URL-pattern-fallback behaviour.
+
+    Parameters
+    ----------
+    token, collection, prefer_url_pattern_fallback, with_rgb:
+        Forwarded to :func:`get_image_raster_for_scene`.
+    plume_id:
+        Colloquial plume id (with the ``-{part}`` suffix).
+
+    Returns
+    -------
+    CMImageRaster | None
+
+    Examples
+    --------
+    >>> tile = get_image_raster_for_plume(  # doctest: +SKIP
+    ...     token, "tan20260331t181625c77s4001-A",
+    ... )
+    >>> tile is not None  # doctest: +SKIP
+    True
+    """
+    scene_id = _scene_id_from_plume(plume_id)
+    return get_image_raster_for_scene(
+        token, scene_id,
+        collection=collection,
+        prefer_url_pattern_fallback=prefer_url_pattern_fallback,
+        with_rgb=with_rgb,
+    )
 
 
 def get_source_for_plume(

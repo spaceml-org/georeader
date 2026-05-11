@@ -193,6 +193,169 @@ def test_get_source_for_plume_returns_none_on_404(monkeypatch):
     assert aq.get_source_for_plume("tok", "tan-foo-A") is None
 
 
+# ─────────────────────────────────────────────────────────────────────
+#  get_image_raster_for_scene / get_image_raster_for_plume
+# ─────────────────────────────────────────────────────────────────────
+
+
+class TestGetImageRasterForScene:
+    """STAC-first, URL-pattern fallback for 2026 plumes (Phase 1)."""
+
+    def test_stac_path_wins_when_available(self, monkeypatch):
+        """v3a STAC items resolve cleanly — no URL-pattern probe."""
+        from georeader.readers.carbonmapper.rasters import CMImageRaster
+
+        # Both CH4 and RGB STAC lookups succeed.
+        def fake_get_tile(token, scene_id, *, collection):
+            return aq.CMTileItem.from_stac_item(_stac_item(scene_id))
+
+        # Sentinel: from_scene_id should NOT be called when STAC wins.
+        def boom(*args, **kwargs):
+            raise AssertionError("URL-pattern fallback called on STAC hit")
+
+        monkeypatch.setattr(aq, "get_tile", fake_get_tile)
+        monkeypatch.setattr(CMImageRaster, "from_scene_id", boom)
+
+        ir = aq.get_image_raster_for_scene("tok", "tan20251212t185057c20s4001")
+        assert isinstance(ir, CMImageRaster)
+        assert ir.scene_id == "tan20251212t185057c20s4001"
+        assert "cmf" in ir.asset_paths
+        assert "rgb" in ir.asset_paths  # RGB sibling attached
+
+    def test_url_pattern_fallback_on_stac_miss(self, monkeypatch):
+        """v3c/v3d scenes — STAC 404s, URL-pattern probe succeeds."""
+        from georeader.readers.carbonmapper.rasters import CMImageRaster
+
+        def stac_404(token, scene_id, *, collection):
+            raise aq.CMSceneNotPublished(scene_id)
+
+        sentinel_ir = CMImageRaster(
+            scene_id="tan20260331t181625c77s4001",
+            asset_paths={"cmf": "https://x/cmf.tif", "rgb": "https://x/rgb.tif"},
+        )
+
+        captured = {}
+
+        def fake_from_scene_id(scene_id, *, token, with_rgb=True, **kw):
+            captured["scene_id"] = scene_id
+            captured["with_rgb"] = with_rgb
+            return sentinel_ir
+
+        monkeypatch.setattr(aq, "get_tile", stac_404)
+        monkeypatch.setattr(CMImageRaster, "from_scene_id", fake_from_scene_id)
+
+        ir = aq.get_image_raster_for_scene(
+            "tok", "tan20260331t181625c77s4001",
+        )
+        assert ir is sentinel_ir
+        assert captured["scene_id"] == "tan20260331t181625c77s4001"
+        assert captured["with_rgb"] is True
+
+    def test_fallback_disabled_returns_none(self, monkeypatch):
+        """Set ``prefer_url_pattern_fallback=False`` for the old STAC-only
+        behaviour."""
+        from georeader.readers.carbonmapper.rasters import CMImageRaster
+
+        def stac_404(token, scene_id, *, collection):
+            raise aq.CMSceneNotPublished(scene_id)
+
+        def boom(*args, **kwargs):
+            raise AssertionError("fallback called despite disable")
+
+        monkeypatch.setattr(aq, "get_tile", stac_404)
+        monkeypatch.setattr(CMImageRaster, "from_scene_id", boom)
+
+        ir = aq.get_image_raster_for_scene(
+            "tok", "tan20260331t181625c77s4001",
+            prefer_url_pattern_fallback=False,
+        )
+        assert ir is None
+
+    def test_both_paths_404_returns_none(self, monkeypatch):
+        """STAC 404 AND URL-pattern 404 — no exception, just ``None``."""
+        from georeader.readers.carbonmapper.rasters import CMImageRaster
+
+        def stac_404(token, scene_id, *, collection):
+            raise aq.CMSceneNotPublished(scene_id)
+
+        def fallback_404(scene_id, *, token, **kw):
+            raise aq.CMSceneNotPublished(scene_id)
+
+        monkeypatch.setattr(aq, "get_tile", stac_404)
+        monkeypatch.setattr(CMImageRaster, "from_scene_id", fallback_404)
+
+        assert aq.get_image_raster_for_scene(
+            "tok", "tan20260331t181625c77s4001",
+        ) is None
+
+    def test_stac_ch4_hits_rgb_misses_returns_ch4_only(self, monkeypatch):
+        """STAC has the CH4 item but not the RGB sibling — keep CH4."""
+        from georeader.readers.carbonmapper.rasters import CMImageRaster
+
+        def fake_get_tile(token, scene_id, *, collection):
+            if collection == "l2b-rgb-v3a":
+                raise aq.CMSceneNotPublished(scene_id)
+            return aq.CMTileItem.from_stac_item(_stac_item(scene_id))
+
+        monkeypatch.setattr(aq, "get_tile", fake_get_tile)
+
+        ir = aq.get_image_raster_for_scene(
+            "tok", "tan20251212t185057c20s4001",
+        )
+        assert isinstance(ir, CMImageRaster)
+        # cmf retained from the CH4 STAC item; rgb is from the CH4 item's
+        # own asset_urls (since this fixture includes it) — the sibling
+        # merge didn't happen, but the CH4 item's bundled rgb stays.
+        assert "cmf" in ir.asset_paths
+
+    def test_with_rgb_false_skips_sibling_lookup(self, monkeypatch):
+        """``with_rgb=False`` → only one STAC call, RGB not requested."""
+        calls = []
+
+        def fake_get_tile(token, scene_id, *, collection):
+            calls.append(collection)
+            return aq.CMTileItem.from_stac_item(_stac_item(scene_id))
+
+        monkeypatch.setattr(aq, "get_tile", fake_get_tile)
+        aq.get_image_raster_for_scene(
+            "tok", "tan20251212t185057c20s4001", with_rgb=False,
+        )
+        assert calls == ["l2b-ch4-mfa-v3a"]
+
+
+class TestGetImageRasterForPlume:
+    def test_derives_scene_id_from_plume_id(self, monkeypatch):
+        captured = {}
+
+        def fake_for_scene(token, scene_id, **kw):
+            captured["scene_id"] = scene_id
+            return None
+
+        monkeypatch.setattr(aq, "get_image_raster_for_scene", fake_for_scene)
+        aq.get_image_raster_for_plume("tok", "tan20260331t181625c77s4001-A")
+        assert captured["scene_id"] == "tan20260331t181625c77s4001"
+
+    def test_forwards_kwargs(self, monkeypatch):
+        captured = {}
+
+        def fake_for_scene(token, scene_id, **kw):
+            captured.update(kw)
+            return None
+
+        monkeypatch.setattr(aq, "get_image_raster_for_scene", fake_for_scene)
+        aq.get_image_raster_for_plume(
+            "tok", "tan20260331t181625c77s4001-A",
+            collection="l2b-ch4-mfa-v3",
+            prefer_url_pattern_fallback=False,
+            with_rgb=False,
+        )
+        assert captured == {
+            "collection": "l2b-ch4-mfa-v3",
+            "prefer_url_pattern_fallback": False,
+            "with_rgb": False,
+        }
+
+
 def test_get_plume_context_combines_three_calls(monkeypatch):
     fake_plume = CMRawPlume(
         plume_id="tan-foo-A", plume_latitude=31.5, plume_longitude=-103.5,
