@@ -16,7 +16,7 @@ Most *read* endpoints work without a token, but some (scenes, related
 plumes, STAC tokens) require a Bearer token.  Use
 :func:`obtain_token` or
 :meth:`~georeader.readers.carbonmapper.config.CarbonMapperConfig.refresh_access_token`
-to obtain one from credentials in ``config/carbonmapper_token.json``.
+to obtain one from credentials in ``~/.georeader/auth_carbonmapper.json``.
 
 References
 ----------

@@ -11,9 +11,16 @@ Credentials can be supplied in three ways (checked in priority order):
    ``CARBONMAPPER_EMAIL`` and ``CARBONMAPPER_PASSWORD`` (login credentials).
 2. **Config file** — a JSON file at one of the well-known paths listed in
    :data:`CONFIG_SEARCH_PATHS`, or a custom path passed to
-   :meth:`CarbonMapperConfig.load`.
+   :meth:`CarbonMapperConfig.load`. The canonical location matches the
+   sibling readers (``emit.py`` / ``S2_SAFE_reader.py``):
+   ``~/.georeader/auth_carbonmapper.json``.
 3. **Explicit arguments** — pass ``token=`` directly to API functions in
    ``download.py``.
+
+If no config file exists when :meth:`CarbonMapperConfig.load` is called
+without an explicit path and no env-var credentials are set, a
+placeholder ``~/.georeader/auth_carbonmapper.json`` is auto-created
+with stub values so users have a clear edit target.
 
 Quick start
 -----------
@@ -23,7 +30,7 @@ Quick start
 >>> # — or — store credentials in the default config file:
 >>> cfg.email = "user@example.com"
 >>> cfg.password = "s3cret"
->>> cfg.save()
+>>> cfg.save()                # writes to ~/.georeader/auth_carbonmapper.json
 
 References
 ----------
@@ -45,22 +52,71 @@ logger = logging.getLogger(__name__)
 # Default config search locations (in priority order)
 # ---------------------------------------------------------------------------
 
-CONFIG_SEARCH_PATHS: list[Path] = [
-    Path("config") / "carbonmapper_token.json",  # project-local convention
-    Path.home() / ".config" / "carbonmapper" / "config.json",
-    Path.home() / ".carbonmapper.json",
-    Path(".carbonmapper.json"),  # current working directory
-]
+#: Canonical credentials path — matches the sibling-reader convention
+#: (``~/.georeader/auth_emit.json`` for EMIT,
+#: ``~/.georeader/auth_S2.json`` for Sentinel-2 / SciHub, etc.).
+#: Used by :meth:`CarbonMapperConfig.save` and :meth:`CarbonMapperConfig.reset`,
+#: and is the first entry in :data:`CONFIG_SEARCH_PATHS`.
+DEFAULT_SAVE_PATH: Path = Path.home() / ".georeader" / "auth_carbonmapper.json"
 
-#: Default path used by :meth:`CarbonMapperConfig.save` and
-#: :meth:`CarbonMapperConfig.reset` — a user-level config file that is
-#: outside the working tree to avoid accidentally committing credentials.
-DEFAULT_SAVE_PATH: Path = Path.home() / ".config" / "carbonmapper" / "config.json"
+#: Search order, first-match-wins. The canonical path is checked first;
+#: legacy paths are kept so users who already configured them continue
+#: to work without action.
+CONFIG_SEARCH_PATHS: list[Path] = [
+    DEFAULT_SAVE_PATH,                                          # canonical
+    Path("config") / "carbonmapper_token.json",                 # legacy — project-local
+    Path.home() / ".config" / "carbonmapper" / "config.json",   # legacy
+    Path.home() / ".carbonmapper.json",                         # legacy
+    Path(".carbonmapper.json"),                                 # legacy — cwd
+]
 
 # Environment variable names
 _ENV_TOKEN = "CARBONMAPPER_TOKEN"
 _ENV_EMAIL = "CARBONMAPPER_EMAIL"
 _ENV_PASSWORD = "CARBONMAPPER_PASSWORD"
+
+# Placeholder values written into the stub config on first run. Users
+# replace these with real credentials. Matches the ``SET-USER`` /
+# ``SET-PASSWORD`` style of ``emit.py``.
+_PLACEHOLDER_EMAIL = "SET-EMAIL"
+_PLACEHOLDER_PASSWORD = "SET-PASSWORD"
+
+
+def _create_placeholder_config() -> Path:
+    """Write a stub config file to :data:`DEFAULT_SAVE_PATH` if missing.
+
+    Matches the behaviour of :mod:`georeader.readers.emit` and
+    :mod:`georeader.readers.scihubcopernicus_query`, which auto-create
+    a placeholder JSON on first run so users have a clear edit target.
+
+    Returns the destination path. No-op if the file already exists.
+    """
+    dest = DEFAULT_SAVE_PATH.expanduser().resolve()
+    if dest.exists():
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    placeholder = {
+        "email": _PLACEHOLDER_EMAIL,
+        "password": _PLACEHOLDER_PASSWORD,
+        "token": None,
+    }
+    dest.write_text(json.dumps(placeholder, indent=2))
+    try:
+        os.chmod(dest, 0o600)
+    except (PermissionError, OSError) as exc:
+        logger.warning(
+            "Created placeholder config at %s but couldn't set 0o600 perms: %s",
+            dest,
+            exc,
+        )
+    logger.warning(
+        "Carbon Mapper credentials not configured. Created placeholder "
+        "at %s — edit it with your Carbon Mapper email + password "
+        "(or set CARBONMAPPER_TOKEN / CARBONMAPPER_EMAIL / "
+        "CARBONMAPPER_PASSWORD env vars).",
+        dest,
+    )
+    return dest
 
 
 # ---------------------------------------------------------------------------
@@ -173,7 +229,7 @@ class CarbonMapperConfig:
 
         Examples
         --------
-        >>> cfg = CarbonMapperConfig.from_file("~/.config/carbonmapper/config.json")
+        >>> cfg = CarbonMapperConfig.from_file("~/.georeader/auth_carbonmapper.json")
         """
         path = Path(path).expanduser().resolve()
         with path.open() as fh:
@@ -181,10 +237,23 @@ class CarbonMapperConfig:
         token = data.pop("token", None)
         email = data.pop("email", None) or data.pop("username", None)
         password = data.pop("password", None)
+        # Filter stub values — if the user hasn't yet edited a freshly
+        # auto-created placeholder, treat the fields as un-set rather
+        # than letting ``"SET-EMAIL"`` flow into has_credentials() as
+        # if it were a real value.
+        if email == _PLACEHOLDER_EMAIL:
+            email = None
+        if password == _PLACEHOLDER_PASSWORD:
+            password = None
         return cls(token=token, email=email, password=password, **data)
 
     @classmethod
-    def load(cls, path: Path | str | None = None) -> "CarbonMapperConfig":
+    def load(
+        cls,
+        path: Path | str | None = None,
+        *,
+        create_placeholder: bool = True,
+    ) -> "CarbonMapperConfig":
         """Load config using the standard resolution order.
 
         Resolution order
@@ -193,12 +262,22 @@ class CarbonMapperConfig:
         2. Otherwise search :data:`CONFIG_SEARCH_PATHS` for the first file
            that exists.
         3. Overlay environment variables — env values overwrite file values.
+        4. If still nothing is configured (no file found, no env vars set)
+           AND ``create_placeholder`` is True, write a stub config to
+           :data:`DEFAULT_SAVE_PATH` with ``SET-EMAIL`` / ``SET-PASSWORD``
+           placeholders so users have a clear edit target. Matches the
+           ``emit.py`` / ``S2_SAFE_reader.py`` behaviour.
 
         Parameters
         ----------
         path:
             Optional explicit path to a config file.  Skips the search
             when provided.
+        create_placeholder:
+            When ``True`` (default), auto-create a stub config file at
+            :data:`DEFAULT_SAVE_PATH` if no credentials could be
+            resolved. Set to ``False`` in tests / non-interactive
+            contexts to keep the filesystem untouched.
 
         Returns
         -------
@@ -214,6 +293,7 @@ class CarbonMapperConfig:
         >>> cfg = CarbonMapperConfig.load("~/my_project/.carbonmapper.json")
         """
         cfg: CarbonMapperConfig | None = None
+        loaded_from_file = False
 
         # 1. Explicit path
         if path is not None:
@@ -221,6 +301,7 @@ class CarbonMapperConfig:
             if resolved.exists():
                 try:
                     cfg = cls.from_file(resolved)
+                    loaded_from_file = True
                     logger.debug("Loaded Carbon Mapper config from %s", resolved)
                 except Exception as exc:
                     logger.warning("Failed to load config from %s: %s", resolved, exc)
@@ -234,6 +315,7 @@ class CarbonMapperConfig:
                 if resolved_candidate.exists():
                     try:
                         cfg = cls.from_file(resolved_candidate)
+                        loaded_from_file = True
                         logger.debug("Loaded Carbon Mapper config from %s", resolved_candidate)
                         break
                     except Exception as exc:
@@ -257,6 +339,16 @@ class CarbonMapperConfig:
         if env_password:
             cfg.password = env_password
 
+        # 4. Placeholder — only when caller didn't pass an explicit path,
+        #    no config file was found, and env vars didn't supply creds.
+        if (
+            create_placeholder
+            and path is None
+            and not loaded_from_file
+            and not cfg.has_credentials()
+        ):
+            _create_placeholder_config()
+
         return cfg
 
     # ------------------------------------------------------------------ #
@@ -271,8 +363,9 @@ class CarbonMapperConfig:
         path:
             Destination file path.  Defaults to
             :data:`DEFAULT_SAVE_PATH`
-            (``~/.config/carbonmapper/config.json``), a user-level
-            location outside the working tree so credentials are never
+            (``~/.georeader/auth_carbonmapper.json``), matching the
+            sibling-reader convention (emit, S2). User-level location
+            outside the working tree so credentials are never
             accidentally committed.
 
         Returns
@@ -285,7 +378,7 @@ class CarbonMapperConfig:
         >>> cfg = CarbonMapperConfig(email="user@example.com", password="s3cret")
         >>> saved_path = cfg.save()
         >>> print(saved_path)
-        /home/user/.config/carbonmapper/config.json
+        /home/user/.georeader/auth_carbonmapper.json
         """
         if path is not None:
             dest = Path(path).expanduser().resolve()
@@ -327,11 +420,11 @@ class CarbonMapperConfig:
         path:
             Path to the config file to remove.  Defaults to
             :data:`DEFAULT_SAVE_PATH`
-            (``~/.config/carbonmapper/config.json``).
+            (``~/.georeader/auth_carbonmapper.json``).
 
         Examples
         --------
-        >>> CarbonMapperConfig.reset()  # removes ~/.config/carbonmapper/config.json
+        >>> CarbonMapperConfig.reset()  # removes ~/.georeader/auth_carbonmapper.json
         """
         dest = (
             Path(path).expanduser().resolve()
@@ -392,7 +485,7 @@ class CarbonMapperConfig:
 
         Examples
         --------
-        >>> cfg = CarbonMapperConfig.load("config/carbonmapper_token.json")
+        >>> cfg = CarbonMapperConfig.load()  # ~/.georeader/auth_carbonmapper.json
         >>> token = cfg.refresh_access_token()
         """
         if not self.email or not self.password:

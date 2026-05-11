@@ -128,17 +128,188 @@ class TestLoad:
         assert cfg.email == "file@e.com"
 
     def test_no_config_returns_empty(self):
+        # ``create_placeholder=False`` keeps the filesystem untouched —
+        # the placeholder behaviour is exercised separately below.
         with patch.dict(os.environ, {}, clear=True):
             with patch.object(Path, "exists", return_value=False):
-                cfg = CarbonMapperConfig.load()
+                cfg = CarbonMapperConfig.load(create_placeholder=False)
         assert cfg.token is None
         assert cfg.email is None
 
     def test_nonexistent_explicit_path_warns_and_continues(self, tmp_path):
         fake_path = tmp_path / "missing.json"
         with patch.dict(os.environ, {}, clear=True):
+            # Explicit path is given — placeholder creation is skipped
+            # by design (see config.py:load step 4 guard).
             cfg = CarbonMapperConfig.load(path=fake_path)
         assert cfg.token is None
+
+
+# --- canonical path + placeholder behaviour ---
+
+
+class TestCanonicalPath:
+    """`~/.georeader/auth_carbonmapper.json` is the canonical path —
+    first in :data:`CONFIG_SEARCH_PATHS`, matches the sibling-reader
+    convention (emit, S2_SAFE_reader, scihubcopernicus_query)."""
+
+    def test_default_save_path_is_in_dot_georeader(self):
+        assert DEFAULT_SAVE_PATH == (
+            Path.home() / ".georeader" / "auth_carbonmapper.json"
+        )
+
+    def test_dot_georeader_is_first_in_search_paths(self):
+        assert CONFIG_SEARCH_PATHS[0] == DEFAULT_SAVE_PATH
+
+    def test_legacy_paths_kept_as_fallbacks(self):
+        # Back-compat — users with existing configs at the old paths
+        # still resolve without action.
+        rest = CONFIG_SEARCH_PATHS[1:]
+        assert Path("config") / "carbonmapper_token.json" in rest
+        assert (
+            Path.home() / ".config" / "carbonmapper" / "config.json"
+        ) in rest
+        assert Path.home() / ".carbonmapper.json" in rest
+        assert Path(".carbonmapper.json") in rest
+
+    def test_dot_georeader_wins_over_legacy(self, tmp_path, monkeypatch):
+        """When both the canonical path and a legacy path exist, the
+        canonical one resolves."""
+        # Redirect Path.home() so we don't touch the real user dir.
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+
+        # Reimport-style: pick up the new home via the module's
+        # configured constants. Easiest is to compute the canonical path
+        # directly against the fake home.
+        canonical = tmp_path / ".georeader" / "auth_carbonmapper.json"
+        legacy = tmp_path / ".config" / "carbonmapper" / "config.json"
+
+        canonical.parent.mkdir(parents=True, exist_ok=True)
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        canonical.write_text(json.dumps({"token": "canonical-wins"}))
+        legacy.write_text(json.dumps({"token": "legacy-loser"}))
+
+        with patch.dict(os.environ, {}, clear=True):
+            # Rebuild the search-paths list against the patched home —
+            # the module's CONFIG_SEARCH_PATHS was bound at import time
+            # and still references the real home, so iterate manually.
+            search_paths = [
+                tmp_path / ".georeader" / "auth_carbonmapper.json",
+                Path("config") / "carbonmapper_token.json",
+                tmp_path / ".config" / "carbonmapper" / "config.json",
+                tmp_path / ".carbonmapper.json",
+                Path(".carbonmapper.json"),
+            ]
+            with patch(
+                "georeader.readers.carbonmapper.config.CONFIG_SEARCH_PATHS",
+                search_paths,
+            ):
+                cfg = CarbonMapperConfig.load(create_placeholder=False)
+        assert cfg.token == "canonical-wins"
+
+
+class TestPlaceholderCreation:
+    """`load()` auto-creates a stub ``~/.georeader/auth_carbonmapper.json``
+    on first run when no credentials are found — matches emit / S2."""
+
+    def test_load_creates_placeholder_when_no_config(self, tmp_path, monkeypatch):
+        canonical = tmp_path / ".georeader" / "auth_carbonmapper.json"
+        monkeypatch.setattr(
+            "georeader.readers.carbonmapper.config.DEFAULT_SAVE_PATH",
+            canonical,
+        )
+        monkeypatch.setattr(
+            "georeader.readers.carbonmapper.config.CONFIG_SEARCH_PATHS",
+            [canonical],
+        )
+        assert not canonical.exists()
+        with patch.dict(os.environ, {}, clear=True):
+            cfg = CarbonMapperConfig.load()
+        assert canonical.exists(), "placeholder file should have been created"
+        body = json.loads(canonical.read_text())
+        assert body == {
+            "email": "SET-EMAIL",
+            "password": "SET-PASSWORD",
+            "token": None,
+        }
+        # On the first run the returned cfg is empty — the placeholder
+        # is just a UX target on disk; `cfg` itself doesn't pretend to
+        # have credentials.
+        assert cfg.email is None
+        assert cfg.password is None
+        assert cfg.token is None
+        assert not cfg.has_credentials()
+
+    def test_second_load_with_placeholder_file_filters_stubs(self, tmp_path, monkeypatch):
+        """Once the placeholder is on disk, the next ``load()`` call
+        opens it via ``from_file``. The stub values must be filtered to
+        ``None`` — otherwise ``has_credentials()`` would falsely return
+        ``True`` because both fields are non-empty strings."""
+        canonical = tmp_path / ".georeader" / "auth_carbonmapper.json"
+        canonical.parent.mkdir(parents=True, exist_ok=True)
+        canonical.write_text(json.dumps({
+            "email": "SET-EMAIL", "password": "SET-PASSWORD", "token": None,
+        }))
+        monkeypatch.setattr(
+            "georeader.readers.carbonmapper.config.DEFAULT_SAVE_PATH",
+            canonical,
+        )
+        monkeypatch.setattr(
+            "georeader.readers.carbonmapper.config.CONFIG_SEARCH_PATHS",
+            [canonical],
+        )
+        with patch.dict(os.environ, {}, clear=True):
+            cfg = CarbonMapperConfig.load(create_placeholder=False)
+        assert cfg.email is None
+        assert cfg.password is None
+        assert not cfg.has_credentials()
+
+    def test_load_skips_placeholder_when_disabled(self, tmp_path, monkeypatch):
+        canonical = tmp_path / ".georeader" / "auth_carbonmapper.json"
+        monkeypatch.setattr(
+            "georeader.readers.carbonmapper.config.DEFAULT_SAVE_PATH",
+            canonical,
+        )
+        monkeypatch.setattr(
+            "georeader.readers.carbonmapper.config.CONFIG_SEARCH_PATHS",
+            [canonical],
+        )
+        with patch.dict(os.environ, {}, clear=True):
+            CarbonMapperConfig.load(create_placeholder=False)
+        assert not canonical.exists(), "placeholder must not be written"
+
+    def test_load_skips_placeholder_when_env_token_set(self, tmp_path, monkeypatch):
+        """Env-var creds are sufficient — no placeholder needed."""
+        canonical = tmp_path / ".georeader" / "auth_carbonmapper.json"
+        monkeypatch.setattr(
+            "georeader.readers.carbonmapper.config.DEFAULT_SAVE_PATH",
+            canonical,
+        )
+        monkeypatch.setattr(
+            "georeader.readers.carbonmapper.config.CONFIG_SEARCH_PATHS",
+            [canonical],
+        )
+        with patch.dict(os.environ, {_ENV_TOKEN: "jwt-from-env"}, clear=True):
+            cfg = CarbonMapperConfig.load()
+        assert cfg.token == "jwt-from-env"
+        assert not canonical.exists(), (
+            "no placeholder when env credentials suffice"
+        )
+
+    def test_load_skips_placeholder_when_explicit_path_given(self, tmp_path, monkeypatch):
+        """Explicit ``path=`` argument means the caller knows where their
+        config lives; we shouldn't write a stub elsewhere."""
+        canonical = tmp_path / ".georeader" / "auth_carbonmapper.json"
+        explicit_missing = tmp_path / "some-other-place.json"
+        monkeypatch.setattr(
+            "georeader.readers.carbonmapper.config.DEFAULT_SAVE_PATH",
+            canonical,
+        )
+        with patch.dict(os.environ, {}, clear=True):
+            CarbonMapperConfig.load(path=explicit_missing)
+        assert not canonical.exists(), (
+            "explicit path means no opinionated placeholder"
+        )
 
 
 # --- save ---
