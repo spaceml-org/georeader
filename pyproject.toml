@@ -24,6 +24,11 @@ mercantile = ">=1"
 # 'georeader-spaceml[carbonmapper]'`).
 pydantic = {version = ">=2", optional = true}
 requests = {version = ">=2", optional = true}
+# Async COG reader (`georeader.async_geotiff_reader.AsyncGeoTIFFReader`) —
+# thin adapter over developmentseed/async-geotiff. async-geotiff requires
+# numpy >= 2 transitively (via async-tiff), so the extra ships its own
+# numpy floor; the default install keeps numpy >= 1 for the sync path.
+async-geotiff = {version = ">=0.5,<0.6", optional = true}
 
 [tool.poetry.extras]
 # Carbon Mapper reader (`georeader.readers.carbonmapper`) — STAC + plume
@@ -34,9 +39,16 @@ requests = {version = ">=2", optional = true}
 # token loading on top of the file-based primitives in
 # `CarbonMapperConfig`.
 carbonmapper = ["pydantic", "requests"]
+# Async COG reader — pulls in `developmentseed/async-geotiff` and its
+# transitive deps (`async-tiff`, `obspec`). Users still need to install
+# an obstore backend (e.g. `obstore`) themselves; we don't pin a store
+# package because the right one depends on the cloud (S3 vs GCS vs Azure
+# vs local).
+async = ["async-geotiff"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.0"
+pytest-asyncio = ">=0.23"
 mypy = "^1.5.1"
 pre-commit = "^3.4.0"
 tox = "^4.11.1"
@@ -46,6 +58,11 @@ scikit-image = "^0.24.0"
 # the dependencies are gated as optional for end users.
 pydantic = ">=2"
 requests = ">=2"
+# Async COG reader tests need the async-geotiff package + an obstore
+# backend (LocalStore here). They use ``pytest.importorskip`` so
+# environments without these installed are skipped cleanly.
+async-geotiff = ">=0.5,<0.6"
+obstore = ">=0.7"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = "^1.4.2"
@@ -99,6 +116,10 @@ show_error_codes = "True"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Mode controls how pytest-asyncio discovers async test functions. "strict"
+# requires each async test to be decorated with @pytest.mark.asyncio (won't
+# touch sync tests). Suppresses the default-mode-deprecation warning.
+asyncio_mode = "strict"
 
 [tool.ruff]
 target-version = "py39"
