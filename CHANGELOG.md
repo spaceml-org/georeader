@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — 2.1.1 line
+
+### Features
+
+* **Carbon Mapper reader** (new): typed access to the Carbon Mapper
+  STAC catalogue and plume API at `georeader.readers.carbonmapper`.
+  Provides `CMRawPlume` (Pydantic model accepting both CSV bulk-export
+  and annotated-JSON payloads), `CMSource` (cluster-of-plumes
+  dataclass), `CMImageRaster` / `CMPlumeRaster` (lazy
+  `RasterioReader`-backed band accessors with polygon extraction from
+  the L3A alpha mask), `CarbonMapperConfig` (file-based token
+  persistence), and the typed query layer (`get_tile`, `get_plume`,
+  `get_source`, `list_*`, exception hierarchy). Gated behind the
+  `[carbonmapper]` install extra (`pip install
+  'georeader-spaceml[carbonmapper]'`) which adds `pydantic` and
+  `requests`. No Azure SDK dependency — token loading via Azure Key
+  Vault is left to downstream consumers (e.g. UNEP IMEO MARS).
+
 ## [2.1.0](https://github.com/spaceml-org/georeader/compare/v2.0.0...v2.1.0) (2026-05-14)
 
 

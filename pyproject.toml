@@ -19,6 +19,21 @@ numpy = ">=1"
 shapely = ">=2"
 geopandas = ">=1"
 mercantile = ">=1"
+# Optional dependencies surfaced via `[tool.poetry.extras]` below.
+# Installed only when users opt in (e.g. `pip install
+# 'georeader-spaceml[carbonmapper]'`).
+pydantic = {version = ">=2", optional = true}
+requests = {version = ">=2", optional = true}
+
+[tool.poetry.extras]
+# Carbon Mapper reader (`georeader.readers.carbonmapper`) — STAC + plume
+# catalogue API, typed plume / source / raster wrappers, file-based
+# token persistence. Pulls in pydantic (for CMRawPlume) and requests
+# (for the API client). Azure SDK is intentionally NOT included —
+# downstream consumers (e.g. UNEP IMEO MARS) wire keyvault-backed
+# token loading on top of the file-based primitives in
+# `CarbonMapperConfig`.
+carbonmapper = ["pydantic", "requests"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.2.0"
@@ -26,6 +41,11 @@ mypy = "^1.5.1"
 pre-commit = "^3.4.0"
 tox = "^4.11.1"
 scikit-image = "^0.24.0"
+# CI installs the dev group; pull in the carbonmapper extras here
+# explicitly so the carbonmapper reader's tests run in CI even though
+# the dependencies are gated as optional for end users.
+pydantic = ">=2"
+requests = ">=2"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = "^1.4.2"
