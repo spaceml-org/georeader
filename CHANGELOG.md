@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.6.0](https://github.com/spaceml-org/georeader/compare/v1.5.12...v1.6.0) (2026-05-14)
+## [2.0.0](https://github.com/spaceml-org/georeader/compare/v1.5.12...v1.6.0) (2026-05-14)
 
 
 ### Features
