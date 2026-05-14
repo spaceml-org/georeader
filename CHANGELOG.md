@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/spaceml-org/georeader/compare/v1.5.12...v1.6.0) (2026-05-14)
+
+
+### Features
+
+* version 2.0 geotensor to implement numpy API ([#21](https://github.com/spaceml-org/georeader/issues/21)) ([00e46f8](https://github.com/spaceml-org/georeader/commit/00e46f80bd812e81e2f6c6b5db86d234ec81bcfd))
+
 ## [1.5.12](https://github.com/spaceml-org/georeader/compare/v1.5.11...v1.5.12) (2026-01-28)
 
 
