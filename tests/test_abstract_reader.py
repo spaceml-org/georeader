@@ -5,6 +5,7 @@ These tests verify the abstract base classes and protocols including:
 - GeoDataBase protocol
 - FakeGeoData dataclass
 - GeoData abstract class
+- AsyncGeoData abstract class
 - same_extent comparison function
 """
 
@@ -12,7 +13,7 @@ import numpy as np
 import pytest
 from rasterio.transform import from_origin
 
-from georeader.abstract_reader import FakeGeoData, same_extent
+from georeader.abstract_reader import AsyncGeoData, FakeGeoData, same_extent
 from georeader.geotensor import GeoTensor
 
 
@@ -74,6 +75,84 @@ class TestGeoDataProtocol:
         assert hasattr(fake, "transform")
         assert hasattr(fake, "crs")
         assert hasattr(fake, "shape")
+
+
+class _FakeAsyncReader(AsyncGeoData):
+    """Minimal concrete ``AsyncGeoData`` used to verify inherited defaults.
+
+    Implements only the abstract surface (``transform``, ``crs``, ``shape``,
+    ``dtype``, ``fill_value_default``); the read methods are left raising
+    so the test focuses on metadata + derived-property defaults.
+    """
+
+    def __init__(self, transform, crs, shape, dtype=np.float32, fill_value_default=0):
+        self._transform = transform
+        self._crs = crs
+        self._shape = shape
+        self._dtype = dtype
+        self._fill_value_default = fill_value_default
+
+    @property
+    def transform(self):
+        return self._transform
+
+    @property
+    def crs(self):
+        return self._crs
+
+    @property
+    def shape(self):
+        return self._shape
+
+    @property
+    def dtype(self):
+        return self._dtype
+
+    @property
+    def fill_value_default(self):
+        return self._fill_value_default
+
+
+class TestAsyncGeoData:
+    """Tests for the AsyncGeoData abstract class."""
+
+    def test_subclass_satisfies_surface(self):
+        """A subclass exposing the required attributes satisfies AsyncGeoData."""
+        transform = from_origin(0, 100, 10, 10)
+        reader = _FakeAsyncReader(transform=transform, crs="EPSG:32631", shape=(3, 100, 100))
+
+        # Inherited from GeoDataBase
+        assert reader.width == 100
+        assert reader.height == 100
+        # Defaults inherited from AsyncGeoData (origin (0, 100), 10x10 pixels, 100x100 grid)
+        assert reader.res == (10.0, 10.0)
+        assert reader.bounds == (0.0, -900.0, 1000.0, 100.0)
+
+    def test_footprint_native_crs(self):
+        """Footprint returns the bounding polygon in the reader's native CRS."""
+        transform = from_origin(0, 100, 10, 10)
+        reader = _FakeAsyncReader(transform=transform, crs="EPSG:32631", shape=(3, 100, 100))
+
+        pol = reader.footprint()
+        # Same coverage as bounds — corners match
+        assert pol.bounds == reader.bounds
+
+    @pytest.mark.parametrize("method_name", ["load", "read_from_window"])
+    def test_default_read_methods_raise_not_implemented(self, method_name):
+        """Default ``load`` / ``read_from_window`` raise NotImplementedError on a bare subclass."""
+        import asyncio
+
+        transform = from_origin(0, 100, 10, 10)
+        reader = _FakeAsyncReader(transform=transform, crs="EPSG:32631", shape=(3, 100, 100))
+
+        method = getattr(reader, method_name)
+        if method_name == "load":
+            coro = method()
+        else:
+            coro = method(window=None, boundless=True)
+
+        with pytest.raises(NotImplementedError):
+            asyncio.run(coro)
 
 
 class TestSameExtent:
