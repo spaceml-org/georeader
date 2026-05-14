@@ -745,16 +745,15 @@ class TestGeoTensorSetitemErrors:
 
     def test_setitem_invalid_index_type_raises(self, sample_geotensor):
         """Test that invalid index type raises an error."""
-        # The source code has a bug where it accesses .dtype on non-array types,
-        # causing AttributeError before the ValueError is raised
-        with pytest.raises((ValueError, AttributeError)):
+        # String indexing should raise a TypeError from numpy
+        with pytest.raises((TypeError, IndexError)):
             sample_geotensor["invalid"] = 5
 
     def test_setitem_wrong_shape_mask_raises(self, sample_geotensor):
-        """Test that boolean mask with wrong shape raises ValueError."""
+        """Test that boolean mask with wrong shape raises IndexError from numpy."""
         wrong_shape_mask = np.ones((50, 50), dtype=bool)
 
-        with pytest.raises(ValueError, match="Unsupported index type"):
+        with pytest.raises(IndexError):
             sample_geotensor[wrong_shape_mask] = 5
 
 
@@ -783,28 +782,17 @@ class TestGeoTensorValidFootprintErrors:
 
 
 class TestGeoTensorSetDtype:
-    """Tests for GeoTensor set_dtype method."""
+    """Tests for GeoTensor set_dtype method.
+    
+    Note: set_dtype is deprecated and doesn't work reliably due to numpy subclass limitations.
+    These tests verify the deprecation warning and RuntimeError are raised.
+    """
 
-    def test_set_dtype_to_float64(self, sample_geotensor):
-        """Test setting dtype to float64."""
-        original_dtype = sample_geotensor.dtype
-        sample_geotensor.set_dtype(np.float64)
-
-        assert sample_geotensor.dtype == np.float64
-        assert sample_geotensor.dtype != original_dtype
-
-    def test_set_dtype_to_int32(self, sample_geotensor):
-        """Test setting dtype to int32."""
-        sample_geotensor.set_dtype(np.int32)
-
-        assert sample_geotensor.dtype == np.int32
-
-    def test_set_dtype_preserves_shape(self, sample_geotensor):
-        """Test that set_dtype preserves shape."""
-        original_shape = sample_geotensor.shape
-        sample_geotensor.set_dtype(np.float64)
-
-        assert sample_geotensor.shape == original_shape
+    def test_set_dtype_raises_error_and_warning(self, sample_geotensor):
+        """Test that set_dtype raises deprecation warning and RuntimeError when dtype doesn't change."""
+        with pytest.warns(DeprecationWarning, match="set_dtype.*deprecated"):
+            with pytest.raises(RuntimeError, match="set_dtype.*failed to change dtype"):
+                sample_geotensor.set_dtype(np.float64)
 
 
 class TestGeoTensorValidFootprint:
@@ -882,30 +870,34 @@ class TestGeoTensorRepr:
 class TestGeoTensorReverseArithmetic:
     """Tests for GeoTensor reverse arithmetic operations.
 
-    Note: GeoTensor does not implement __radd__, __rsub__, __rmul__, __rtruediv__.
-    These tests document that reverse operations with scalars are NOT supported.
+    Note: With numpy ufunc implementation, reverse operations now work correctly.
+    These tests document that reverse operations with scalars ARE supported.
     """
 
-    def test_radd_scalar_not_supported(self, sample_geotensor):
-        """Test that reverse add with scalar is not supported."""
-        with pytest.raises(TypeError, match="unsupported operand"):
-            5 + sample_geotensor
+    def test_radd_scalar_works(self, sample_geotensor):
+        """Test that reverse add with scalar now works."""
+        result = 5 + sample_geotensor
+        assert isinstance(result, GeoTensor)
+        assert np.allclose(result.values, 5 + sample_geotensor.values)
 
-    def test_rsub_scalar_not_supported(self, sample_geotensor):
-        """Test that reverse subtract with scalar is not supported."""
-        with pytest.raises(TypeError, match="unsupported operand"):
-            10 - sample_geotensor
+    def test_rsub_scalar_works(self, sample_geotensor):
+        """Test that reverse subtract with scalar now works."""
+        result = 10 - sample_geotensor
+        assert isinstance(result, GeoTensor)
+        assert np.allclose(result.values, 10 - sample_geotensor.values)
 
-    def test_rmul_scalar_not_supported(self, sample_geotensor):
-        """Test that reverse multiply with scalar is not supported."""
-        with pytest.raises(TypeError, match="unsupported operand"):
-            3 * sample_geotensor
+    def test_rmul_scalar_works(self, sample_geotensor):
+        """Test that reverse multiply with scalar now works."""
+        result = 3 * sample_geotensor
+        assert isinstance(result, GeoTensor)
+        assert np.allclose(result.values, 3 * sample_geotensor.values)
 
-    def test_rtruediv_scalar_not_supported(self, sample_geotensor):
-        """Test that reverse divide with scalar is not supported."""
+    def test_rtruediv_scalar_works(self, sample_geotensor):
+        """Test that reverse divide with scalar now works."""
         gt = sample_geotensor + 1
-        with pytest.raises(TypeError, match="unsupported operand"):
-            10 / gt
+        result = 10 / gt
+        assert isinstance(result, GeoTensor)
+        assert np.allclose(result.values, 10 / gt.values)
 
 
 class TestGeoTensorLoadFile:
@@ -977,3 +969,352 @@ class TestGeoTensorAttrs:
 
         assert gt.attrs == attrs
         assert gt.attrs["custom_key"] == "custom_value"
+
+
+# =============================================================================
+# Tests for NumPy API compatibility (ufuncs, slicing, reductions)
+# =============================================================================
+
+
+class TestGeoTensorNumpyUfuncs:
+    """Tests for NumPy universal functions (ufuncs) on GeoTensor."""
+
+    def test_ufunc_sin(self, sample_geotensor):
+        """Test np.sin returns GeoTensor with same spatial info."""
+        result = np.sin(sample_geotensor)
+
+        assert isinstance(result, GeoTensor)
+        assert result.shape == sample_geotensor.shape
+        assert result.transform == sample_geotensor.transform
+        assert result.crs == sample_geotensor.crs
+
+    def test_ufunc_exp(self, sample_geotensor):
+        """Test np.exp returns GeoTensor."""
+        result = np.exp(sample_geotensor)
+
+        assert isinstance(result, GeoTensor)
+        assert result.transform == sample_geotensor.transform
+
+    def test_ufunc_sqrt(self, sample_geotensor):
+        """Test np.sqrt returns GeoTensor."""
+        result = np.sqrt(sample_geotensor)
+
+        assert isinstance(result, GeoTensor)
+        assert result.shape == sample_geotensor.shape
+
+    def test_ufunc_add_two_geotensors(self, sample_geotensor):
+        """Test np.add with two GeoTensors of same extent."""
+        gt1 = sample_geotensor
+        gt2 = sample_geotensor.copy()
+
+        result = np.add(gt1, gt2)
+
+        assert isinstance(result, GeoTensor)
+        assert np.allclose(result.values, gt1.values + gt2.values)
+
+
+class TestGeoTensorNumpyReductions:
+    """Tests for NumPy reduction operations on GeoTensor."""
+
+    def test_mean_preserves_spatial_returns_geotensor(self, sample_geotensor):
+        """Test np.mean along non-spatial axis returns GeoTensor."""
+        # Mean along band axis (axis=0) preserves spatial dims
+        result = np.mean(sample_geotensor, axis=0)
+
+        assert isinstance(result, GeoTensor)
+        assert result.shape == (100, 100)  # 2D result
+        assert result.transform == sample_geotensor.transform
+        assert result.crs == sample_geotensor.crs
+
+    def test_mean_reduces_spatial_returns_ndarray(self, sample_geotensor):
+        """Test np.mean along spatial axis returns ndarray."""
+        # Mean along spatial axes returns ndarray
+        result = np.mean(sample_geotensor, axis=(-2, -1))
+
+        assert isinstance(result, np.ndarray)
+        assert not isinstance(result, GeoTensor)
+        assert result.shape == (3,)  # One value per band
+
+    def test_mean_full_reduction_returns_scalar(self, sample_geotensor):
+        """Test np.mean with no axis returns scalar."""
+        result = np.mean(sample_geotensor)
+
+        assert np.isscalar(result) or result.shape == ()
+
+    def test_sum_preserves_spatial(self, sample_geotensor):
+        """Test np.sum along non-spatial axis returns GeoTensor."""
+        result = np.sum(sample_geotensor, axis=0)
+
+        assert isinstance(result, GeoTensor)
+        assert result.shape == (100, 100)
+
+    def test_max_preserves_spatial(self, sample_geotensor):
+        """Test np.max along non-spatial axis returns GeoTensor."""
+        result = np.max(sample_geotensor, axis=0)
+
+        assert isinstance(result, GeoTensor)
+        assert result.shape == (100, 100)
+
+    def test_all_preserves_spatial(self, sample_geotensor):
+        """Test np.all along non-spatial axis returns GeoTensor."""
+        bool_tensor = sample_geotensor > 0.5
+        result = np.all(bool_tensor, axis=0)
+
+        assert isinstance(result, GeoTensor)
+        assert result.dtype == bool
+
+    def test_mean_keepdims_true(self, sample_geotensor):
+        """Test np.mean with keepdims=True."""
+        result = np.mean(sample_geotensor, axis=0, keepdims=True)
+
+        assert isinstance(result, GeoTensor)
+        assert result.shape == (1, 100, 100)
+
+
+class TestGeoTensorDirectSlicing:
+    """Tests for direct slicing with __getitem__ and transform propagation."""
+
+    def test_slice_spatial_dims_updates_transform(self, sample_geotensor):
+        """Test that slicing spatial dimensions updates transform correctly."""
+        sliced = sample_geotensor[:, 20:80, 30:90]
+
+        assert sliced.shape == (3, 60, 60)
+        # Transform should be shifted by the slice offsets
+        assert sliced.transform != sample_geotensor.transform
+        # Check that origin is shifted (col_off=30, row_off=20 with resolution 1)
+        assert sliced.transform.c == sample_geotensor.transform.c + 30
+        assert sliced.transform.f == sample_geotensor.transform.f - 20
+
+    def test_slice_with_step(self, sample_geotensor):
+        """Test slicing with step changes resolution."""
+        sliced = sample_geotensor[:, ::2, ::2]
+
+        assert sliced.shape == (3, 50, 50)
+        # Resolution should be doubled
+        assert abs(sliced.res[0]) == abs(sample_geotensor.res[0]) * 2
+        assert abs(sliced.res[1]) == abs(sample_geotensor.res[1]) * 2
+
+    def test_slice_with_negative_step_reverses(self, sample_geotensor):
+        """Test slicing with negative step reverses the array."""
+        sliced = sample_geotensor[:, ::-1, :]
+
+        assert sliced.shape == sample_geotensor.shape
+        # Data should be reversed along y axis
+        assert np.allclose(sliced.values[:, 0, :], sample_geotensor.values[:, -1, :])
+
+    def test_slice_band_dimension(self, sample_geotensor):
+        """Test slicing band dimension with list."""
+        sliced = sample_geotensor[[0, 2]]
+
+        assert sliced.shape == (2, 100, 100)
+        assert sliced.transform == sample_geotensor.transform
+
+    def test_slice_single_band(self, sample_geotensor):
+        """Test selecting a single band."""
+        sliced = sample_geotensor[1]
+
+        assert sliced.shape == (100, 100)
+        assert sliced.transform == sample_geotensor.transform
+
+
+class TestGeoTensorValidInvalidMask:
+    """Tests for validmask and invalidmask methods."""
+
+    def test_validmask_basic(self):
+        """Test validmask returns correct boolean GeoTensor."""
+        data = np.array([[[1, 0, 2], [0, 3, 0]]])  # 1x2x3
+        transform = from_origin(0, 2, 1, 1)
+        gt = GeoTensor(data, transform=transform, crs="EPSG:32631", fill_value_default=0)
+
+        valid = gt.validmask()
+
+        assert isinstance(valid, GeoTensor)
+        assert valid.dtype == bool
+        expected = np.array([[[True, False, True], [False, True, False]]])
+        assert np.array_equal(valid.values, expected)
+
+    def test_invalidmask_basic(self):
+        """Test invalidmask returns correct boolean GeoTensor."""
+        data = np.array([[[1, 0, 2], [0, 3, 0]]])
+        transform = from_origin(0, 2, 1, 1)
+        gt = GeoTensor(data, transform=transform, crs="EPSG:32631", fill_value_default=0)
+
+        invalid = gt.invalidmask()
+
+        assert isinstance(invalid, GeoTensor)
+        assert invalid.dtype == bool
+        expected = np.array([[[False, True, False], [True, False, True]]])
+        assert np.array_equal(invalid.values, expected)
+
+    def test_validmask_none_fill_value(self):
+        """Test validmask when fill_value_default is None."""
+        data = np.ones((3, 10, 10))
+        transform = from_origin(0, 10, 1, 1)
+        gt = GeoTensor(data, transform=transform, crs="EPSG:32631", fill_value_default=None)
+
+        valid = gt.validmask()
+
+        # All values should be valid when fill_value_default is None
+        assert np.all(valid.values)
+
+    def test_invalidmask_preserves_spatial_info(self):
+        """Test invalidmask preserves transform and crs."""
+        data = np.zeros((3, 50, 50))
+        transform = from_origin(10, 100, 2, 2)
+        gt = GeoTensor(data, transform=transform, crs="EPSG:4326", fill_value_default=0)
+
+        invalid = gt.invalidmask()
+
+        assert invalid.transform == gt.transform
+        assert invalid.crs == gt.crs
+
+
+class TestGeoTensorComparisonOperations:
+    """Tests for comparison operations returning GeoTensor."""
+
+    def test_less_than(self, sample_geotensor):
+        """Test < operator returns GeoTensor."""
+        result = sample_geotensor < 0.5
+
+        assert isinstance(result, GeoTensor)
+        assert result.dtype == bool
+        assert result.fill_value_default is False
+
+    def test_less_equal(self, sample_geotensor):
+        """Test <= operator returns GeoTensor."""
+        result = sample_geotensor <= 0.5
+
+        assert isinstance(result, GeoTensor)
+        assert result.dtype == bool
+
+    def test_greater_than(self, sample_geotensor):
+        """Test > operator returns GeoTensor."""
+        result = sample_geotensor > 0.5
+
+        assert isinstance(result, GeoTensor)
+        assert result.dtype == bool
+
+    def test_not_equal(self, sample_geotensor):
+        """Test != operator returns GeoTensor."""
+        result = sample_geotensor != 0
+
+        assert isinstance(result, GeoTensor)
+        assert result.dtype == bool
+
+    def test_comparison_preserves_spatial_info(self, sample_geotensor):
+        """Test comparison preserves transform and crs."""
+        result = sample_geotensor > 0.5
+
+        assert result.transform == sample_geotensor.transform
+        assert result.crs == sample_geotensor.crs
+
+
+class TestGeoTensorExpandDims:
+    """Tests for expand_dims method."""
+
+    def test_expand_dims_axis_0(self, sample_geotensor):
+        """Test expand_dims at axis 0."""
+        result = sample_geotensor.expand_dims(0)
+
+        assert result.shape == (1, 3, 100, 100)
+        assert result.transform == sample_geotensor.transform
+
+    def test_expand_dims_invalid_axis_raises(self, sample_geotensor):
+        """Test expand_dims at spatial axis raises error."""
+        # Axis 1 would be spatial for 3D array after expansion
+        with pytest.raises(ValueError, match="Cannot add dimension"):
+            sample_geotensor.expand_dims(2)
+
+
+class TestGeoTensorTranspose:
+    """Tests for transpose method."""
+
+    def test_transpose_4d(self):
+        """Test transpose reverses non-spatial dimensions."""
+        data = np.random.rand(2, 3, 50, 50)
+        transform = from_origin(0, 50, 1, 1)
+        gt = GeoTensor(data, transform=transform, crs="EPSG:32631")
+
+        result = gt.transpose()
+
+        assert result.shape == (3, 2, 50, 50)
+        assert result.transform == gt.transform
+
+    def test_transpose_explicit_axes(self):
+        """Test transpose with explicit axes."""
+        data = np.random.rand(2, 3, 50, 50)
+        transform = from_origin(0, 50, 1, 1)
+        gt = GeoTensor(data, transform=transform, crs="EPSG:32631")
+
+        result = gt.transpose((1, 0, 2, 3))
+
+        assert result.shape == (3, 2, 50, 50)
+
+    def test_transpose_invalid_spatial_axes_raises(self):
+        """Test transpose fails if spatial dims are moved."""
+        data = np.random.rand(2, 3, 50, 50)
+        transform = from_origin(0, 50, 1, 1)
+        gt = GeoTensor(data, transform=transform, crs="EPSG:32631")
+
+        with pytest.raises(ValueError, match="Cannot change the position of spatial dimensions"):
+            gt.transpose((0, 2, 1, 3))
+
+
+class TestGeoTensorArrayAsGeotensor:
+    """Tests for array_as_geotensor method."""
+
+    def test_array_as_geotensor_same_shape(self, sample_geotensor):
+        """Test converting ndarray to GeoTensor with same spatial dims."""
+        arr = np.ones((3, 100, 100))
+        result = sample_geotensor.array_as_geotensor(arr)
+
+        assert isinstance(result, GeoTensor)
+        assert result.transform == sample_geotensor.transform
+        assert result.crs == sample_geotensor.crs
+
+    def test_array_as_geotensor_2d(self, sample_geotensor):
+        """Test converting 2D ndarray to GeoTensor."""
+        arr = np.ones((100, 100))
+        result = sample_geotensor.array_as_geotensor(arr)
+
+        assert isinstance(result, GeoTensor)
+        assert result.shape == (100, 100)
+
+    def test_array_as_geotensor_wrong_spatial_raises(self, sample_geotensor):
+        """Test array_as_geotensor raises for wrong spatial dims."""
+        arr = np.ones((3, 50, 50))  # Different spatial dims
+
+        with pytest.raises(ValueError, match="Operation altered spatial dimensions"):
+            sample_geotensor.array_as_geotensor(arr)
+
+
+class TestGeoTensorBitwiseOperations:
+    """Tests for bitwise AND and OR operations."""
+
+    def test_and_operation(self):
+        """Test & operator with boolean GeoTensors."""
+        data1 = np.array([[True, False], [True, True]])
+        data2 = np.array([[True, True], [False, True]])
+        transform = from_origin(0, 2, 1, 1)
+        gt1 = GeoTensor(data1, transform=transform, crs="EPSG:32631")
+        gt2 = GeoTensor(data2, transform=transform, crs="EPSG:32631")
+
+        result = gt1 & gt2
+
+        assert isinstance(result, GeoTensor)
+        expected = np.array([[True, False], [False, True]])
+        assert np.array_equal(result.values, expected)
+
+    def test_or_operation(self):
+        """Test | operator with boolean GeoTensors."""
+        data1 = np.array([[True, False], [False, False]])
+        data2 = np.array([[False, True], [False, True]])
+        transform = from_origin(0, 2, 1, 1)
+        gt1 = GeoTensor(data1, transform=transform, crs="EPSG:32631")
+        gt2 = GeoTensor(data2, transform=transform, crs="EPSG:32631")
+
+        result = gt1 | gt2
+
+        assert isinstance(result, GeoTensor)
+        expected = np.array([[True, True], [False, True]])
+        assert np.array_equal(result.values, expected)

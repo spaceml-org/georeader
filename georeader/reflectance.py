@@ -1,3 +1,150 @@
+"""
+Radiometric Conversion Module for Top-of-Atmosphere Reflectance and Radiance.
+
+This module provides functions for converting between radiance and top-of-atmosphere
+(ToA) reflectance, handling spectral response functions (SRF), and computing
+solar irradiance integrals. It is essential for calibrating satellite imagery
+from raw digital numbers to physically meaningful radiometric quantities.
+
+Unit Conventions & Conversion Pipeline
+--------------------------------------
+
+The module handles conversions between different unit systems commonly used in
+remote sensing:
+
+::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                    RADIOMETRIC UNIT CONVERSION FLOW                     │
+    ├─────────────────────────────────────────────────────────────────────────┤
+    │                                                                         │
+    │   Raw DN ──────►  Radiance ──────────────────────────►  Reflectance     │
+    │   (counts)        (W/m²/sr/nm)                          (unitless 0-1)  │
+    │                                                                         │
+    │   Supported radiance units:                                             │
+    │   ┌────────────────────────────────────────────────────────────────┐    │
+    │   │  Unit              │  Factor to W/m²/sr/nm                     │    │
+    │   ├────────────────────┼───────────────────────────────────────────┤    │
+    │   │  W/m²/sr/nm        │  1.0         (no conversion)              │    │
+    │   │  mW/m²/sr/nm       │  ÷ 1000      (milli → base)               │    │
+    │   │  µW/cm²/sr/nm      │  ÷ 100       (micro/cm² → base/m²)        │    │
+    │   └────────────────────┴───────────────────────────────────────────┘    │
+    │                                                                         │
+    │   Solar Irradiance: W/m²/nm or mW/m²/nm (at TOA, perpendicular)         │
+    │                                                                         │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+Physics of ToA Reflectance Conversion
+-------------------------------------
+
+ToA reflectance (ρ) accounts for solar illumination geometry and Earth-Sun distance:
+
+::
+
+    ρ = (π × d² × L) / (E_sun × cos(θ_z))
+
+    where:
+    - L      = at-sensor radiance (W/m²/sr/nm)
+    - E_sun  = solar irradiance at TOA (W/m²/nm)
+    - d      = Earth-Sun distance in AU (varies ~3% annually)
+    - θ_z    = solar zenith angle (0° = Sun overhead)
+
+The observation_date_correction_factor combines these geometric factors:
+
+::
+
+    obfactor = (π × d²) / cos(θ_z)
+
+    Then:  ρ = L × obfactor / E_sun
+
+Earth-Sun Distance Variation
+---------------------------
+
+::
+
+    ┌────────────────────────────────────────────────────────────────────┐
+    │       Earth-Sun Distance Throughout the Year                       │
+    │                                                                    │
+    │  Distance   ▲                                                      │
+    │  (AU)       │     Aphelion (~July 4)                               │
+    │             │          ╭───────╮                                   │
+    │  1.017 ─────┼─────────╱         ╲─────────────────────────         │
+    │             │        ╱           ╲                                 │
+    │  1.000 ─────┼───────╱─────────────╲──────────────────────          │
+    │             │      ╱               ╲                               │
+    │  0.983 ─────┼─────╱─────────────────╲────────────────────          │
+    │             │    ╱    Perihelion     ╲                             │
+    │             │   ╱     (~Jan 3)        ╲                            │
+    │             └───┴──────────────────────┴────────────────► Day      │
+    │                 0    91   182   273   365                          │
+    │                Jan  Apr   Jul   Oct   Jan                          │
+    │                                                                    │
+    │  d = 1 - 0.01673 × cos(0.0172 × (day_of_year - 4))                 │
+    │                                                                    │
+    │  Impact: ~6.5% variation in irradiance (d² factor)                 │
+    └────────────────────────────────────────────────────────────────────┘
+
+Spectral Response Functions (SRF)
+--------------------------------
+
+When converting hyperspectral to multispectral data, the SRF defines how
+each band integrates radiance across wavelengths:
+
+::
+
+    ┌─────────────────────────────────────────────────────────────────┐
+    │  Spectral Response Function Convolution                          │
+    │                                                                   │
+    │  Hyperspectral               SRF for Band X             Result   │
+    │  Radiance L(λ)               R(λ)                       L_X     │
+    │                                                                   │
+    │  L(λ)│     ╱╲                R(λ)│   ╱╲                         │
+    │      │    ╱  ╲╱╲╱╲              │  ╱  ╲                         │
+    │      │   ╱        ╲             │ ╱    ╲                        │
+    │      │  ╱          ╲            │╱      ╲                       │
+    │      └──────────────── λ        └──────────── λ                 │
+    │            400-2500 nm              λ_center ± FWHM/2            │
+    │                                                                   │
+    │  Integration:  L_X = ∫ L(λ) × R(λ) dλ  /  ∫ R(λ) dλ             │
+    │                                                                   │
+    │  The SRF is typically Gaussian:                                  │
+    │  R(λ) = exp(-(λ - λ_center)² / (2σ²))                           │
+    │  where σ = FWHM / (2 × √(2 × ln(2))) ≈ FWHM / 2.355             │
+    └─────────────────────────────────────────────────────────────────┘
+
+Module Functions Overview
+------------------------
+
+Core Conversion:
+    - :func:`radiance_to_reflectance`: L → ρ with unit handling
+    - :func:`reflectance_to_radiance`: ρ → L (inverse)
+
+Correction Factors:
+    - :func:`earth_sun_distance_correction_factor`: d from date
+    - :func:`observation_date_correction_factor`: Combined π×d²/cos(θ_z)
+    - :func:`compute_sza`: Solar zenith angle from location & time
+
+Spectral Integration:
+    - :func:`srf`: Build Gaussian spectral response function
+    - :func:`integrated_irradiance`: ∫ E_sun(λ) × R(λ) dλ
+    - :func:`transform_to_srf`: Hyperspectral → multispectral via SRF
+
+Solar Irradiance Data:
+    - :func:`load_thuillier_irradiance`: Standard TOA irradiance (200-2400 nm)
+
+
+References
+----------
+- ESA Sentinel-2 TOA Processing: https://sentiwiki.copernicus.eu/web/s2-processing
+- Thuillier Solar Irradiance: Solar Physics, vol. 214, pp. 1-22, 2003
+- NASA EMIT L2A Reflectance ATBD: https://lpdaac.usgs.gov/documents/
+
+See Also
+--------
+georeader.readers.emit : EMIT hyperspectral reader with GLT orthorectification
+georeader.readers.prisma : PRISMA reader with built-in radiance calibration
+georeader.readers.enmap : EnMAP reader with DN→radiance conversion
+"""
 from datetime import datetime
 from typing import Tuple, Union, List, Optional
 from georeader import window_utils
@@ -13,33 +160,79 @@ import numbers
 
 def earth_sun_distance_correction_factor(date_of_acquisition:datetime) -> float:
     """
-    This function returns the Earth-sun distance correction factor given by the formula:
+    Compute the Earth-Sun distance correction factor for a given date.
 
-    ```
-    d = 1-0.01673*cos(0.0172*(t-4))
+    The Earth's orbit is slightly elliptical (eccentricity ~0.0167), causing
+    solar irradiance at Earth to vary by approximately ±3.4% throughout the year.
+    This factor is used to normalize radiance measurements to a standard distance.
 
-    Where:
-    0.0172 = 360/365.256363 * np.pi/180.  # (Earth orbit angular velocity)
-    0.01673 is the Earth eccentricity
+    Formula
+    -------
+    ::
 
-    # t is the day of the year starting in 1:
-    t = datenum(Y,M,D) - datenum(Y,1,1) + 1;
+        d = 1 - 0.01673 × cos(0.0172 × (t - 4))
 
-    # tm_yday starts in 1
-    datetime.datetime.strptime("2022-01-01", "%Y-%m-%d").timetuple().tm_yday -> 1
+        where:
+        - 0.0172 = 2π/365.256363 rad/day (Earth's mean angular velocity)
+        - 0.01673 = Earth's orbital eccentricity
+        - t = day of year (1-366)
+        - The "-4" offset accounts for perihelion occurring ~Jan 3-4
 
-    ```
+    Unit Analysis
+    -------------
+    ::
 
-    In the Sentinel-2 metadata they provide `U` which is the square inverse of this factor: `U = 1 / d^2`
-    
-    [https://sentiwiki.copernicus.eu/web/s2-processing#S2Processing-TOAReflectanceComputation](https://sentiwiki.copernicus.eu/web/s2-processing#S2Processing-TOAReflectanceComputation)
-    
+        Input:  date (datetime)
+        Output: d (dimensionless, in Astronomical Units)
+
+        Physical interpretation:
+        - d ≈ 0.983 AU at perihelion (early January)
+        - d ≈ 1.017 AU at aphelion (early July)
+        - d² appears in irradiance: E ∝ 1/d² (inverse square law)
+
+    Relationship to Sentinel-2 Metadata
+    -----------------------------------
+    Sentinel-2 provides ``U`` in the metadata, which is the squared inverse::
+
+        U = 1/d²
+
+    This is directly used in their reflectance formula. To convert::
+
+        d = 1/√U
+
     Args:
-        date_of_acquisition: date of acquisition. The day of the year will be used 
-            to compute the correction factor
+        date_of_acquisition: Date/time of image acquisition. Only the day-of-year
+            is used; the time component is ignored for this approximation.
 
     Returns:
-        (1-0.01673*cos(0.0172*(t-4)))
+        Earth-Sun distance in AU (typically 0.983 to 1.017).
+
+    Examples
+    --------
+    >>> from datetime import datetime
+    >>> # Perihelion (closest to Sun) around January 3
+    >>> d_jan = earth_sun_distance_correction_factor(datetime(2024, 1, 3))
+    >>> print(f"January 3: d = {d_jan:.4f} AU")  # ~0.983
+    January 3: d = 0.9833 AU
+
+    >>> # Aphelion (farthest from Sun) around July 4
+    >>> d_jul = earth_sun_distance_correction_factor(datetime(2024, 7, 4))
+    >>> print(f"July 4: d = {d_jul:.4f} AU")  # ~1.017
+    July 4: d = 1.0167 AU
+
+    >>> # Irradiance ratio (inverse square)
+    >>> irradiance_ratio = (d_jan / d_jul) ** 2
+    >>> print(f"Jan/Jul irradiance ratio: {irradiance_ratio:.3f}")  # ~0.935
+    Jan/Jul irradiance ratio: 0.935
+
+    See Also
+    --------
+    observation_date_correction_factor : Combines this with solar zenith angle
+    
+    References
+    ----------
+    .. [1] ESA Sentinel-2 Processing:
+       https://sentiwiki.copernicus.eu/web/s2-processing#S2Processing-TOAReflectanceComputation
     """
     tm_yday = date_of_acquisition.timetuple().tm_yday # from 1 to 365 (or 366!)
     return 1 - 0.01673 * np.cos(0.0172 * (tm_yday - 4))
@@ -117,33 +310,134 @@ def radiance_to_reflectance(data:Union[GeoTensor, ArrayLike],
                             observation_date_corr_factor:Optional[float]=None,
                             units:str="uW/cm^2/SR/nm") -> Union[GeoTensor, NDArray]:
     """
-    Convert the radiance to ToA reflectance using the solar irradiance and the date of acquisition.
+    Convert at-sensor radiance to Top-of-Atmosphere (ToA) reflectance.
 
-    ```
-    toaBandX = (radianceBandX  * pi * d^2) / (cos(solarzenithangle/180*pi) * solarIrradianceBandX)
-    toaBandX = (radianceBandX / solarIrradianceBandX) * observation_date_correction_factor(center_coords, date_of_acquisition)
-    ```
+    This function implements the standard radiometric calibration equation
+    that accounts for solar illumination geometry and Earth-Sun distance.
 
-    [ESA reference of ToA calculation](https://sentiwiki.copernicus.eu/web/s2-processing#S2Processing-TOAReflectanceComputation)
+    Physical Equation
+    -----------------
+    ::
 
-    where:
-        d = earth_sun_distance_correction_factor(date_of_acquisition)
-        solarzenithangle = is obtained from the date of aquisition and location
+        ρ = (L × π × d²) / (E_sun × cos(θ_z))
+
+        Equivalently using observation_date_correction_factor:
+        ρ = L × obfactor / E_sun
+
+        where:
+        - ρ      = ToA reflectance (dimensionless, typically 0-1)
+        - L      = at-sensor radiance
+        - E_sun  = solar spectral irradiance at TOA
+        - d      = Earth-Sun distance (AU)
+        - θ_z    = solar zenith angle
+        - obfactor = π × d² / cos(θ_z)
+
+    Unit Analysis
+    -------------
+    ::
+
+        ┌─────────────────────────────────────────────────────────────────┐
+        │  UNIT CONVERSION FLOW                                            │
+        │                                                                   │
+        │  Input radiance        Normalized radiance      Output           │
+        │  (various units)   →   (W/m²/sr/nm)         →   reflectance     │
+        │                                                                   │
+        │  ┌─────────────────────────────────────────────────────────────┐ │
+        │  │ Input Unit       │ factor_div │ Conversion                  │ │
+        │  ├──────────────────┼────────────┼─────────────────────────────┤ │
+        │  │ W/m²/sr/nm       │ 1          │ No conversion               │ │
+        │  │ mW/m²/sr/nm      │ 1000       │ ×10⁻³ (milli → base)       │ │
+        │  │ µW/cm²/sr/nm     │ 100        │ ×10⁻⁶×10⁴ = ×10⁻²         │ │
+        │  └──────────────────┴────────────┴─────────────────────────────┘ │
+        │                                                                   │
+        │  Final calculation:                                              │
+        │                                                                   │
+        │  L [W/m²/sr/nm] × obfactor [sr⁻¹] / E_sun [W/m²/nm]            │
+        │  = dimensionless reflectance                                     │
+        │                                                                   │
+        │  Note: The steradian cancels with implicit assumptions about     │
+        │  the solar disk's solid angle as seen from Earth.               │
+        └─────────────────────────────────────────────────────────────────┘
 
     Args:
-        data:  (C, H, W) tensor with units: µW /(nm cm² sr)
-                microwatts per centimeter_squared per nanometer per steradian
-        solar_irradiance: (C,) vector units: W/m²/nm
-        date_of_acquisition: date of acquisition to compute the solar zenith angles and the Earth-Sun distance correction factor.
-        center_coords: location being considered to compute the solar zenith angles and the Earth-Sun distance correction factor.
-            (x,y) (long, lat if EPSG:4326). If None, it will use the center of the image.
-        observation_date_corr_factor: if None, it will be computed using the center_coords and date_of_acquisition.        
-        crs_coords: if None it will assume center_coords are in `EPSG:4326`.
-        units: if as_reflectance is True, the units of the hyperspectral data must be provided. Defaults to None.
-            accepted values: "mW/m2/sr/nm", "W/m2/sr/nm", "uW/cm^2/SR/nm"
+        data: Radiance tensor with shape (C, H, W) where C is spectral bands.
+            Units must match the ``units`` parameter.
+        solar_irradiance: Per-band solar irradiance values with shape (C,).
+            **Must be in W/m²/nm** (SI units, NOT mW/m²/nm).
+        date_of_acquisition: UTC datetime for computing solar geometry.
+            Required if ``observation_date_corr_factor`` is not provided.
+        center_coords: Image center as (x, y) or (lon, lat) for solar angle.
+            If None and data is GeoTensor, computed from transform.
+        crs_coords: CRS of center_coords. If None, assumes EPSG:4326.
+        observation_date_corr_factor: Pre-computed π×d²/cos(θ_z). If provided,
+            ``date_of_acquisition`` and ``center_coords`` are ignored.
+        units: Input radiance units. Must be one of:
+            - ``"W/m2/sr/nm"``: SI units (factor=1)
+            - ``"mW/m2/sr/nm"``: milliwatts (factor=1000)
+            - ``"uW/cm^2/SR/nm"``: EMIT/PRISMA standard (factor=100)
 
     Returns:
-        GeoTensor with ToA reflectance values (C, H, W)
+        ToA reflectance with same shape (C, H, W). Values typically 0-1
+        for non-saturated pixels over land. Returns GeoTensor if input
+        was GeoTensor, preserving georeferencing. Fill values are propagated.
+
+    Raises:
+        ValueError: If units string is not recognized.
+        AssertionError: If data shape doesn't match solar_irradiance length.
+
+    Examples
+    --------
+    Basic conversion from EMIT radiance::
+
+        >>> import numpy as np
+        >>> from datetime import datetime
+        >>> from georeader.reflectance import radiance_to_reflectance
+        >>> 
+        >>> # Simulated 3-band radiance (µW/cm²/sr/nm)
+        >>> radiance = np.array([[[10, 12], [11, 13]],    # Band 1 (blue ~450nm)
+        ...                      [[15, 18], [16, 19]],    # Band 2 (green ~550nm)
+        ...                      [[20, 24], [21, 25]]])   # Band 3 (red ~650nm)
+        >>> 
+        >>> # Approximate solar irradiance (W/m²/nm) - decreases with wavelength
+        >>> solar_irrad = np.array([1.95, 1.88, 1.55])  # Blue, Green, Red
+        >>> 
+        >>> # Summer acquisition in Northern Hemisphere
+        >>> refl = radiance_to_reflectance(
+        ...     radiance,
+        ...     solar_irradiance=solar_irrad,
+        ...     date_of_acquisition=datetime(2024, 6, 21, 10, 30),
+        ...     center_coords=(-122.4, 37.8),  # San Francisco
+        ...     units="uW/cm^2/SR/nm"
+        ... )
+        >>> print(f"Reflectance range: {refl.min():.3f} to {refl.max():.3f}")
+
+    Using pre-computed correction factor::
+
+        >>> obfactor = 3.5  # Pre-computed from metadata
+        >>> refl = radiance_to_reflectance(
+        ...     radiance,
+        ...     solar_irradiance=solar_irrad,
+        ...     observation_date_corr_factor=obfactor,
+        ...     units="uW/cm^2/SR/nm"
+        ... )
+
+    Warning
+    -------
+    The ``solar_irradiance`` parameter must be in **W/m²/nm**, even when
+    input radiance uses different units. The function handles radiance
+    unit conversion internally, but solar irradiance is assumed to be
+    already in SI units.
+
+    See Also
+    --------
+    reflectance_to_radiance : Inverse conversion
+    observation_date_correction_factor : Compute obfactor from date/location
+    transform_to_srf : Combined SRF integration and reflectance conversion
+
+    References
+    ----------
+    .. [1] ESA Sentinel-2 TOA Reflectance Computation:
+       https://sentiwiki.copernicus.eu/web/s2-processing#S2Processing-TOAReflectanceComputation
     """
 
     solar_irradiance = np.array(solar_irradiance)[:, np.newaxis, np.newaxis] # (C, 1, 1)
@@ -195,15 +489,86 @@ def radiance_to_reflectance(data:Union[GeoTensor, ArrayLike],
 
 def srf(center_wavelengths:ArrayLike, fwhm:ArrayLike, wavelengths:ArrayLike) -> NDArray:
     """
-    Returns the spectral response function (SRF) for the given center wavelengths and full width half maximum (FWHM).
+    Generate Gaussian spectral response functions (SRF) for sensor bands.
+
+    Creates a normalized Gaussian response curve for each band, which describes
+    the relative sensitivity of a sensor band to different wavelengths. This is
+    essential for simulating how a hyperspectral signal would appear in a
+    multispectral sensor.
+
+    Mathematical Definition
+    -----------------------
+    ::
+
+        For each band k with center wavelength λ_k and FWHM_k:
+
+        σ_k = FWHM_k / (2 × √(2 × ln(2))) ≈ FWHM_k / 2.355
+
+        R_k(λ) = exp(-(λ - λ_k)² / (2σ_k²)) / √(2πσ_k²)
+
+        Then normalized so that: Σ R_k(λ) = 1 over all λ
 
     Args:
-        center_wavelengths (np.array): array with center wavelengths. (K, )
-        fwhm (np.array): array with full width half maximum (FWHM) values (K,)
-        wavelengths (np.array): array with wavelengths where the SRF is evaluated (N,)
+        center_wavelengths: Band center wavelengths in nm. Shape (K,) where
+            K is the number of bands.
+        fwhm: Full Width at Half Maximum for each band in nm. Shape (K,).
+            Typical values: ~30nm for Sentinel-2, ~7-10nm for hyperspectral.
+        wavelengths: Wavelength grid where SRF is evaluated, in nm. Shape (N,).
+            Should span the range of center_wavelengths with appropriate resolution
+            (typically 1nm for accurate integration).
 
     Returns:
-        np.array: normalized SRF (N, K)
+        Normalized SRF matrix of shape (N, K). Each column sums to 1.0 and
+        represents the relative weight of each input wavelength for that band.
+
+    Examples
+    --------
+    Create Sentinel-2 visible bands SRF::
+
+        >>> import numpy as np
+        >>> from georeader.reflectance import srf
+        >>> 
+        >>> # Sentinel-2 Band 2 (Blue), Band 3 (Green), Band 4 (Red)
+        >>> s2_centers = np.array([492.4, 559.8, 664.6])  # nm
+        >>> s2_fwhm = np.array([66, 36, 31])  # nm
+        >>> 
+        >>> # Fine wavelength grid for integration
+        >>> wavelengths = np.arange(400, 800, 1)  # 400-799 nm at 1nm steps
+        >>> 
+        >>> response = srf(s2_centers, s2_fwhm, wavelengths)
+        >>> print(f"SRF shape: {response.shape}")  # (400, 3)
+        SRF shape: (400, 3)
+        >>> 
+        >>> # Verify normalization
+        >>> print(f"Column sums: {response.sum(axis=0)}")  # All ~1.0
+        Column sums: [1. 1. 1.]
+
+    Convert hyperspectral radiance to multispectral::
+
+        >>> # Hyperspectral radiance at 1nm resolution
+        >>> hyper_radiance = np.random.rand(400)  # 400-799 nm
+        >>> 
+        >>> # Integrate using SRF weights
+        >>> multi_radiance = hyper_radiance @ response  # Shape: (3,)
+        >>> print(f"Multispectral radiance: {multi_radiance}")
+
+    Notes
+    -----
+    - The FWHM-to-sigma conversion uses the exact Gaussian relationship:
+      σ = FWHM / (2√(2·ln(2)))
+    - Normalization ensures energy conservation when integrating radiance
+    - For non-Gaussian SRFs (e.g., from measured sensor response), use
+      :func:`integrated_irradiance` with actual SRF data
+
+    See Also
+    --------
+    integrated_irradiance : Integrate solar irradiance weighted by SRF
+    transform_to_srf : Full hyperspectral to multispectral conversion
+
+    References
+    ----------
+    .. [1] Sentinel-2 Spectral Response Functions:
+       https://sentiwiki.copernicus.eu/web/s2-msi-spectral-model
     """
     center_wavelengths = np.array(center_wavelengths) # (K, )
     fwhm = np.array(fwhm) # (K, )
@@ -246,19 +611,118 @@ def integrated_irradiance(srf:pd.DataFrame,
                           solar_irradiance:Optional[pd.DataFrame]=None,
                           epsilon_srf:float=1e-4) -> NDArray:
     """
-    Returns the integrated irradiance for the given spectral response function (SRF) and solar irradiance.
+    Compute band-integrated solar irradiance weighted by spectral response.
 
-    The output is the integrated irradiance for each band.
+    Calculates the effective solar irradiance for each sensor band by
+    convolving the TOA solar spectrum with the band's spectral response
+    function. This is necessary for accurate radiance-to-reflectance
+    conversion of multispectral data.
+
+    Mathematical Definition
+    -----------------------
+    ::
+
+        For band k with spectral response function R_k(λ):
+
+        E_k = ∫ E_sun(λ) × R_k(λ) dλ  /  ∫ R_k(λ) dλ
+
+        where:
+        - E_sun(λ) = solar spectral irradiance at TOA (W/m²/nm or mW/m²/nm)
+        - R_k(λ)   = spectral response function for band k
+        - E_k      = band-integrated irradiance (same units as E_sun)
+
+    Visual Representation
+    ---------------------
+    ::
+
+        ┌────────────────────────────────────────────────────────────────┐
+        │  Spectral Integration Process                                   │
+        │                                                                  │
+        │  E_sun(λ)          R(λ)               E_sun(λ) × R(λ)          │
+        │  (Solar)           (SRF)              (Product)                 │
+        │                                                                  │
+        │    │╲              │ ╱╲                 │  ╱╲                   │
+        │    │ ╲╲            │╱  ╲                │ ╱  ╲                  │
+        │    │  ╲╲╲          │    ╲               │╱    ╲                 │
+        │    │   ╲╲╲╲        │     ╲              │      ╲                │
+        │    └────────λ      └──────λ            └────────λ              │
+        │                                         ████████ ← Area = E_k  │
+        │                                                                  │
+        │  Solar spectrum   Band response    Weighted → integrate & norm  │
+        │  (~200-2500 nm)   (Gaussian)       gives band-effective E_sun   │
+        └────────────────────────────────────────────────────────────────┘
 
     Args:
-        srf (pd.DataFrame): dataframe with the spectral response function (SRF) (N, K) where N is the number of wavelengths and K the number of bands.
-            The index is the wavelengths in nanometers and the columns are the bands.
-        solar_irradiance (Optional[pd.DataFrame], optional): dataframe with the solar irradiance. It must contain the columns "Nanometer" and "Radiance(mW/m2/nm)". (D, 2)
-                  Defaults to None. If None, it will load the Thuillier solar irradiance and the output will be in mW/m2/nm.
-        epsilon_srf (float, optional): threshold to consider a band in the SRF. Defaults to 1e-4.
+        srf: Spectral response function as DataFrame. Index is wavelength (nm),
+            columns are band names. Shape (N, K) where N wavelengths, K bands.
+            Values should be normalized so each column sums to ~1.
+        solar_irradiance: Solar spectrum DataFrame with columns:
+            - ``"Nanometer"``: wavelength in nm
+            - ``"Radiance(mW/m2/nm)"``: spectral irradiance in mW/m²/nm
+            If None, loads Thuillier (2003) standard spectrum.
+        epsilon_srf: Threshold below which SRF values are treated as zero.
+            Bands/wavelengths with all values < epsilon_srf are excluded.
+            Default: 1e-4.
 
     Returns:
-        NDArray: integrated irradiance (K,)
+        Band-integrated irradiance array of shape (K,). Units match input
+        solar_irradiance (mW/m²/nm if using default Thuillier).
+
+    Examples
+    --------
+    Compute Sentinel-2 band irradiances::
+
+        >>> import numpy as np
+        >>> import pandas as pd
+        >>> from georeader.reflectance import srf, integrated_irradiance
+        >>> 
+        >>> # Create simple SRF for 3 bands
+        >>> wavelengths = np.arange(400, 800)
+        >>> centers = [490, 560, 665]
+        >>> fwhms = [65, 35, 30]
+        >>> srf_matrix = srf(centers, fwhms, wavelengths)
+        >>> srf_df = pd.DataFrame(srf_matrix, index=wavelengths, 
+        ...                       columns=['B2_Blue', 'B3_Green', 'B4_Red'])
+        >>> 
+        >>> # Integrate with default Thuillier solar spectrum
+        >>> band_irradiance = integrated_irradiance(srf_df)
+        >>> print("Band irradiances (mW/m²/nm):")
+        >>> for name, val in zip(srf_df.columns, band_irradiance):
+        ...     print(f"  {name}: {val:.1f}")
+        Band irradiances (mW/m²/nm):
+          B2_Blue: 1960.5
+          B3_Green: 1853.2
+          B4_Red: 1535.8
+
+    Using with radiance_to_reflectance::
+
+        >>> # Convert to W/m²/nm for use in radiance_to_reflectance
+        >>> band_irradiance_si = band_irradiance / 1000  # mW → W
+        >>> # Now use in reflectance conversion...
+
+    Notes
+    -----
+    - The function interpolates the SRF to the solar spectrum wavelengths,
+      not vice versa, to preserve spectral detail in the solar spectrum.
+    - Wavelengths outside the SRF range are excluded from integration.
+    - Default Thuillier spectrum covers 200-2400 nm at ~1nm resolution.
+
+    Warning
+    -------
+    The default output is in **mW/m²/nm** (Thuillier units). Divide by 1000
+    to convert to **W/m²/nm** for use with :func:`radiance_to_reflectance`.
+
+    See Also
+    --------
+    srf : Generate Gaussian spectral response functions
+    load_thuillier_irradiance : Load Thuillier (2003) solar spectrum
+    radiance_to_reflectance : Uses band irradiance for conversion
+
+    References
+    ----------
+    .. [1] Thuillier, G. et al. (2003). "The Solar Spectral Irradiance
+       from 200 to 2400nm as Measured by the SOLSPEC Spectrometer."
+       Solar Physics, 214(1), 1-22.
     """
     from scipy import interpolate
 

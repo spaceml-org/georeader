@@ -1,3 +1,107 @@
+"""
+Module to read EnMAP (Environmental Mapping and Analysis Program) hyperspectral images.
+
+EnMAP is a German hyperspectral satellite mission operated by DLR (German Aerospace Center),
+launched in 2022. It provides high-spectral-resolution data in 224 bands from 420 to 2450 nm
+with a 30m spatial resolution and 30km swath width.
+
+Data Format Overview
+--------------------
+EnMAP data is distributed as separate GeoTIFF files with an XML metadata file:
+
+    EnMAP Product Structure:
+    ┌─────────────────────────────────────────────────────────────────────┐
+    │  ENMAP01-____L1B-DT0000000000_20220501T101523Z_001_V010110_...     │
+    │  ├── *-METADATA.XML           ← Main metadata file (input)         │
+    │  ├── *-SPECTRAL_IMAGE_VNIR.TIF   420-1000 nm, ~88 bands            │
+    │  ├── *-SPECTRAL_IMAGE_SWIR.TIF   900-2450 nm, ~136 bands           │
+    │  ├── *-QL_QUALITY_CLOUD.TIF      Cloud mask                        │
+    │  ├── *-QL_QUALITY_CIRRUS.TIF     Cirrus mask                       │
+    │  ├── *-QL_QUALITY_SNOW.TIF       Snow mask                         │
+    │  ├── *-QL_QUALITY_HAZE.TIF       Haze mask                         │
+    │  └── *-QL_PIXELMASK_*.TIF        Per-sensor pixel masks            │
+    └─────────────────────────────────────────────────────────────────────┘
+
+Unlike EMIT and PRISMA, EnMAP L1B data is already orthorectified (map-projected) with
+Rational Polynomial Coefficients (RPCs) stored in the metadata for refined geolocation.
+
+Dual-Sensor Architecture
+------------------------
+EnMAP uses two pushbroom sensors with overlapping spectral coverage:
+
+    VNIR Detector                        SWIR Detector
+    ┌────────────────────┐               ┌────────────────────┐
+    │ 420 - 1000 nm      │               │ 900 - 2450 nm      │
+    │ ~88 bands          │               │ ~136 bands         │
+    │ 6.5 nm sampling    │               │ 10 nm sampling     │
+    │ Si CCD             │               │ HgCdTe             │
+    └────────────────────┘               └────────────────────┘
+              │                                    │
+              └──────────── Overlap ───────────────┘
+                         900-1000 nm
+
+The spectral overlap enables cross-calibration between the two detectors.
+
+Radiometric Processing
+----------------------
+EnMAP L1B data requires conversion from Digital Numbers (DN) to radiance:
+
+    L_λ = DN × GAIN + OFFSET   [W/(m²·sr·nm)]
+    
+    Note: DLR provides gains between 2000-10000 (multiplicative, not divisive)
+    The reader applies: L = (GAIN × DN + OFFSET) × 1000 to get mW/(m²·sr·nm)
+
+Rational Polynomial Coefficients (RPCs)
+---------------------------------------
+EnMAP includes RPCs for precise geolocation refinement:
+
+    Pixel (col, row) ──→ RPC Transform ──→ Geographic (lon, lat)
+    
+    RPCs model:
+    - Satellite orbit and attitude
+    - Sensor geometry  
+    - Terrain elevation effects (when height_off is set appropriately)
+    
+The reader can apply RPCs during loading for refined geolocation.
+
+Product Levels
+--------------
+- L1B: At-sensor radiance, sensor geometry
+- L2A: Surface reflectance, atmospheric correction applied
+
+This reader is designed for L1B products.
+
+Examples
+--------
+Basic usage::
+
+    from georeader.readers.enmap import EnMAP
+    
+    # Load from metadata XML file
+    enmap = EnMAP('/path/to/*-METADATA.XML')
+    
+    # Load specific wavelengths as reflectance
+    bands = enmap.load_wavelengths([665, 865, 1600], as_reflectance=True)
+    
+    # Load RGB with RPC-refined geolocation
+    rgb = enmap.load_rgb(as_reflectance=True, apply_rpcs=True)
+    
+    # Load quality masks
+    cloud_mask = enmap.load_product('QL_QUALITY_CLOUD')
+
+See Also
+--------
+georeader.readers.emit : EMIT hyperspectral reader
+georeader.readers.prisma : PRISMA hyperspectral reader
+georeader.rasterio_reader : Base reader for GeoTIFF files
+
+References
+----------
+- DLR EnMAP Mission: https://www.enmap.org/
+- EnMAP Product Specification: https://www.enmap.org/data_access/
+- GFZ enpt Package: https://github.com/GFZ/enpt (metadata parsing reference)
+
+"""
 import numpy as np
 import xml.etree.ElementTree as ET
 from georeader.rasterio_reader import RasterioReader
@@ -241,54 +345,179 @@ def read_xml(file_xml):
 
 class EnMAP:
     """
-    EnMAP (Environmental Mapping and Analysis Program) image reader.
+    Reader for EnMAP (Environmental Mapping and Analysis Program) hyperspectral images.
 
-    This class provides functionality to read and manipulate EnMAP satellite imagery products.
-    It handles the specific format and metadata of EnMAP files, supporting operations
-    like loading specific wavelengths, RGB composites, and converting to reflectance.
+    This class provides comprehensive functionality to read and manipulate EnMAP satellite
+    imagery products from DLR. It handles the multi-file product structure (separate VNIR/SWIR
+    GeoTIFFs with XML metadata), supporting operations like:
+    
+    - Loading radiance or reflectance data at specific wavelengths
+    - Automatic handling of VNIR/SWIR sensor selection based on wavelength
+    - Converting DN to radiance using gain/offset from metadata
+    - Converting radiance to reflectance using solar irradiance
+    - Applying Rational Polynomial Coefficients (RPCs) for refined geolocation
+    - Loading quality masks (cloud, cirrus, snow, haze)
+    
+    EnMAP Data Model
+    ----------------
+    EnMAP L1B products are orthorectified (map-projected) GeoTIFFs with separate files
+    for VNIR and SWIR bands:
+    
+        File Structure:
+        ┌────────────────────────────────────────────────────┐
+        │  METADATA.XML  ──→  wavelengths, FWHM, angles,    │
+        │                      gain/offset, RPCs             │
+        │                                                    │
+        │  SPECTRAL_IMAGE_VNIR.TIF  ──→  (88, H, W) bands   │
+        │  SPECTRAL_IMAGE_SWIR.TIF  ──→  (136, H, W) bands  │
+        │                                                    │
+        │  QL_QUALITY_*.TIF  ──→  quality masks              │
+        └────────────────────────────────────────────────────┘
+    
+    Radiometric Conversion
+    ----------------------
+    DN to radiance conversion is automatic::
+    
+        L_λ = (GAIN × DN + OFFSET) × 1000   [mW/(m²·sr·nm)]
+        
+        Note: DLR gains are multiplicative (not divisive as in some sensors)
 
-    Args:
-        xml_file (str): Path to the EnMAP XML metadata file.
-        by_folder (bool): If True, files are organized by folder structure.
-            Defaults to False.
-        window_focus (Optional[Window]): Window to focus on a specific
-            region of the image. Defaults to None (entire image).
-        fs (Optional[fsspec.AbstractFileSystem]): Filesystem to use for file access.
-            Defaults to None (local filesystem).
+    Spectral Configuration
+    ----------------------
+    EnMAP has two detectors with overlapping coverage:
+    
+        Wavelength: 420nm ──── 1000nm ──── 2450nm
+                    ├── VNIR ────┤
+                              ├──── SWIR ──────────┤
+                              └ overlap┘
+                              900-1000nm
+    
+    - VNIR: Silicon CCD, ~88 bands, 6.5nm sampling, SNR >500:1
+    - SWIR: HgCdTe, ~136 bands, 10nm sampling, SNR >150:1
 
-    Attributes:
-        xml_file (str): Path to the XML metadata file.
-        by_folder (bool): Whether files are organized by folder structure.
-        swir_file (str): Path to the SWIR image file.
-        fs (fsspec.AbstractFileSystem): Filesystem used for file access.
-        swir (RasterioReader): Reader for SWIR image.
-        vnir (RasterioReader): Reader for VNIR image.
-        wl_center (Dict): Dictionary of center wavelengths for each band.
-        wl_fwhm (Dict): Dictionary of FWHM (Full Width at Half Maximum) for each band.
-        hsf (float): Mean ground elevation.
-        sza (float): Solar zenith angle.
-        saa (float): Solar azimuth angle.
-        vaa (float): Viewing azimuth angle.
-        vza (float): Viewing zenith angle.
-        gain_arr (Dict): Dictionary of gain values for each band.
-        offs_arr (Dict): Dictionary of offset values for each band.
-        rpcs_vnir: Rational Polynomial Coefficients for VNIR.
-        rpcs_swir: Rational Polynomial Coefficients for SWIR.
-        swir_range (Tuple[float, float]): Wavelength range of SWIR bands.
-        vnir_range (Tuple[float, float]): Wavelength range of VNIR bands.
-        units (str): Units of radiance data (mW/m2/sr/nm).
-        time_coverage_start (datetime): Start time of acquisition.
-        time_coverage_end (datetime): End time of acquisition.
+    Attributes
+    ----------
+    xml_file : str
+        Path to the EnMAP XML metadata file.
+    by_folder : bool
+        Whether files are organized by folder structure (alternative naming convention).
+    swir_file : str
+        Path to the SWIR GeoTIFF file (derived from xml_file).
+    fs : fsspec.AbstractFileSystem
+        Filesystem for file access (local or cloud storage).
+    vnir : RasterioReader
+        Reader for VNIR spectral image.
+    swir : RasterioReader
+        Reader for SWIR spectral image.
+    wl_center : Dict[str, np.ndarray]
+        Center wavelengths per sensor: {'vnir': [...], 'swir': [...]}.
+    wl_fwhm : Dict[str, np.ndarray]
+        FWHM per sensor: {'vnir': [...], 'swir': [...]}.
+    gain_arr : Dict[str, np.ndarray]
+        Radiometric gains per sensor for DN→radiance conversion.
+    offs_arr : Dict[str, np.ndarray]
+        Radiometric offsets per sensor for DN→radiance conversion.
+    vnir_range : Tuple[float, float]
+        VNIR wavelength range (min, max) including FWHM margins.
+    swir_range : Tuple[float, float]
+        SWIR wavelength range (min, max) including FWHM margins.
+    hsf : float
+        Mean ground elevation (m) from scene metadata.
+    sza : float
+        Solar zenith angle (degrees).
+    saa : float
+        Solar azimuth angle (degrees).
+    vza : float
+        View zenith angle (across-track off-nadir angle, degrees).
+    vaa : float
+        View azimuth angle (scene azimuth, degrees).
+    rpcs_vnir : rasterio.rpc.RPC
+        Rational Polynomial Coefficients for VNIR refined geolocation.
+    rpcs_swir : rasterio.rpc.RPC
+        Rational Polynomial Coefficients for SWIR refined geolocation.
+    time_coverage_start : datetime
+        UTC datetime of acquisition start.
+    time_coverage_end : datetime
+        UTC datetime of acquisition end.
+    units : str
+        Radiance units: 'mW/m2/sr/nm'.
+    
+    Properties (from underlying readers)
+    ------------------------------------
+    shape : Tuple[int, int, int]
+        Full shape (total_bands, height, width).
+    transform : rasterio.Affine
+        Affine geotransform from SWIR file.
+    crs : rasterio.crs.CRS
+        Coordinate reference system from SWIR file.
+    bounds : Tuple[float, float, float, float]
+        Geographic bounds (xmin, ymin, xmax, ymax).
+    res : Tuple[float, float]
+        Pixel resolution (x, y).
 
-    Examples:
-        >>> # Initialize the EnMAP reader with a data path
-        >>> enmap = EnMAP('/path/to/enmap_metadata.xml')
-        >>> # Load RGB bands as reflectance with RPCs applied
+    Examples
+    --------
+    Basic loading::
+    
+        >>> from georeader.readers.enmap import EnMAP
+        >>> 
+        >>> enmap = EnMAP('/data/ENMAP01-...-METADATA.XML')
+        >>> print(enmap)  # View metadata summary
+    
+    Loading specific wavelengths::
+    
+        >>> # Load NDVI bands as reflectance
+        >>> bands = enmap.load_wavelengths([665, 865], as_reflectance=True)
+        >>> print(bands.shape)  # (2, H, W)
+        >>> 
+        >>> # Compute NDVI
+        >>> red, nir = bands.values[0], bands.values[1]
+        >>> ndvi = (nir - red) / (nir + red + 1e-10)
+    
+    Loading RGB with RPC refinement::
+    
+        >>> # Apply RPCs for better geolocation (recommended)
         >>> rgb = enmap.load_rgb(as_reflectance=True, apply_rpcs=True)
-        >>> # Load specific wavelengths
-        >>> bands = enmap.load_wavelengths([850, 1600, 2200], as_reflectance=True)
-        >>> # Load cloud mask or other quality products
-        >>> clouds = enmap.load_product('QL_QUALITY_CLOUD')
+        >>> 
+        >>> # Without RPCs (uses original map projection)
+        >>> rgb = enmap.load_rgb(as_reflectance=True, apply_rpcs=False)
+    
+    Loading quality masks::
+    
+        >>> # Load cloud mask
+        >>> cloud = enmap.load_product('QL_QUALITY_CLOUD')
+        >>> 
+        >>> # Available products: 
+        >>> # 'QL_QUALITY_CLOUD', 'QL_QUALITY_CIRRUS', 'QL_QUALITY_SNOW',
+        >>> # 'QL_QUALITY_HAZE', 'QL_PIXELMASK_VNIR', 'QL_PIXELMASK_SWIR'
+    
+    Spatial subsetting with window_focus::
+    
+        >>> from rasterio.windows import Window
+        >>> 
+        >>> # Focus on a specific region
+        >>> window = Window(col_off=100, row_off=200, width=500, height=500)
+        >>> enmap_subset = EnMAP('/path/to/METADATA.XML', window_focus=window)
+    
+    Cloud storage access::
+    
+        >>> import gcsfs
+        >>> 
+        >>> fs = gcsfs.GCSFileSystem()
+        >>> enmap = EnMAP('gs://bucket/ENMAP-METADATA.XML', fs=fs)
+
+    See Also
+    --------
+    georeader.readers.emit.EMITImage : EMIT hyperspectral reader
+    georeader.readers.prisma.PRISMA : PRISMA hyperspectral reader
+    georeader.rasterio_reader.RasterioReader : Base reader for GeoTIFF
+    georeader.read.read_rpcs : Apply RPC transformations
+    
+    References
+    ----------
+    - DLR EnMAP Mission: https://www.enmap.org/
+    - GFZ enpt Package: https://github.com/GFZ/enpt (metadata parser reference)
+    - EnMAP Product Specification Document
     """
 
     def __init__(

@@ -1,20 +1,149 @@
 """
-Sentinel-2 reader inherited from https://github.com/IPL-UV/DL-L8S2-UV.
+Sentinel-2 SAFE Product Reader for L1C and L2A Data.
+
+This module provides readers for Sentinel-2 satellite imagery in the SAFE format,
+supporting both Level-1C (top-of-atmosphere reflectance) and Level-2A (surface
+reflectance) products. It handles local files and cloud storage (Google Cloud).
+
+Sentinel-2 Product Levels
+-------------------------
+
+::
+
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │                 SENTINEL-2 PROCESSING LEVELS                             │
+    │                                                                          │
+    │   Level-1C (L1C)                      Level-2A (L2A)                     │
+    │   ─────────────────                   ─────────────────                  │
+    │                                                                          │
+    │   ☀️ Sun                               ☀️ Sun                             │
+    │    │                                   │                                 │
+    │    ▼                                   ▼                                 │
+    │   ┌─────────┐                        ┌─────────┐                        │
+    │   │Atmosphere│ ◄─ NOT corrected      │Atmosphere│ ◄─ CORRECTED          │
+    │   └────┬────┘                        └────┬────┘                        │
+    │        │                                  │                              │
+    │        ▼                                  ▼                              │
+    │   ┌─────────┐                        ┌─────────┐                        │
+    │   │ Surface │                        │ Surface │                        │
+    │   └─────────┘                        └─────────┘                        │
+    │        │                                  │                              │
+    │        ▼ 🛰️                              ▼ 🛰️                           │
+    │                                                                          │
+    │   TOA Reflectance                     BOA Reflectance                   │
+    │   - Includes atmospheric effects      - Surface reflectance             │
+    │   - Globally available                - Atmospheric correction applied  │
+    │   - Can convert to radiance           - Scene Classification (SCL)     │
+    │   - 13 bands (incl. B10 cirrus)       - 12 bands (no B10)              │
+    │                                                                          │
+    │   Use for:                            Use for:                          │
+    │   - Radiance-based analysis           - Land cover mapping              │
+    │   - Custom atmospheric correction     - Vegetation indices (NDVI)       │
+    │   - Cloud studies (B10)               - Change detection                │
+    │                                                                          │
+    └─────────────────────────────────────────────────────────────────────────┘
+
+Spectral Bands
+--------------
+
+::
+
+    Band │ Central λ │ Bandwidth │ Resolution │ L1C │ L2A │ Description
+    ─────┼───────────┼───────────┼────────────┼─────┼─────┼─────────────────────
+    B01  │   443 nm  │   20 nm   │    60m     │  ✓  │  ✓  │ Coastal/Aerosol
+    B02  │   490 nm  │   65 nm   │    10m     │  ✓  │  ✓  │ Blue
+    B03  │   560 nm  │   35 nm   │    10m     │  ✓  │  ✓  │ Green
+    B04  │   665 nm  │   30 nm   │    10m     │  ✓  │  ✓  │ Red
+    B05  │   705 nm  │   15 nm   │    20m     │  ✓  │  ✓  │ Red Edge 1
+    B06  │   740 nm  │   15 nm   │    20m     │  ✓  │  ✓  │ Red Edge 2
+    B07  │   783 nm  │   20 nm   │    20m     │  ✓  │  ✓  │ Red Edge 3
+    B08  │   842 nm  │  115 nm   │    10m     │  ✓  │  ✓  │ NIR
+    B8A  │   865 nm  │   20 nm   │    20m     │  ✓  │  ✓  │ NIR Narrow
+    B09  │   945 nm  │   20 nm   │    60m     │  ✓  │  ✓  │ Water Vapour
+    B10  │  1375 nm  │   30 nm   │    60m     │  ✓  │  ✗  │ Cirrus (L1C only)
+    B11  │  1610 nm  │   90 nm   │    20m     │  ✓  │  ✓  │ SWIR 1
+    B12  │  2190 nm  │  180 nm   │    20m     │  ✓  │  ✓  │ SWIR 2
+
+Data Access
+-----------
+
+Products can be loaded from:
+
+1. **Local SAFE folders**::
+
+    s2 = S2ImageL2A("/data/S2A_MSIL2A_20240115T...SAFE")
+
+2. **Google Cloud Public Bucket** (free, no auth)::
+
+    path = "gs://gcp-public-data-sentinel-2/tiles/32/T/QM/..."
+    s2 = S2ImageL2A(path)
+
+3. **Other cloud storage** (via fsspec)::
+
+    s2 = S2ImageL2A("s3://bucket/S2A_MSIL2A_...SAFE", requester_pays=True)
+
+Quick Start Examples
+--------------------
+
+Load L2A surface reflectance (most common)::
+
+    from georeader.readers.S2_SAFE_reader import S2ImageL2A
+    from shapely.geometry import box
+    
+    # Define area of interest in WGS84
+    aoi = box(-3.75, 40.40, -3.65, 40.50)  # Madrid area
+    
+    # Load from Google Cloud public bucket
+    s2 = S2ImageL2A(
+        "gs://gcp-public-data-sentinel-2/L2/tiles/30/T/VK/"
+        "S2A_MSIL2A_20240115T110351_N0510_R094_T30TVK_20240115T144512.SAFE",
+        polygon=aoi,
+        out_res=10,  # 10m resolution
+        bands=["B04", "B03", "B02", "B08"]  # RGBNIR
+    )
+    
+    # Load as GeoTensor
+    gt = s2.load()
+    print(f"Shape: {gt.shape}")  # (4, H, W)
+    print(f"CRS: {gt.crs}")      # EPSG:32630 (UTM 30N)
+
+Load L1C and convert to radiance::
+
+    from georeader.readers.S2_SAFE_reader import S2ImageL1C
+    
+    s2_l1c = S2ImageL1C("/path/to/S2A_MSIL1C_...SAFE", polygon=aoi)
+    
+    # Read tile metadata for solar angles
+    s2_l1c.read_metadata_tl()
+    
+    # Get solar zenith angle
+    sza = s2_l1c.mean_sza
+    
+    # Convert DN to at-sensor radiance (W/m²/sr/µm)
+    radiance = s2_l1c.DN_to_radiance(bands=["B04", "B03", "B02"])
+
+Classes
+-------
+
+S2Image
+    Base class with shared functionality (don't use directly)
+S2ImageL1C
+    Level-1C reader with TOA reflectance and angle accessors
+S2ImageL2A
+    Level-2A reader with surface reflectance
+
+See Also
+--------
+georeader.reflectance : Radiance ↔ reflectance conversions
+georeader.readers.ee_image : Load Sentinel-2 via Google Earth Engine
+
+References
+----------
+- ESA Sentinel-2 User Guide: https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi
+- Google Cloud Sentinel-2 Bucket: https://cloud.google.com/storage/docs/public-datasets/sentinel-2
+- Sentinel-2 Radiometric Resolution: https://sentiwiki.copernicus.eu/web/s2-processing
 
 Authors: Gonzalo Mateo-García, Dan Lopez-Puigdollers
-
-It has several enhancements:
-
-* Support for S2L2A images
-* It can read directly images from a GCP bucket (for example data from  [here](https://cloud.google.com/storage/docs/public-datasets/sentinel-2))
-* Windowed read and read and reproject in the same function (see `load_bands_bbox`)
-* Creation of the image only involves reading one metadata file (`xxx.SAFE/MTD_{self.producttype}.xml`)
-* Compatible with `georeader.read` functions
-* It can read from the pyramid if available.
-
-
-[Sentinel-2 docs](https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/document-library)
-
 """
 
 from shapely.geometry import Polygon
