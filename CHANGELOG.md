@@ -18,6 +18,13 @@
   `requests`. No Azure SDK dependency — token loading via Azure Key
   Vault is left to downstream consumers (e.g. UNEP IMEO MARS).
 
+## [2.2.0](https://github.com/spaceml-org/georeader/compare/v2.1.0...v2.2.0) (2026-05-14)
+
+
+### Features
+
+* **readers:** add Carbon Mapper reader subpackage ([158e57f](https://github.com/spaceml-org/georeader/commit/158e57f03b0cde11d93478611a9ce73e367b3dd6))
+
 ## [2.1.0](https://github.com/spaceml-org/georeader/compare/v2.0.0...v2.1.0) (2026-05-14)
 
 
