@@ -1,0 +1,4602 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="🛰️ Process raster data in python">
+      
+      
+        <meta name="author" content="Gonzalo Mateo-García">
+      
+      
+        <link rel="canonical" href="https://spaceml-org.github.io/georeader/carbonmapper/api_explore/">
+      
+      
+        <link rel="prev" href="../../prisma_with_cloudsen12/">
+      
+      
+        <link rel="next" href="../products_explore/">
+      
+      
+      <link rel="icon" href="../../images/logo_georeader.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.21">
+    
+    
+      
+        <title>API + typed models - georeader</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.2a3383ac.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../css/ansi-colours.css">
+    
+      <link rel="stylesheet" href="../../css/jupyter-cells.css">
+    
+      <link rel="stylesheet" href="../../css/pandas-dataframe.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="deep-orange">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#carbon-mapper" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="georeader" class="md-header__button md-logo" aria-label="georeader" data-md-component="logo">
+      
+  <img src="../../images/logo_georeader.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            georeader
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              API + typed models
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="deep-orange"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="deep-orange"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/spaceml-org/georeader" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    spaceml-org/georeader
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="georeader" class="md-nav__button md-logo" aria-label="georeader" data-md-component="logo">
+      
+  <img src="../../images/logo_georeader.png" alt="logo">
+
+    </a>
+    georeader
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/spaceml-org/georeader" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    spaceml-org/georeader
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../modules/read_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    GeoReader concepts and protocols
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Modules
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Modules
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../modules/reflectance_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    reflectance
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../modules/geotensor_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    GeoTensor
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../modules/rasterio_reader/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    RasterioReader
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../modules/rasterize_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    rasterize
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../modules/vectorize_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    vectorize
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../modules/ee_image/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    ee_image
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../modules/readers_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    readers
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Advanced modules
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Advanced modules
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced_modules/save_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    save
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced_modules/plot_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    plot
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced_modules/mosaic_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    mosaic
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced_modules/slices_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    slices
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced_modules/griddata_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    griddata
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Tutorials
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Tutorials
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_1" id="__nav_5_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Read overlapping rasters
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_1">
+            <span class="md-nav__icon md-icon"></span>
+            Read overlapping rasters
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../read_overlapping_probav_and_sentinel2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overlapping S2 and Proba-V
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reading_overlapping_sentinel2_aviris/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overlapping S2 and AVIRIS
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../geotensor_numpy_api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    GeoTensor numpy API
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced/tiling_and_stitching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Tile and stitch AI predictions
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Sentinel-2
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_4">
+            <span class="md-nav__icon md-icon"></span>
+            Sentinel-2
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../Sentinel-2/run_in_gee_image/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    From Google Earth Engine
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../read_S2_SAFE_from_bucket/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    From the public bucket
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../Sentinel-2/explore_metadata_s2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Metadata
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../Sentinel-2/query_mosaic_s2_images/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Mosaic
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../Sentinel-2/s2_mosaic_from_gee/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Mosaic from GEE
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../Sentinel-2/convert_to_radiance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    ToA reflectance to radiance
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Hyperspectral sensors
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_5">
+            <span class="md-nav__icon md-icon"></span>
+            Hyperspectral sensors
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../emit_explore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    EMIT
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../simultaneous_prisma_emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    PRISMA
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../enmap_with_cloudsen12/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    EnMAP
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../prisma_with_cloudsen12/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    PRISMA cloud detection
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Carbon Mapper
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5_6">
+            <span class="md-nav__icon md-icon"></span>
+            Carbon Mapper
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    API + typed models
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    API + typed models
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#install" class="md-nav__link">
+    <span class="md-ellipsis">
+      Install
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      Authentication
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#publication-lag" class="md-nav__link">
+    <span class="md-ellipsis">
+      Publication lag
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Setup
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#domain-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      Domain model
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-typed-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      1 · Typed models
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1 · Typed models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-cmsource-dbscan-clustered-point-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.1 CMSource — DBSCAN-clustered point source
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-cmtileitem-typed-wrapper-over-a-stac-item" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.2 CMTileItem — typed wrapper over a STAC item
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-downloadpy-raw-http-wrappers" class="md-nav__link">
+    <span class="md-ellipsis">
+      2 · download.py — raw HTTP wrappers
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2 · download.py — raw HTTP wrappers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-bbox-encoding-rest-vs-stac" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.1 bbox encoding — REST vs STAC
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-endpoint-wrappers" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.2 Endpoint wrappers
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-api_queriespy-typed-query-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      3 · api_queries.py — typed query layer
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3 · api_queries.py — typed query layer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-single-resource-fetchers" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.1 Single-resource fetchers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-typed-exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.2 Typed exceptions
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-list-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.3 List helpers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-cross-resolution-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.4 Cross-resolution helpers
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-end-to-end-mini-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      4 · End-to-end mini-workflow
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-plume-catalog-stats-whats-in-the-live-catalog-right-now" class="md-nav__link">
+    <span class="md-ellipsis">
+      5 · Plume catalog stats — what's in the live catalog right now
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5 · Plume catalog stats — what&#39;s in the live catalog right now">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-headline-counts" class="md-nav__link">
+    <span class="md-ellipsis">
+      5.1 Headline counts
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-ipcc-sector-distribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      5.2 IPCC sector distribution
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-monthly-activity-last-12-months" class="md-nav__link">
+    <span class="md-ellipsis">
+      5.3 Monthly activity — last 12 months
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#54-emission-rate-distribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      5.4 Emission rate distribution
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-stac-inventory-whats-downloadable" class="md-nav__link">
+    <span class="md-ellipsis">
+      6 · STAC inventory — what's downloadable
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6 · STAC inventory — what&#39;s downloadable">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-collection-counts-by-level" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.1 Collection counts by level
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-active-v3a-collections-item-counts" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.2 Active v3a collections — item counts
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-asset-shapes-whats-actually-inside-an-item" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.3 Asset shapes — what's actually inside an item
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-reachable-products-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      7 · Reachable products reference
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7 · Reachable products reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#71-plume-level-products" class="md-nav__link">
+    <span class="md-ellipsis">
+      7.1 Plume-level products
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#72-stac-collections-current-ch4-v3a" class="md-nav__link">
+    <span class="md-ellipsis">
+      7.2 STAC collections — current CH4 (v3a)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#73-source-level-products" class="md-nav__link">
+    <span class="md-ellipsis">
+      7.3 Source-level products
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7.3 Source-level products">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      Endpoints
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#properties-on-each-source-feature" class="md-nav__link">
+    <span class="md-ellipsis">
+      Properties on each source feature
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-cmplumeimage-per-plume-product-bundle" class="md-nav__link">
+    <span class="md-ellipsis">
+      8 · CMPlumeImage — per-plume product bundle
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8 · CMPlumeImage — per-plume product bundle">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#81-lazy-properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      8.1 Lazy properties
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#82-outline-canonical-geojson" class="md-nav__link">
+    <span class="md-ellipsis">
+      8.2 Outline (canonical GeoJSON)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      See also
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../products_explore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Products
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_7" id="__nav_5_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Advanced
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7">
+            <span class="md-nav__icon md-icon"></span>
+            Advanced
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced/error_read_write_in_remote_path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    VSIL cache problem
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#install" class="md-nav__link">
+    <span class="md-ellipsis">
+      Install
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      Authentication
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#publication-lag" class="md-nav__link">
+    <span class="md-ellipsis">
+      Publication lag
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Setup
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#domain-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      Domain model
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-typed-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      1 · Typed models
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1 · Typed models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-cmsource-dbscan-clustered-point-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.1 CMSource — DBSCAN-clustered point source
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-cmtileitem-typed-wrapper-over-a-stac-item" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.2 CMTileItem — typed wrapper over a STAC item
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-downloadpy-raw-http-wrappers" class="md-nav__link">
+    <span class="md-ellipsis">
+      2 · download.py — raw HTTP wrappers
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2 · download.py — raw HTTP wrappers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-bbox-encoding-rest-vs-stac" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.1 bbox encoding — REST vs STAC
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-endpoint-wrappers" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.2 Endpoint wrappers
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-api_queriespy-typed-query-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      3 · api_queries.py — typed query layer
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3 · api_queries.py — typed query layer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-single-resource-fetchers" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.1 Single-resource fetchers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-typed-exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.2 Typed exceptions
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-list-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.3 List helpers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-cross-resolution-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.4 Cross-resolution helpers
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-end-to-end-mini-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      4 · End-to-end mini-workflow
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-plume-catalog-stats-whats-in-the-live-catalog-right-now" class="md-nav__link">
+    <span class="md-ellipsis">
+      5 · Plume catalog stats — what's in the live catalog right now
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5 · Plume catalog stats — what&#39;s in the live catalog right now">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-headline-counts" class="md-nav__link">
+    <span class="md-ellipsis">
+      5.1 Headline counts
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-ipcc-sector-distribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      5.2 IPCC sector distribution
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-monthly-activity-last-12-months" class="md-nav__link">
+    <span class="md-ellipsis">
+      5.3 Monthly activity — last 12 months
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#54-emission-rate-distribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      5.4 Emission rate distribution
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-stac-inventory-whats-downloadable" class="md-nav__link">
+    <span class="md-ellipsis">
+      6 · STAC inventory — what's downloadable
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6 · STAC inventory — what&#39;s downloadable">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-collection-counts-by-level" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.1 Collection counts by level
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-active-v3a-collections-item-counts" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.2 Active v3a collections — item counts
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-asset-shapes-whats-actually-inside-an-item" class="md-nav__link">
+    <span class="md-ellipsis">
+      6.3 Asset shapes — what's actually inside an item
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-reachable-products-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      7 · Reachable products reference
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7 · Reachable products reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#71-plume-level-products" class="md-nav__link">
+    <span class="md-ellipsis">
+      7.1 Plume-level products
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#72-stac-collections-current-ch4-v3a" class="md-nav__link">
+    <span class="md-ellipsis">
+      7.2 STAC collections — current CH4 (v3a)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#73-source-level-products" class="md-nav__link">
+    <span class="md-ellipsis">
+      7.3 Source-level products
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7.3 Source-level products">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      Endpoints
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#properties-on-each-source-feature" class="md-nav__link">
+    <span class="md-ellipsis">
+      Properties on each source feature
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-cmplumeimage-per-plume-product-bundle" class="md-nav__link">
+    <span class="md-ellipsis">
+      8 · CMPlumeImage — per-plume product bundle
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8 · CMPlumeImage — per-plume product bundle">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#81-lazy-properties" class="md-nav__link">
+    <span class="md-ellipsis">
+      8.1 Lazy properties
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#82-outline-canonical-geojson" class="md-nav__link">
+    <span class="md-ellipsis">
+      8.2 Outline (canonical GeoJSON)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      See also
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+<script>
+(function() {
+  function addWidgetsRenderer() {
+    var requireJsScript = document.createElement('script');
+    requireJsScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js';
+
+    var mimeElement = document.querySelector('script[type="application/vnd.jupyter.widget-view+json"]');
+    var jupyterWidgetsScript = document.createElement('script');
+    var widgetRendererSrc = 'https://unpkg.com/@jupyter-widgets/html-manager@*/dist/embed-amd.js';
+    var widgetState;
+
+    // Fallback for older version:
+    try {
+      widgetState = mimeElement && JSON.parse(mimeElement.innerHTML);
+
+      if (widgetState && (widgetState.version_major < 2 || !widgetState.version_major)) {
+        widgetRendererSrc = 'jupyter-js-widgets@*/dist/embed.js';
+      }
+    } catch(e) {}
+
+    jupyterWidgetsScript.src = widgetRendererSrc;
+
+    document.body.appendChild(requireJsScript);
+    document.body.appendChild(jupyterWidgetsScript);
+  }
+
+  document.addEventListener('DOMContentLoaded', addWidgetsRenderer);
+}());
+</script>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h1 id="carbon-mapper">Carbon Mapper<a class="headerlink" href="#carbon-mapper" title="Permanent link">&para;</a></h1>
+<p>The <a href="https://carbonmapper.org">Carbon Mapper</a> reader is a typed
+client for Carbon Mapper's two API surfaces (REST catalog + STAC)
+that hides three real-world inconveniences:</p>
+<ol>
+<li><strong>Two protocols, two bbox conventions</strong> — the REST catalog wants
+   repeated <code>?bbox=W&amp;amp;bbox=S&amp;amp;...</code> keys, STAC wants <code>?bbox=W,S,E,N</code>.
+   Mix them up and the server 422s with no useful error.</li>
+<li><strong>Three resource types with hand-rolled joins</strong> — a <em>plume</em> is a
+   single detection, a <em>tile</em> (a.k.a. <em>scene</em>) is the L2B raster it
+   was detected in, and a <em>source</em> is the DBSCAN cluster of plumes
+   at one physical site. The API exposes them via different
+   endpoints with no FK-style links; this layer does the joins.</li>
+<li><strong>Inconsistent error shapes</strong> — 404s look different per
+   resource. We translate them to a small typed exception
+   hierarchy so callers can <code>except CMPlumeNotFound</code> rather than
+   string-match <code>requests.HTTPError</code>.</li>
+</ol>
+<p>The catalog ships methane and CO₂ retrievals from
+<strong>Tanager-1</strong>, <strong>EMIT</strong>, <strong>AVIRIS-3</strong>, <strong>AVIRIS-NG</strong>, and <strong>GAO</strong>.
+Plume detection is operational on all platforms; published L2B
+<em>scenes</em> lag plume publication by weeks-to-months for Tanager (see
+<a href="#publication-lag">Publication lag</a>).</p>
+<p>&gt; <strong>CH4 only in this notebook.</strong> The reader is gas-agnostic
+&gt; internally, but query helpers are typed <code>Literal["CH4"]</code> for now;
+&gt; CO2 lands in a follow-up.</p>
+<p>This notebook walks the layers bottom-up:</p>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Module</th>
+<th>Use when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Raw HTTP</td>
+<td><code>download.py</code></td>
+<td>You need a field this layer doesn't expose, or you're prototyping a new endpoint wrapper.</td>
+</tr>
+<tr>
+<td>Typed query</td>
+<td><code>api_queries.py</code></td>
+<td>Default. Returns <code>CMRawPlume</code> / <code>CMTileItem</code> / <code>CMSource</code>, never raw dicts.</td>
+</tr>
+<tr>
+<td>Cross-resolution</td>
+<td><code>api_queries.get_*_for_*</code> / <code>get_plume_context</code></td>
+<td>One call → <code>(plume, tile, source)</code> — the typical ingestion shape.</td>
+</tr>
+<tr>
+<td>Per-plume image</td>
+<td><strong><code>image.py</code> / <code>CMPlumeImage</code></strong></td>
+<td>Per-plume product bundle (mask, concentrations, IME, RGB, outline). Handles v3a (STAC) + v3c (CDN-only) via URL-pattern derivation.</td>
+</tr>
+<tr>
+<td>L2B scene raster</td>
+<td><code>rasters.py</code> / <code>CMImageRaster</code></td>
+<td>Scene-level CMF retrieval and RGB sibling.</td>
+</tr>
+</tbody>
+</table>
+<p>Companion: <a href="../products_explore/"><code>products_explore.ipynb</code></a> covers
+the raster wrappers in depth.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
+<p>The Carbon Mapper reader is gated behind the <code>[carbonmapper]</code> extra
+to keep <code>georeader-spaceml</code>'s base install minimal. Install with:</p>
+<div class="highlight"><pre><span></span><code>pip install &#39;georeader-spaceml[carbonmapper]&#39;
+</code></pre></div>
+<p>This pulls in <code>pydantic</code> (for <code>CMRawPlume</code>) and <code>requests</code> (for the
+HTTP client). No Azure or other cloud-vendor SDKs are required.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h2>
+<p>Every cell below hits the live API and needs a Bearer token.
+<code>CarbonMapperConfig.load()</code> resolves credentials in this priority
+order:</p>
+<ol>
+<li><strong><code>CARBONMAPPER_TOKEN</code></strong> environment variable — one-shot, no
+   refresh.</li>
+<li><strong><code>CARBONMAPPER_EMAIL</code> + <code>CARBONMAPPER_PASSWORD</code></strong> environment
+   variables — refreshable via
+   <a href="https://api.carbonmapper.org/api/v1/docs"><code>obtain_token</code></a>.</li>
+<li><strong>Config file</strong> at the canonical location (matches sibling
+   readers like <code>emit.py</code> / <code>S2_SAFE_reader.py</code>):</li>
+<li><code>~/.georeader/auth_carbonmapper.json</code> ← canonical</li>
+</ol>
+<p>Legacy fallbacks (still honoured if present):
+   - <code>./config/carbonmapper_token.json</code>
+   - <code>~/.config/carbonmapper/config.json</code>
+   - <code>~/.carbonmapper.json</code>
+   - <code>./.carbonmapper.json</code></p>
+<p>On first run, if no config file is found and no env vars are
+   set, a stub <code>~/.georeader/auth_carbonmapper.json</code> is created
+   with placeholder values for you to edit.</p>
+<p>Sign up for a developer account at
+<a href="https://api.carbonmapper.org">api.carbonmapper.org</a> — the
+free tier covers all the calls in this notebook.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="publication-lag">Publication lag<a class="headerlink" href="#publication-lag" title="Permanent link">&para;</a></h2>
+<p>Carbon Mapper's plume catalog and STAC catalog publish on
+different cadences. As of late 2025:</p>
+<table>
+<thead>
+<tr>
+<th>Asset</th>
+<th>Latency from acquisition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Plume (L4A, in <code>/catalog/plumes/...</code>)</td>
+<td>hours to days</td>
+</tr>
+<tr>
+<td>Tile / scene (L2B, in <code>/stac/collections/l2b-ch4-mfa-v3a/...</code>)</td>
+<td>weeks to months (Tanager)</td>
+</tr>
+</tbody>
+</table>
+<p>Practical consequences:</p>
+<ul>
+<li><code>api_queries.list_plumes(...)</code> returns plumes whose parent L2B
+  scene is <strong>not yet in STAC</strong>. Don't expect every plume to round-
+  trip through <code>get_tile_for_plume</code> — it returns <code>None</code> when
+  the parent is unpublished, and <code>get_tile()</code> raises
+  <code>CMSceneNotPublished</code>.</li>
+<li>For ingestion pipelines, treat <code>CMSceneNotPublished</code> as
+  <em>defer-and-retry</em>, not an error.</li>
+<li>The plume's <code>geometry</code>, <code>emission_auto</code>, and wind are
+  authoritative <em>without</em> the L2B raster — you only need the
+  L2B for visualisation / re-quantification / model retraining.</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="setup">Setup<a class="headerlink" href="#setup" title="Permanent link">&para;</a></h2>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timezone</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">georeader.readers.carbonmapper</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">CMAPIError</span><span class="p">,</span>
+    <span class="n">CMPlumeNotFound</span><span class="p">,</span>
+    <span class="n">CMSceneNotPublished</span><span class="p">,</span>
+    <span class="n">CMSource</span><span class="p">,</span>
+    <span class="n">CMSourceNotFound</span><span class="p">,</span>
+    <span class="n">CMTileItem</span><span class="p">,</span>
+    <span class="n">CarbonMapperConfig</span><span class="p">,</span>
+    <span class="n">api_queries</span><span class="p">,</span>
+    <span class="n">download</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># --- 429-resilient HTTP -----------------------------------------------</span>
+<span class="c1"># CarbonMapper rate-limits per account. §§ 5–6 below fire dozens of</span>
+<span class="c1"># catalog probes back-to-back and can trip the per-minute cap. Mount</span>
+<span class="c1"># a retry-aware adapter on a shared Session and re-bind the `requests`</span>
+<span class="c1"># module shortcuts to route through it — so every HTTP call in this</span>
+<span class="c1"># kernel (including the bare `requests.get(...)` calls in §§ 5–6 and</span>
+<span class="c1"># the ones inside georeader&#39;s `.download` helpers) gets automatic 429</span>
+<span class="c1"># backoff honouring `Retry-After`, plus exponential backoff for 5xx.</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">requests.adapters</span><span class="w"> </span><span class="kn">import</span> <span class="n">HTTPAdapter</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">urllib3.util.retry</span><span class="w"> </span><span class="kn">import</span> <span class="n">Retry</span>
+
+<span class="n">_cm_session</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">Session</span><span class="p">()</span>
+<span class="n">_cm_session</span><span class="o">.</span><span class="n">mount</span><span class="p">(</span><span class="s2">&quot;https://&quot;</span><span class="p">,</span> <span class="n">HTTPAdapter</span><span class="p">(</span><span class="n">max_retries</span><span class="o">=</span><span class="n">Retry</span><span class="p">(</span>
+    <span class="n">total</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+    <span class="n">backoff_factor</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>           <span class="c1"># 2, 4, 8, 16, 32, 64 s</span>
+    <span class="n">status_forcelist</span><span class="o">=</span><span class="p">(</span><span class="mi">429</span><span class="p">,</span> <span class="mi">500</span><span class="p">,</span> <span class="mi">502</span><span class="p">,</span> <span class="mi">503</span><span class="p">,</span> <span class="mi">504</span><span class="p">),</span>
+    <span class="n">respect_retry_after_header</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">allowed_methods</span><span class="o">=</span><span class="nb">frozenset</span><span class="p">([</span><span class="s2">&quot;GET&quot;</span><span class="p">,</span> <span class="s2">&quot;POST&quot;</span><span class="p">]),</span>
+<span class="p">)))</span>
+<span class="n">requests</span><span class="o">.</span><span class="n">get</span> <span class="o">=</span> <span class="n">_cm_session</span><span class="o">.</span><span class="n">get</span>
+<span class="n">requests</span><span class="o">.</span><span class="n">post</span> <span class="o">=</span> <span class="n">_cm_session</span><span class="o">.</span><span class="n">post</span>
+<span class="n">requests</span><span class="o">.</span><span class="n">request</span> <span class="o">=</span> <span class="n">_cm_session</span><span class="o">.</span><span class="n">request</span>
+
+<span class="c1"># Resolve a Bearer token from env / config file (see &quot;Authentication&quot;).</span>
+<span class="n">TOKEN</span> <span class="o">=</span> <span class="n">CarbonMapperConfig</span><span class="o">.</span><span class="n">load</span><span class="p">()</span><span class="o">.</span><span class="n">refresh_access_token</span><span class="p">()</span>
+
+<span class="c1"># Protagonist plume — Tanager-1 over the Permian basin, 2025-12-12.</span>
+<span class="n">PLUME_ID</span> <span class="o">=</span> <span class="s2">&quot;tan20251212t185057c20s4001-E&quot;</span>
+<span class="n">SCENE_ID</span> <span class="o">=</span> <span class="n">PLUME_ID</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">PERMIAN_BBOX</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="mf">104.5</span><span class="p">,</span> <span class="mf">32.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">103.5</span><span class="p">,</span> <span class="mf">32.8</span><span class="p">)</span>  <span class="c1"># (W, S, E, N)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;plume = </span><span class="si">{</span><span class="n">PLUME_ID</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;scene = </span><span class="si">{</span><span class="n">SCENE_ID</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>plume = tan20251212t185057c20s4001-E
+scene = tan20251212t185057c20s4001
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="domain-model">Domain model<a class="headerlink" href="#domain-model" title="Permanent link">&para;</a></h2>
+<p>Three resource types, with these relationships:</p>
+<table>
+<caption><strong>Relationships</strong></caption>
+<thead>
+<tr>
+<th>Parent</th>
+<th>Cardinality</th>
+<th>Child</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>SOURCE</strong></td>
+<td>1 — N</td>
+<td><strong>PLUME</strong></td>
+<td>DBSCAN clusters detections at one physical site</td>
+</tr>
+<tr>
+<td><strong>TILE</strong></td>
+<td>1 — N</td>
+<td><strong>PLUME</strong></td>
+<td>L2B scene contains the detected plumes</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption><strong>Entity properties</strong></caption>
+<thead>
+<tr>
+<th>Entity</th>
+<th>Field</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td rowspan="4"><strong>PLUME</strong></td>
+<td><code>plume_id</code></td>
+<td>string</td>
+<td><code>tan20251212t185057...-E</code></td>
+</tr>
+<tr>
+<td><code>emission_auto</code></td>
+<td>float</td>
+<td>kg/h</td>
+</tr>
+<tr>
+<td><code>geometry</code></td>
+<td>polygon</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>wind_u_v</code></td>
+<td>float</td>
+<td>from CM forecast</td>
+</tr>
+<tr>
+<td rowspan="3"><strong>SOURCE</strong></td>
+<td><code>source_name</code></td>
+<td>string</td>
+<td><code>{gas}_{sector}_{m}m_{lon}_{lat}</code></td>
+</tr>
+<tr>
+<td><code>plume_count</code></td>
+<td>int</td>
+<td>across all scenes</td>
+</tr>
+<tr>
+<td><code>emission_auto</code></td>
+<td>float</td>
+<td>site-aggregate (kg/h)</td>
+</tr>
+<tr>
+<td rowspan="3"><strong>TILE</strong></td>
+<td><code>scene_id</code></td>
+<td>string</td>
+<td><code>plume_id.rsplit('-',1)[0]</code></td>
+</tr>
+<tr>
+<td><code>platform</code></td>
+<td>string</td>
+<td><code>tan / emi / ang / av3 / gao</code></td>
+</tr>
+<tr>
+<td><code>acquired</code></td>
+<td>datetime</td>
+<td>L2B GeoTIFF, may lag publication</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Plume</strong> — one detection. Carries <code>emission_auto</code> (kg/h),
+  wind, geometry, and a <code>plume_id</code> that encodes the source-instrument
+  prefix and acquisition timestamp (e.g.
+  <code>tan20251212t185057c20s4001-E</code>).</li>
+<li><strong>Tile</strong> (or <strong>scene</strong>) — the L2B GeoTIFF the plume was
+  extracted from. One tile contains 0..N plumes. <code>scene_id</code> is
+  <code>plume_id.rsplit('-', 1)[0]</code>.</li>
+<li><strong>Source</strong> — DBSCAN cluster of plumes at the same physical
+  site. One source contains 1..N plumes across many scenes / dates.
+  Identified by the deterministic key
+  <code>{gas}_{sector}_{footprint_m}m_{lon}_{lat}</code>.</li>
+</ul>
+<p>A plume <strong>always</strong> has a parent scene (encoded in the id), but the
+parent L2B item may not be <strong>published in STAC yet</strong> (see
+<a href="#publication-lag">Publication lag</a>). A plume may <strong>not yet be
+clustered into a source</strong> if it's the first detection at that site.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="1-typed-models">1 · Typed models<a class="headerlink" href="#1-typed-models" title="Permanent link">&para;</a></h2>
+<p>Two frozen dataclasses you'll see flowing through every other call.
+Worth a minute up front so you know what you're getting back.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="11-cmsource-dbscan-clustered-point-source">1.1 <code>CMSource</code> — DBSCAN-clustered point source<a class="headerlink" href="#11-cmsource-dbscan-clustered-point-source" title="Permanent link">&para;</a></h3>
+<p>Carbon Mapper aggregates plumes detected at the same physical
+location into a <em>source</em> — a deterministic point-source record
+addressed by <code>{gas}_{sector}_{footprint_m}m_{lon}_{lat}</code>. The
+<code>/catalog/sources.geojson</code> endpoint returns features whose
+<code>source_name</code> carries a stray <code>?plume_gas=...</code> query suffix that
+must be stripped before using the value as a key into other
+endpoints (the suffix is an accidental bleed from the geojson
+endpoint's filtering query string — Carbon Mapper plans to fix
+it upstream, but the strip is defensive in the meantime).
+<code>CMSource.from_geojson_feature</code> does the strip unconditionally so
+downstream code can treat <code>source_name</code> as canonical.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">feature</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s2">&quot;source_name&quot;</span><span class="p">:</span> <span class="s2">&quot;CH4_1B2_100m_-104.17525_32.49125?plume_gas=CH4&amp;amp;bbox=...&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;sector&quot;</span><span class="p">:</span> <span class="s2">&quot;1B2&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;gas&quot;</span><span class="p">:</span> <span class="s2">&quot;CH4&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;plume_count&quot;</span><span class="p">:</span> <span class="mi">12</span><span class="p">,</span>
+        <span class="s2">&quot;persistence&quot;</span><span class="p">:</span> <span class="mf">0.42</span><span class="p">,</span>
+        <span class="s2">&quot;emission_auto&quot;</span><span class="p">:</span> <span class="mf">250.0</span><span class="p">,</span>
+        <span class="s2">&quot;emission_uncertainty_auto&quot;</span><span class="p">:</span> <span class="mf">35.0</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="s2">&quot;geometry&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;Point&quot;</span><span class="p">,</span> <span class="s2">&quot;coordinates&quot;</span><span class="p">:</span> <span class="p">[</span><span class="o">-</span><span class="mf">104.17525</span><span class="p">,</span> <span class="mf">32.49125</span><span class="p">]},</span>
+<span class="p">}</span>
+<span class="n">src</span> <span class="o">=</span> <span class="n">CMSource</span><span class="o">.</span><span class="n">from_geojson_feature</span><span class="p">(</span><span class="n">feature</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">src</span><span class="o">.</span><span class="n">source_name</span><span class="p">)</span>                        <span class="c1"># suffix stripped</span>
+<span class="nb">print</span><span class="p">((</span><span class="n">src</span><span class="o">.</span><span class="n">point</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="n">src</span><span class="o">.</span><span class="n">point</span><span class="o">.</span><span class="n">y</span><span class="p">))</span>             <span class="c1"># (-104.17525, 32.49125)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">plume_count</span><span class="si">}</span><span class="s2"> plumes · sector </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">sector</span><span class="si">}</span><span class="s2"> · gas </span><span class="si">{</span><span class="n">src</span><span class="o">.</span><span class="n">gas</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>CH4_1B2_100m_-104.17525_32.49125
+(-104.17525, 32.49125)
+12 plumes · sector 1B2 · gas CH4
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="12-cmtileitem-typed-wrapper-over-a-stac-item">1.2 <code>CMTileItem</code> — typed wrapper over a STAC item<a class="headerlink" href="#12-cmtileitem-typed-wrapper-over-a-stac-item" title="Permanent link">&para;</a></h3>
+<p>Frozen dataclass exposing the fields we use in practice
+(<code>scene_id</code>, <code>collection</code>, <code>datetime</code>, <code>platform</code>, <code>bbox</code>,
+<code>geometry</code>, <code>asset_urls</code>). The full <code>properties</code> dict and the
+<code>raw</code> STAC item stay attached for one-off field access.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">stac_item</span> <span class="o">=</span> <span class="n">download</span><span class="o">.</span><span class="n">stac_get_item</span><span class="p">(</span><span class="s2">&quot;l2b-ch4-mfa-v3a&quot;</span><span class="p">,</span> <span class="n">SCENE_ID</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">TOKEN</span><span class="p">)</span>
+<span class="n">tile</span> <span class="o">=</span> <span class="n">CMTileItem</span><span class="o">.</span><span class="n">from_stac_item</span><span class="p">(</span><span class="n">stac_item</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">tile</span><span class="o">.</span><span class="n">scene_id</span><span class="si">}</span><span class="s2"> · </span><span class="si">{</span><span class="n">tile</span><span class="o">.</span><span class="n">platform</span><span class="si">}</span><span class="s2"> · </span><span class="si">{</span><span class="n">tile</span><span class="o">.</span><span class="n">datetime</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;bbox  : </span><span class="si">{</span><span class="n">tile</span><span class="o">.</span><span class="n">bbox</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;assets: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">tile</span><span class="o">.</span><span class="n">asset_urls</span><span class="p">)[:</span><span class="mi">5</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>tan20251212t185057c20s4001 · tan · 2025-12-12 18:50:57+00:00
+bbox  : (-104.5861937, 31.6662665, -103.9359726, 33.0604707)
+assets: ['artifact-mask.tif', 'cmf-unortho.tif', 'cmf.tif', 'uas.txt', 'uncertainty-unortho.tif']
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="2-downloadpy-raw-http-wrappers">2 · <code>download.py</code> — raw HTTP wrappers<a class="headerlink" href="#2-downloadpy-raw-http-wrappers" title="Permanent link">&para;</a></h2>
+<p>You usually shouldn't reach here — <code>api_queries.py</code> is the
+supported surface. We expose it because (a) the bbox encoding is
+non-obvious and worth understanding, and (b) the REST endpoints
+carry fields the typed layer doesn't yet model (e.g. raw CSV
+exports). Thin endpoint wrappers — same return shape as the
+upstream JSON, but with bbox-encoding, retries, and Bearer auth
+handled.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="21-bbox-encoding-rest-vs-stac">2.1 bbox encoding — REST vs STAC<a class="headerlink" href="#21-bbox-encoding-rest-vs-stac" title="Permanent link">&para;</a></h3>
+<p>Carbon Mapper's two API surfaces disagree on bbox shape:</p>
+<ul>
+<li><strong>REST Catalog</strong> (<code>/catalog/...</code>) wants <strong>repeated keys</strong>:
+  <code>?bbox=W&amp;amp;bbox=S&amp;amp;bbox=E&amp;amp;bbox=N</code>. Comma-joined returns 422.</li>
+<li><strong>STAC</strong> (<code>/stac/...</code>) wants the <strong>comma-joined</strong> form:
+  <code>?bbox=W,S,E,N</code>.</li>
+</ul>
+<p><code>_rest_bbox_params</code> returns a list-valued dict (<code>requests</code>
+serialises lists as repeated keys); <code>_stac_bbox_param</code> returns the
+comma-joined string.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">georeader.readers.carbonmapper.download</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">_rest_bbox_params</span><span class="p">,</span> <span class="n">_stac_bbox_param</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">_rest_bbox_params</span><span class="p">(</span><span class="n">PERMIAN_BBOX</span><span class="p">))</span>
+<span class="c1"># {&#39;bbox&#39;: [&#39;-104.5&#39;, &#39;32.0&#39;, &#39;-103.5&#39;, &#39;32.8&#39;]}</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">_stac_bbox_param</span><span class="p">(</span><span class="n">PERMIAN_BBOX</span><span class="p">))</span>
+<span class="c1"># {&#39;bbox&#39;: &#39;-104.5,32.0,-103.5,32.8&#39;}</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>{'bbox': ['-104.5', '32.0', '-103.5', '32.8']}
+{'bbox': '-104.5,32.0,-103.5,32.8'}
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="22-endpoint-wrappers">2.2 Endpoint wrappers<a class="headerlink" href="#22-endpoint-wrappers" title="Permanent link">&para;</a></h3>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="c1"># stac_get_item — one STAC item by collection + scene_id</span>
+<span class="n">item</span> <span class="o">=</span> <span class="n">download</span><span class="o">.</span><span class="n">stac_get_item</span><span class="p">(</span><span class="s2">&quot;l2b-ch4-mfa-v3a&quot;</span><span class="p">,</span> <span class="n">SCENE_ID</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">TOKEN</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">item</span><span class="p">[</span><span class="s1">&#39;id&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">item</span><span class="p">[</span><span class="s1">&#39;properties&#39;</span><span class="p">][</span><span class="s1">&#39;datetime&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>tan20251212t185057c20s4001 2025-12-12T18:50:57Z
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="c1"># get_source_for_plume_name — find the source for our protagonist plume</span>
+<span class="n">src_dict</span> <span class="o">=</span> <span class="n">download</span><span class="o">.</span><span class="n">get_source_for_plume_name</span><span class="p">(</span><span class="n">PLUME_ID</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">TOKEN</span><span class="p">)</span>
+<span class="n">SOURCE_NAME</span> <span class="o">=</span> <span class="n">src_dict</span><span class="p">[</span><span class="s2">&quot;source_name&quot;</span><span class="p">]</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">SOURCE_NAME</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>CH4_1B2_100m_-104.17525_32.49125
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="c1"># get_source_by_name — REST source record (flat dict with properties)</span>
+<span class="n">src_dict</span> <span class="o">=</span> <span class="n">download</span><span class="o">.</span><span class="n">get_source_by_name</span><span class="p">(</span><span class="n">SOURCE_NAME</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">TOKEN</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;plumes: </span><span class="si">{</span><span class="n">src_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;plume_count&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">  emission: </span><span class="si">{</span><span class="n">src_dict</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;emission_auto&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2"> kg/h&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>plumes: None  emission: None kg/h
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="c1"># get_source_plumes_csv — every plume attributed to one source as CSV text</span>
+<span class="n">csv_text</span> <span class="o">=</span> <span class="n">download</span><span class="o">.</span><span class="n">get_source_plumes_csv</span><span class="p">(</span><span class="n">SOURCE_NAME</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">TOKEN</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">csv_text</span><span class="p">[:</span><span class="mi">200</span><span class="p">])</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>plume_id,plume_latitude,plume_longitude,datetime,country,state_province,ipcc_sector,gas,emission_cmf_type,plume_bounds,instrument,mission_phase,published_at,modified,emission_version,processing_softwa
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="c1"># stac_search — accepts ids= for direct STAC item lookup</span>
+<span class="n">fc</span> <span class="o">=</span> <span class="n">download</span><span class="o">.</span><span class="n">stac_search</span><span class="p">(</span>
+    <span class="n">collections</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;l2b-ch4-mfa-v3a&quot;</span><span class="p">],</span>
+    <span class="n">ids</span><span class="o">=</span><span class="p">[</span><span class="n">SCENE_ID</span><span class="p">],</span>
+    <span class="n">limit</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">token</span><span class="o">=</span><span class="n">TOKEN</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">fc</span><span class="p">[</span><span class="s1">&#39;features&#39;</span><span class="p">])</span><span class="si">}</span><span class="s2"> feature(s) returned&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>1 feature(s) returned
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="3-api_queriespy-typed-query-layer">3 · <code>api_queries.py</code> — typed query layer<a class="headerlink" href="#3-api_queriespy-typed-query-layer" title="Permanent link">&para;</a></h2>
+<p>The default surface for downstream code. Three families:</p>
+<ol>
+<li><strong>Single-resource fetchers</strong> — <code>get_plume</code>, <code>get_tile</code>,
+   <code>get_source</code>. Translate 404s to typed exceptions.</li>
+<li><strong>List helpers</strong> — <code>list_plumes</code>, <code>list_tiles</code>,
+   <code>list_sources</code>. Take a bbox + datetime range + filters.</li>
+<li><strong>Cross-resolution</strong> — given a plume, get its tile / source /
+   full context. Given a source, get all its plumes / tiles. The
+   join logic is hidden so callers don't reinvent
+   <code>scene_id</code> derivation, dedup, etc.</li>
+</ol>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="31-single-resource-fetchers">3.1 Single-resource fetchers<a class="headerlink" href="#31-single-resource-fetchers" title="Permanent link">&para;</a></h3>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">plume</span> <span class="o">=</span> <span class="n">api_queries</span><span class="o">.</span><span class="n">get_plume</span><span class="p">(</span><span class="n">TOKEN</span><span class="p">,</span> <span class="n">PLUME_ID</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">plume</span><span class="o">.</span><span class="n">plume_id</span><span class="si">}</span><span class="s2">  gas=</span><span class="si">{</span><span class="n">plume</span><span class="o">.</span><span class="n">gas</span><span class="si">}</span><span class="s2">  emission_auto=</span><span class="si">{</span><span class="n">plume</span><span class="o">.</span><span class="n">emission_auto</span><span class="si">}</span><span class="s2"> kg/h&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;scene_id=</span><span class="si">{</span><span class="n">plume</span><span class="o">.</span><span class="n">scene_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>tan20251212t185057c20s4001-E  gas=CH4  emission_auto=1007.6564374669618 kg/h
+scene_id=tan20251212t185057c20s4001
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">tile</span> <span class="o">=</span> <span class="n">api_queries</span><span class="o">.</span><span class="n">get_tile</span><span class="p">(</span><span class="n">TOKEN</span><span class="p">,</span> <span class="n">SCENE_ID</span><span class="p">)</span>  <span class="c1"># default collection l2b-ch4-mfa-v3a</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">tile</span><span class="o">.</span><span class="n">scene_id</span><span class="si">}</span><span class="s2"> · </span><span class="si">{</span><span class="n">tile</span><span class="o">.</span><span class="n">platform</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;bbox: </span><span class="si">{</span><span class="n">tile</span><span class="o">.</span><span class="n">bbox</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>tan20251212t185057c20s4001 · tan
+bbox: (-104.5861937, 31.6662665, -103.9359726, 33.0604707)
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">source</span> <span class="o">=</span> <span class="n">api_queries</span><span class="o">.</span><span class="n">get_source</span><span class="p">(</span><span class="n">TOKEN</span><span class="p">,</span> <span class="n">SOURCE_NAME</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">source</span><span class="o">.</span><span class="n">source_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;plumes: </span><span class="si">{</span><span class="n">source</span><span class="o">.</span><span class="n">plume_count</span><span class="si">}</span><span class="s2">  sector: </span><span class="si">{</span><span class="n">source</span><span class="o">.</span><span class="n">sector</span><span class="si">}</span><span class="s2">  emission: </span><span class="si">{</span><span class="n">source</span><span class="o">.</span><span class="n">emission_auto</span><span class="si">}</span><span class="s2"> kg/h&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>CH4_1B2_100m_-104.17525_32.49125
+plumes: 0  sector:   emission: None kg/h
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="32-typed-exceptions">3.2 Typed exceptions<a class="headerlink" href="#32-typed-exceptions" title="Permanent link">&para;</a></h3>
+<p>404s are translated to typed <code>CMAPIError</code> subclasses — easy to
+catch one resource type without swallowing real failures. All three
+inherit from <code>CMAPIError</code> so a single <code>except CMAPIError</code> catches
+every documented failure mode; anything else is an HTTP / network
+error and should be allowed to propagate.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="k">try</span><span class="p">:</span>
+    <span class="c1"># Well-formed but non-existent plume id (the API 422s on malformed input).</span>
+    <span class="n">api_queries</span><span class="o">.</span><span class="n">get_plume</span><span class="p">(</span><span class="n">TOKEN</span><span class="p">,</span> <span class="s2">&quot;tan29991231t000000c00s4001-Z&quot;</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">CMPlumeNotFound</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;caught CMPlumeNotFound: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">api_queries</span><span class="o">.</span><span class="n">get_source</span><span class="p">(</span><span class="n">TOKEN</span><span class="p">,</span> <span class="s2">&quot;CH4_1B2_100m_0_0&quot;</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">CMSourceNotFound</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;caught CMSourceNotFound: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="c1"># A scene whose L2B item is not yet published in STAC.</span>
+    <span class="n">api_queries</span><span class="o">.</span><span class="n">get_tile</span><span class="p">(</span><span class="n">TOKEN</span><span class="p">,</span> <span class="s2">&quot;tan29991231t000000c00s4001&quot;</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">CMSceneNotPublished</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;caught CMSceneNotPublished: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># All three inherit from CMAPIError if you want a single catch.</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;isinstance(CMPlumeNotFound(...), CMAPIError) -&amp;gt; &quot;</span>
+      <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">CMPlumeNotFound</span><span class="p">(</span><span class="s1">&#39;x&#39;</span><span class="p">),</span><span class="w"> </span><span class="n">CMAPIError</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>caught CMPlumeNotFound: Plume not found: tan29991231t000000c00s4001-Z
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>caught CMSourceNotFound: Source not found: CH4_1B2_100m_0_0
+caught CMSceneNotPublished: L2B scene not published: tan29991231t000000c00s4001
+isinstance(CMPlumeNotFound(...), CMAPIError) -&gt; True
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="33-list-helpers">3.3 List helpers<a class="headerlink" href="#33-list-helpers" title="Permanent link">&para;</a></h3>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">dt_min</span> <span class="o">=</span> <span class="n">datetime</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tzinfo</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
+<span class="n">dt_max</span> <span class="o">=</span> <span class="n">datetime</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="n">tzinfo</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
+
+<span class="n">plumes</span> <span class="o">=</span> <span class="n">api_queries</span><span class="o">.</span><span class="n">list_plumes</span><span class="p">(</span>
+    <span class="n">TOKEN</span><span class="p">,</span>
+    <span class="n">bbox</span><span class="o">=</span><span class="n">PERMIAN_BBOX</span><span class="p">,</span>
+    <span class="n">datetime_min</span><span class="o">=</span><span class="n">dt_min</span><span class="p">,</span>
+    <span class="n">datetime_max</span><span class="o">=</span><span class="n">dt_max</span><span class="p">,</span>
+    <span class="n">gas</span><span class="o">=</span><span class="s2">&quot;CH4&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">plumes</span><span class="p">)</span><span class="si">}</span><span class="s2"> plumes&quot;</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">plumes</span><span class="p">[:</span><span class="mi">3</span><span class="p">]:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">p</span><span class="o">.</span><span class="n">plume_id</span><span class="si">}</span><span class="s2">  emission_auto=</span><span class="si">{</span><span class="n">p</span><span class="o">.</span><span class="n">emission_auto</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>22 plumes
+  tan20251212t185057c20s4001-C  emission_auto=876.1038259991867
+  tan20251212t185057c20s4001-D  emission_auto=432.5738771282001
+  tan20251212t185057c20s4001-E  emission_auto=1007.6564374669618
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="c1"># NB: STAC search caps page size at 100 — pass an explicit limit until</span>
+<span class="c1"># pagination lands.</span>
+<span class="n">tiles</span> <span class="o">=</span> <span class="n">api_queries</span><span class="o">.</span><span class="n">list_tiles</span><span class="p">(</span>
+    <span class="n">TOKEN</span><span class="p">,</span>
+    <span class="n">bbox</span><span class="o">=</span><span class="n">PERMIAN_BBOX</span><span class="p">,</span>
+    <span class="n">datetime_min</span><span class="o">=</span><span class="n">dt_min</span><span class="p">,</span>
+    <span class="n">datetime_max</span><span class="o">=</span><span class="n">dt_max</span><span class="p">,</span>
+    <span class="n">limit</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">tiles</span><span class="p">)</span><span class="si">}</span><span class="s2"> tiles&quot;</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tiles</span><span class="p">[:</span><span class="mi">3</span><span class="p">]:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">t</span><span class="o">.</span><span class="n">scene_id</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">t</span><span class="o">.</span><span class="n">platform</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">t</span><span class="o">.</span><span class="n">datetime</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>4 tiles
+  tan20251212t185057c20s4001 tan 2025-12-12 18:50:57+00:00
+  tan20251210t183649c71s4001 tan 2025-12-10 18:36:49+00:00
+  tan20251210t183749c38s4001 tan 2025-12-10 18:37:49+00:00
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">sources</span> <span class="o">=</span> <span class="n">api_queries</span><span class="o">.</span><span class="n">list_sources</span><span class="p">(</span><span class="n">TOKEN</span><span class="p">,</span> <span class="n">bbox</span><span class="o">=</span><span class="n">PERMIAN_BBOX</span><span class="p">,</span> <span class="n">gas</span><span class="o">=</span><span class="s2">&quot;CH4&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">sources</span><span class="p">)</span><span class="si">}</span><span class="s2"> sources&quot;</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">sources</span><span class="p">[:</span><span class="mi">3</span><span class="p">]:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">s</span><span class="o">.</span><span class="n">source_name</span><span class="si">}</span><span class="s2">  plumes=</span><span class="si">{</span><span class="n">s</span><span class="o">.</span><span class="n">plume_count</span><span class="si">}</span><span class="s2">  emission=</span><span class="si">{</span><span class="n">s</span><span class="o">.</span><span class="n">emission_auto</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>10593 sources
+  CH4_6A_500m_-117.26768_34.59375  plumes=3  emission=23.0636206375622
+  CH4_6A_500m_-118.51707_34.32769  plumes=485  emission=1070.9700550816046
+  CH4_6A_500m_-119.38080_36.39176  plumes=34  emission=174.91747754329324
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="34-cross-resolution-helpers">3.4 Cross-resolution helpers<a class="headerlink" href="#34-cross-resolution-helpers" title="Permanent link">&para;</a></h3>
+<p>The headline value-add — these do the join work the upstream API
+leaves to the caller (scene-id derivation, source lookup-by-plume,
+dedup of <code>scene_id</code>s per source, etc.).</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="c1"># plume → tile (returns None when the L2B scene isn&#39;t published yet)</span>
+<span class="n">tile</span> <span class="o">=</span> <span class="n">api_queries</span><span class="o">.</span><span class="n">get_tile_for_plume</span><span class="p">(</span><span class="n">TOKEN</span><span class="p">,</span> <span class="n">PLUME_ID</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;tile  : </span><span class="si">{</span><span class="n">tile</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">tile</span><span class="o">.</span><span class="n">scene_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>tile  : tan20251212t185057c20s4001
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="c1"># plume → source (returns None when CM hasn&#39;t clustered this plume yet)</span>
+<span class="n">source</span> <span class="o">=</span> <span class="n">api_queries</span><span class="o">.</span><span class="n">get_source_for_plume</span><span class="p">(</span><span class="n">TOKEN</span><span class="p">,</span> <span class="n">PLUME_ID</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;source: </span><span class="si">{</span><span class="n">source</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">source</span><span class="o">.</span><span class="n">source_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>source: CH4_1B2_100m_-104.17525_32.49125
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="c1"># One call → (plume, tile|None, source|None) — the typical ingestion shape.</span>
+<span class="n">plume</span><span class="p">,</span> <span class="n">tile</span><span class="p">,</span> <span class="n">source</span> <span class="o">=</span> <span class="n">api_queries</span><span class="o">.</span><span class="n">get_plume_context</span><span class="p">(</span><span class="n">TOKEN</span><span class="p">,</span> <span class="n">PLUME_ID</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;plume  : </span><span class="si">{</span><span class="n">plume</span><span class="o">.</span><span class="n">plume_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  tile  : </span><span class="si">{</span><span class="n">tile</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">tile</span><span class="o">.</span><span class="n">scene_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  source: </span><span class="si">{</span><span class="n">source</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">source</span><span class="o">.</span><span class="n">source_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>plume  : tan20251212t185057c20s4001-E
+  tile  : tan20251212t185057c20s4001
+  source: CH4_1B2_100m_-104.17525_32.49125
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="c1"># tile → all plumes in that scene</span>
+<span class="n">plumes</span> <span class="o">=</span> <span class="n">api_queries</span><span class="o">.</span><span class="n">list_plumes_for_tile</span><span class="p">(</span><span class="n">TOKEN</span><span class="p">,</span> <span class="n">SCENE_ID</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">plumes</span><span class="p">)</span><span class="si">}</span><span class="s2"> plumes in scene </span><span class="si">{</span><span class="n">SCENE_ID</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>0 plumes in scene tan20251212t185057c20s4001
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="c1"># source → every plume attributed to it (parsed from CSV)</span>
+<span class="n">plumes</span> <span class="o">=</span> <span class="n">api_queries</span><span class="o">.</span><span class="n">list_plumes_for_source</span><span class="p">(</span><span class="n">TOKEN</span><span class="p">,</span> <span class="n">SOURCE_NAME</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">plumes</span><span class="p">)</span><span class="si">}</span><span class="s2"> plumes for source </span><span class="si">{</span><span class="n">SOURCE_NAME</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="c1"># source → distinct parent tiles (dedups scene_ids before STAC ids= search)</span>
+<span class="n">tiles</span> <span class="o">=</span> <span class="n">api_queries</span><span class="o">.</span><span class="n">list_tiles_for_source</span><span class="p">(</span><span class="n">TOKEN</span><span class="p">,</span> <span class="n">SOURCE_NAME</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">tiles</span><span class="p">)</span><span class="si">}</span><span class="s2"> unique parent tiles&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>1 plumes for source CH4_1B2_100m_-104.17525_32.49125
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>1 unique parent tiles
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="4-end-to-end-mini-workflow">4 · End-to-end mini-workflow<a class="headerlink" href="#4-end-to-end-mini-workflow" title="Permanent link">&para;</a></h2>
+<p>Tie it together: take a bbox + date range, list plumes, expand
+each into full context, count how many have a published L2B parent
+and how many are clustered into a source.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">plumes</span> <span class="o">=</span> <span class="n">api_queries</span><span class="o">.</span><span class="n">list_plumes</span><span class="p">(</span>
+    <span class="n">TOKEN</span><span class="p">,</span> <span class="n">bbox</span><span class="o">=</span><span class="n">PERMIAN_BBOX</span><span class="p">,</span> <span class="n">datetime_min</span><span class="o">=</span><span class="n">dt_min</span><span class="p">,</span> <span class="n">datetime_max</span><span class="o">=</span><span class="n">dt_max</span><span class="p">,</span> <span class="n">gas</span><span class="o">=</span><span class="s2">&quot;CH4&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">n_with_tile</span> <span class="o">=</span> <span class="n">n_with_source</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">plumes</span><span class="p">[:</span><span class="mi">25</span><span class="p">]:</span>  <span class="c1"># cap to keep the request count modest</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">tile</span><span class="p">,</span> <span class="n">source</span> <span class="o">=</span> <span class="n">api_queries</span><span class="o">.</span><span class="n">get_plume_context</span><span class="p">(</span><span class="n">TOKEN</span><span class="p">,</span> <span class="n">p</span><span class="o">.</span><span class="n">plume_id</span><span class="p">)</span>
+    <span class="n">n_with_tile</span> <span class="o">+=</span> <span class="n">tile</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+    <span class="n">n_with_source</span> <span class="o">+=</span> <span class="n">source</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;checked       : </span><span class="si">{</span><span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">plumes</span><span class="p">),</span><span class="w"> </span><span class="mi">25</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;L2B published : </span><span class="si">{</span><span class="n">n_with_tile</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;in a source   : </span><span class="si">{</span><span class="n">n_with_source</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>checked       : 22
+L2B published : 22
+in a source   : 22
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>The <code>22 / 22 / 22</code> saturation reads as: in this Permian month,
+every plume detection has both (a) a parent L2B published in STAC
+and (b) a clustered source. That's typical for archives older than
+~3 months — the publication lag has caught up. Run the same
+query over the most recent 30 days and you'll see <code>N / 0 / 0</code>
+(plumes exist, scenes pending) — which is what your ingestion
+pipeline needs to handle gracefully via <code>CMSceneNotPublished</code>.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="5-plume-catalog-stats-whats-in-the-live-catalog-right-now">5 · Plume catalog stats — what's in the live catalog right now<a class="headerlink" href="#5-plume-catalog-stats-whats-in-the-live-catalog-right-now" title="Permanent link">&para;</a></h2>
+<p>Cells below hit the live API at notebook-execution time, so numbers
+will drift between runs. Each cell calls one or more
+<code>/catalog/plumes/annotated?limit=1</code> requests and reads the
+<code>total_count</code> field — no large data transfer. Total runtime ≈ 25s.</p>
+<p>If the API is rate-limiting at the moment you re-run, drop the
+section: the prose narrative stands on its own.</p>
+<p>&gt; CH4-only — <code>plume_gas="CH4"</code> is implicit on every call below.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="51-headline-counts">5.1 Headline counts<a class="headerlink" href="#51-headline-counts" title="Permanent link">&para;</a></h3>
+<p>Total CH4 plumes in the catalog, split by <code>instrument</code>. The
+<code>instrument</code> filter is case-sensitive upstream — <code>tan</code> / <code>emi</code> /
+<code>ang</code> / <code>av3</code> are lowercase, <code>GAO</code> is uppercase. Other obvious
+filter names are silently ignored: use <code>plume_gas</code> not <code>gas</code>, and
+<code>instrument</code> not <code>platform</code>.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
+
+<span class="n">BASE</span> <span class="o">=</span> <span class="s2">&quot;https://api.carbonmapper.org/api/v1&quot;</span>
+<span class="n">H</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;Authorization&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Bearer </span><span class="si">{</span><span class="n">TOKEN</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">plume_count</span><span class="p">(</span><span class="o">**</span><span class="n">filters</span><span class="p">)</span> <span class="o">-&amp;</span><span class="n">gt</span><span class="p">;</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;`total_count` for the plume catalog under the given filters.&quot;&quot;&quot;</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">BASE</span><span class="si">}</span><span class="s2">/catalog/plumes/annotated&quot;</span><span class="p">,</span>
+        <span class="n">headers</span><span class="o">=</span><span class="n">H</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;limit&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;plume_gas&quot;</span><span class="p">:</span> <span class="s2">&quot;CH4&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">filters</span><span class="p">},</span>
+        <span class="n">timeout</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">r</span><span class="o">.</span><span class="n">json</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;total_count&quot;</span><span class="p">)</span>
+
+
+<span class="n">total</span> <span class="o">=</span> <span class="n">plume_count</span><span class="p">()</span>
+<span class="c1"># Instrument codes are case-sensitive upstream — `gao` returns None,</span>
+<span class="c1"># `GAO` works. Other codes are lowercase. Worth a comment because it</span>
+<span class="c1"># bites everyone once.</span>
+<span class="n">by_inst</span> <span class="o">=</span> <span class="p">{</span><span class="n">code</span><span class="p">:</span> <span class="n">plume_count</span><span class="p">(</span><span class="n">instrument</span><span class="o">=</span><span class="n">code</span><span class="p">)</span> <span class="k">for</span> <span class="n">code</span> <span class="ow">in</span>
+           <span class="p">(</span><span class="s2">&quot;tan&quot;</span><span class="p">,</span> <span class="s2">&quot;emi&quot;</span><span class="p">,</span> <span class="s2">&quot;ang&quot;</span><span class="p">,</span> <span class="s2">&quot;av3&quot;</span><span class="p">,</span> <span class="s2">&quot;GAO&quot;</span><span class="p">)}</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;TOTAL CH4: </span><span class="si">{</span><span class="n">total</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> plumes</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;By instrument&quot;</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">by_inst</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">k</span><span class="si">:</span><span class="s2">5s</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">v</span><span class="si">:</span><span class="s2">&amp;gt;8,</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>TOTAL CH4: 32,642 plumes
+
+By instrument
+  tan     11,970
+  emi      4,297
+  ang      4,693
+  av3      2,343
+  GAO      9,339
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="52-ipcc-sector-distribution">5.2 IPCC sector distribution<a class="headerlink" href="#52-ipcc-sector-distribution" title="Permanent link">&para;</a></h3>
+<p>Carbon Mapper attributes most plumes to an IPCC sector code.
+Anything below <code>1B2</code> (oil &amp; gas) is dwarfed by it — Tanager's
+operational targeting bias toward upstream O&amp;G shows up clearly.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">sector_codes</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;1A1&quot;</span><span class="p">,</span> <span class="s2">&quot;1B1a&quot;</span><span class="p">,</span> <span class="s2">&quot;1B2&quot;</span><span class="p">,</span> <span class="s2">&quot;3A&quot;</span><span class="p">,</span> <span class="s2">&quot;4B&quot;</span><span class="p">,</span> <span class="s2">&quot;6A&quot;</span><span class="p">,</span> <span class="s2">&quot;6B&quot;</span><span class="p">]</span>
+<span class="n">by_sector</span> <span class="o">=</span> <span class="p">{</span><span class="n">s</span><span class="p">:</span> <span class="n">plume_count</span><span class="p">(</span><span class="n">sectors</span><span class="o">=</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">sector_codes</span><span class="p">}</span>
+
+<span class="n">df_sector</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
+    <span class="s2">&quot;sector&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">by_sector</span><span class="p">),</span>
+    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;Energy generation&quot;</span><span class="p">,</span> <span class="s2">&quot;Coal mining&quot;</span><span class="p">,</span> <span class="s2">&quot;Oil &amp;amp; gas&quot;</span><span class="p">,</span>
+             <span class="s2">&quot;Enteric fermentation&quot;</span><span class="p">,</span> <span class="s2">&quot;Livestock&quot;</span><span class="p">,</span> <span class="s2">&quot;Solid waste&quot;</span><span class="p">,</span>
+             <span class="s2">&quot;Waste water&quot;</span><span class="p">],</span>
+    <span class="s2">&quot;plumes&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">by_sector</span><span class="o">.</span><span class="n">values</span><span class="p">()),</span>
+<span class="p">})</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="s2">&quot;plumes&quot;</span><span class="p">,</span> <span class="n">ascending</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">na_position</span><span class="o">=</span><span class="s2">&quot;last&quot;</span><span class="p">)</span>
+<span class="n">df_sector</span><span class="p">[</span><span class="s2">&quot;share&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df_sector</span><span class="p">[</span><span class="s2">&quot;plumes&quot;</span><span class="p">]</span> <span class="o">/</span> <span class="n">df_sector</span><span class="p">[</span><span class="s2">&quot;plumes&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+<span class="n">df_sector</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_html rendered_html output_subarea output_execute_result">
+<div>
+<style scoped="">
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th></th>
+<th>sector</th>
+<th>name</th>
+<th>plumes</th>
+<th>share</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th>2</th>
+<td>1B2</td>
+<td>Oil &amp; gas</td>
+<td>18657.0</td>
+<td>0.580564</td>
+</tr>
+<tr>
+<th>5</th>
+<td>6A</td>
+<td>Solid waste</td>
+<td>8552.0</td>
+<td>0.266119</td>
+</tr>
+<tr>
+<th>1</th>
+<td>1B1a</td>
+<td>Coal mining</td>
+<td>3574.0</td>
+<td>0.111215</td>
+</tr>
+<tr>
+<th>4</th>
+<td>4B</td>
+<td>Livestock</td>
+<td>1051.0</td>
+<td>0.032705</td>
+</tr>
+<tr>
+<th>0</th>
+<td>1A1</td>
+<td>Energy generation</td>
+<td>252.0</td>
+<td>0.007842</td>
+</tr>
+<tr>
+<th>6</th>
+<td>6B</td>
+<td>Waste water</td>
+<td>50.0</td>
+<td>0.001556</td>
+</tr>
+<tr>
+<th>3</th>
+<td>3A</td>
+<td>Enteric fermentation</td>
+<td>NaN</td>
+<td>NaN</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="53-monthly-activity-last-12-months">5.3 Monthly activity — last 12 months<a class="headerlink" href="#53-monthly-activity-last-12-months" title="Permanent link">&para;</a></h3>
+<p>Plumes-by-month using ISO datetime intervals. Tanager-1 went
+operational mid-2024, so the early months are sparse; recent
+months reflect both the fleet ramp and the publication lag (newer
+detections are still flowing into the catalog).</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span><span class="p">,</span> <span class="n">timezone</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">month_count</span><span class="p">(</span><span class="n">year</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">month</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&amp;</span><span class="n">gt</span><span class="p">;</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">datetime</span><span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="n">month</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">tzinfo</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
+    <span class="n">end</span> <span class="o">=</span> <span class="p">(</span><span class="n">datetime</span><span class="p">(</span><span class="n">year</span> <span class="o">+</span> <span class="p">(</span><span class="n">month</span> <span class="o">==</span> <span class="mi">12</span><span class="p">),</span> <span class="p">(</span><span class="n">month</span> <span class="o">%</span> <span class="mi">12</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span>
+                    <span class="n">tzinfo</span><span class="o">=</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
+           <span class="o">-</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">seconds</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">plume_count</span><span class="p">(</span><span class="n">datetime</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">start</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">end</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+
+<span class="n">now</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
+<span class="n">months</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">y</span><span class="p">,</span> <span class="n">m</span> <span class="o">=</span> <span class="n">now</span><span class="o">.</span><span class="n">year</span><span class="p">,</span> <span class="n">now</span><span class="o">.</span><span class="n">month</span>
+<span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">12</span><span class="p">):</span>
+    <span class="n">months</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">y</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">month_count</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">m</span><span class="p">)))</span>
+    <span class="n">m</span> <span class="o">-=</span> <span class="mi">1</span>
+    <span class="k">if</span> <span class="n">m</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">m</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="mi">12</span><span class="p">,</span> <span class="n">y</span> <span class="o">-</span> <span class="mi">1</span>
+
+<span class="n">df_months</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">months</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;year&quot;</span><span class="p">,</span> <span class="s2">&quot;month&quot;</span><span class="p">,</span> <span class="s2">&quot;plumes&quot;</span><span class="p">])</span>
+<span class="n">df_months</span><span class="p">[</span><span class="s2">&quot;label&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">df_months</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span>
+    <span class="k">lambda</span> <span class="n">r</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">year</span><span class="si">}</span><span class="s2">-</span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">month</span><span class="si">:</span><span class="s2">02d</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">df_months</span><span class="p">[[</span><span class="s2">&quot;label&quot;</span><span class="p">,</span> <span class="s2">&quot;plumes&quot;</span><span class="p">]]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_html rendered_html output_subarea output_execute_result">
+<div>
+<style scoped="">
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th></th>
+<th>label</th>
+<th>plumes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th>0</th>
+<td>2025-06</td>
+<td>934</td>
+</tr>
+<tr>
+<th>1</th>
+<td>2025-07</td>
+<td>1073</td>
+</tr>
+<tr>
+<th>2</th>
+<td>2025-08</td>
+<td>932</td>
+</tr>
+<tr>
+<th>3</th>
+<td>2025-09</td>
+<td>935</td>
+</tr>
+<tr>
+<th>4</th>
+<td>2025-10</td>
+<td>892</td>
+</tr>
+<tr>
+<th>5</th>
+<td>2025-11</td>
+<td>1011</td>
+</tr>
+<tr>
+<th>6</th>
+<td>2025-12</td>
+<td>961</td>
+</tr>
+<tr>
+<th>7</th>
+<td>2026-01</td>
+<td>669</td>
+</tr>
+<tr>
+<th>8</th>
+<td>2026-02</td>
+<td>775</td>
+</tr>
+<tr>
+<th>9</th>
+<td>2026-03</td>
+<td>949</td>
+</tr>
+<tr>
+<th>10</th>
+<td>2026-04</td>
+<td>303</td>
+</tr>
+<tr>
+<th>11</th>
+<td>2026-05</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="54-emission-rate-distribution">5.4 Emission rate distribution<a class="headerlink" href="#54-emission-rate-distribution" title="Permanent link">&para;</a></h3>
+<p>The headline metric per plume is <code>emission_auto</code> in kg/h. Pull
+one page (1,000 plumes) and summarise — the long tail is dramatic:
+the median CH4 plume is sub-kT/yr, the p99 is in the multi-kT/yr
+super-emitter regime.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">BASE</span><span class="si">}</span><span class="s2">/catalog/plumes/annotated&quot;</span><span class="p">,</span>
+    <span class="n">headers</span><span class="o">=</span><span class="n">H</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;limit&quot;</span><span class="p">:</span> <span class="mi">1000</span><span class="p">,</span> <span class="s2">&quot;plume_gas&quot;</span><span class="p">:</span> <span class="s2">&quot;CH4&quot;</span><span class="p">},</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">60</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">emissions_kgh</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">(</span>
+    <span class="p">[</span><span class="n">item</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;emission_auto&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">json</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;items&quot;</span><span class="p">,</span> <span class="p">[])],</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;emission_kg_per_h&quot;</span><span class="p">,</span>
+<span class="p">)</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span>
+
+<span class="c1"># Convert to kt/yr (×24h ×365.25d ÷ 1e6 kg/kt) for context.</span>
+<span class="n">emissions_kt_yr</span> <span class="o">=</span> <span class="n">emissions_kgh</span> <span class="o">*</span> <span class="mi">24</span> <span class="o">*</span> <span class="mf">365.25</span> <span class="o">/</span> <span class="mi">1_000_000</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Sample size: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">emissions_kgh</span><span class="p">)</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> CH4 plumes</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;kg/h:&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">emissions_kgh</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">percentiles</span><span class="o">=</span><span class="p">[</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.75</span><span class="p">,</span> <span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.99</span><span class="p">])</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">kt/yr equivalent:&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">emissions_kt_yr</span><span class="o">.</span><span class="n">describe</span><span class="p">(</span><span class="n">percentiles</span><span class="o">=</span><span class="p">[</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.75</span><span class="p">,</span> <span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.99</span><span class="p">])</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>Sample size: 754 CH4 plumes
+
+kg/h:
+count      754.0
+mean      1228.9
+std       1567.6
+min         79.4
+50%        802.1
+75%       1464.6
+90%       2540.7
+99%       7265.3
+max      20900.0
+Name: emission_kg_per_h, dtype: float64
+
+kt/yr equivalent:
+count    754.00
+mean      10.77
+std       13.74
+min        0.70
+50%        7.03
+75%       12.84
+90%       22.27
+99%       63.69
+max      183.21
+Name: emission_kg_per_h, dtype: float64
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="6-stac-inventory-whats-downloadable">6 · STAC inventory — what's downloadable<a class="headerlink" href="#6-stac-inventory-whats-downloadable" title="Permanent link">&para;</a></h2>
+<p>The plume catalog (§ 5) is the <em>detection</em> index — what was
+spotted, where, when, how strong. The STAC catalogue is the
+<em>download</em> index — the actual GeoTIFFs and per-plume products you
+can pull bytes for. There are 86 STAC collections total, but most
+are superseded versions; only ~9 are actively published as of
+late 2025.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="61-collection-counts-by-level">6.1 Collection counts by level<a class="headerlink" href="#61-collection-counts-by-level" title="Permanent link">&para;</a></h3>
+<p>The <code>l&lt;n&gt;</code> prefix tells you what kind of product:</p>
+<ul>
+<li><strong>L2B</strong> — orthorectified scene-level retrievals (cmf, RGB, uncertainty, artifact-mask).</li>
+<li><strong>L2C</strong> — per-scene CH4/CO2 composites (less common downstream).</li>
+<li><strong>L3A</strong> — per-plume products (the small <code>plume_tif</code> clip + <code>ime</code> retrieval crop).</li>
+<li><strong>L4A</strong> — retrieval cubes; flat per-platform listings of L4 outputs.</li>
+</ul>
+<p><code>v3a</code> is the current canonical version family. Older versions
+(<code>v1</code>, <code>v3</code>, <code>j001</code>, <code>jpl</code> legacy) still exist for archival
+reads.</p>
+<p></n></p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">defaultdict</span>
+
+<span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">BASE</span><span class="si">}</span><span class="s2">/stac/collections&quot;</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">H</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
+<span class="n">all_collections</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">json</span><span class="p">()[</span><span class="s2">&quot;collections&quot;</span><span class="p">]</span>
+
+<span class="n">groups</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">all_collections</span><span class="p">:</span>
+    <span class="n">m</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;(l\d[a-z]?)-&quot;</span><span class="p">,</span> <span class="n">c</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">m</span><span class="p">:</span>
+        <span class="n">groups</span><span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">c</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">])</span>
+
+<span class="n">df_levels</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span>
+    <span class="s2">&quot;level&quot;</span><span class="p">:</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">groups</span><span class="p">),</span>
+    <span class="s2">&quot;collections&quot;</span><span class="p">:</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">groups</span><span class="p">[</span><span class="n">k</span><span class="p">])</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">groups</span><span class="p">)],</span>
+<span class="p">})</span>
+<span class="n">df_levels</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">df_levels</span><span class="p">)]</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;TOTAL&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">all_collections</span><span class="p">)]</span>
+<span class="n">df_levels</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_html rendered_html output_subarea output_execute_result">
+<div>
+<style scoped="">
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th></th>
+<th>level</th>
+<th>collections</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th>0</th>
+<td>l2</td>
+<td>1</td>
+</tr>
+<tr>
+<th>1</th>
+<td>l2b</td>
+<td>31</td>
+</tr>
+<tr>
+<th>2</th>
+<td>l2c</td>
+<td>3</td>
+</tr>
+<tr>
+<th>3</th>
+<td>l3a</td>
+<td>32</td>
+</tr>
+<tr>
+<th>4</th>
+<td>l3c</td>
+<td>1</td>
+</tr>
+<tr>
+<th>5</th>
+<td>l4a</td>
+<td>18</td>
+</tr>
+<tr>
+<th>6</th>
+<td>TOTAL</td>
+<td>86</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="62-active-v3a-collections-item-counts">6.2 Active v3a collections — item counts<a class="headerlink" href="#62-active-v3a-collections-item-counts" title="Permanent link">&para;</a></h3>
+<p>For each <code>*-v3a</code> collection, fetch <code>numberMatched</code> via a
+1-result STAC search. Empty placeholder collections (e.g.
+<code>l2b-ch4-mfma-v3a</code>) show 0 — the algorithm variant isn't
+currently published. The pairs <code>l2b-ch4-mfa-v3a</code> /
+<code>l2b-co2-mfa-v3a</code> have identical item counts because they're the
+same Tanager scenes processed twice for different gases.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">v3a</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">all_collections</span>
+       <span class="k">if</span> <span class="p">(</span><span class="n">c</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;-v3a&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">c</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;-quick-v3a&quot;</span><span class="p">))</span>
+       <span class="ow">and</span> <span class="p">(</span><span class="s2">&quot;ch4&quot;</span> <span class="ow">in</span> <span class="n">c</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">]</span> <span class="ow">or</span> <span class="s2">&quot;rgb&quot;</span> <span class="ow">in</span> <span class="n">c</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">])]</span>
+
+<span class="n">rows</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">cid</span> <span class="ow">in</span> <span class="n">v3a</span><span class="p">:</span>
+    <span class="n">info</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">all_collections</span> <span class="k">if</span> <span class="n">c</span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">cid</span><span class="p">)</span>
+    <span class="n">extent</span> <span class="o">=</span> <span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;extent&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;temporal&quot;</span><span class="p">,</span> <span class="p">{})</span> \
+                  <span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;interval&quot;</span><span class="p">,</span> <span class="p">[[</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]])[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">BASE</span><span class="si">}</span><span class="s2">/stac/search&quot;</span><span class="p">,</span>
+        <span class="n">headers</span><span class="o">=</span><span class="n">H</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;collections&quot;</span><span class="p">:</span> <span class="n">cid</span><span class="p">,</span> <span class="s2">&quot;limit&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">matched</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">json</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;numberMatched&quot;</span><span class="p">)</span>
+    <span class="n">rows</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+        <span class="s2">&quot;collection&quot;</span><span class="p">:</span> <span class="n">cid</span><span class="p">,</span>
+        <span class="s2">&quot;items&quot;</span><span class="p">:</span> <span class="n">matched</span><span class="p">,</span>
+        <span class="s2">&quot;start&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">extent</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)[:</span><span class="mi">10</span><span class="p">],</span>
+        <span class="s2">&quot;end&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">extent</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)[:</span><span class="mi">10</span><span class="p">],</span>
+    <span class="p">})</span>
+
+<span class="n">df_v3a</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span>
+    <span class="n">by</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;items&quot;</span><span class="p">,</span> <span class="s2">&quot;collection&quot;</span><span class="p">],</span> <span class="n">ascending</span><span class="o">=</span><span class="p">[</span><span class="kc">False</span><span class="p">,</span> <span class="kc">True</span><span class="p">],</span>
+<span class="p">)</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">df_v3a</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_html rendered_html output_subarea output_execute_result">
+<div>
+<style scoped="">
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th></th>
+<th>collection</th>
+<th>items</th>
+<th>start</th>
+<th>end</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th>0</th>
+<td>l2b-ch4-mfa-v3a</td>
+<td>1675</td>
+<td>2025-07-11</td>
+<td>2025-12-16</td>
+</tr>
+<tr>
+<th>1</th>
+<td>l2b-rgb-v3a</td>
+<td>1672</td>
+<td>2025-07-11</td>
+<td>2025-12-16</td>
+</tr>
+<tr>
+<th>2</th>
+<td>l3a-vis-ch4-mfa-v3a</td>
+<td>1451</td>
+<td>2023-10-25</td>
+<td>2025-12-16</td>
+</tr>
+<tr>
+<th>3</th>
+<td>l3a-ime-ch4-mfa-v3a</td>
+<td>1450</td>
+<td>2023-10-25</td>
+<td>2025-12-16</td>
+</tr>
+<tr>
+<th>4</th>
+<td>l4a-ch4-mfa-v3a</td>
+<td>1450</td>
+<td>2023-10-25</td>
+<td>2025-12-16</td>
+</tr>
+<tr>
+<th>5</th>
+<td>l2b-ch4-mfma-v3a</td>
+<td>0</td>
+<td>2025-07-11</td>
+<td>2025-12-16</td>
+</tr>
+<tr>
+<th>6</th>
+<td>l4a-combined-ch4-quick-v3a</td>
+<td>0</td>
+<td>2025-11-06</td>
+<td>2025-12-15</td>
+</tr>
+<tr>
+<th>7</th>
+<td>l4a-combined-ch4-v3a</td>
+<td>0</td>
+<td>2024-11-21</td>
+<td>2025-12-15</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<p>&gt; <strong>v3c is the live processing version, but isn't in STAC.</strong> The
+&gt; latest Tanager CH4 plumes (post-2025-12-16) live in
+&gt; <code>l3a-vis-ch4-mfa-v3c</code> / <code>l3a-ime-ch4-mfa-v3c</code> (and <code>-v3d</code> for the
+&gt; very newest) — but those collections are not exposed via
+&gt; <code>/stac/collections</code> or any item lookup. They're reachable only
+&gt; via direct asset URLs derived from <code>/catalog/plume/{id}</code>. Both
+&gt; wrappers handle this transparently via URL-pattern derivation:
+&gt; <code>CMPlumeImage</code> for the per-plume L3A bundle (see § 8 below), and
+&gt; <code>CMImageRaster</code> (via <code>api_queries.get_image_raster_for_plume</code>)
+&gt; for the parent L2B scene — which tries STAC first and falls back
+&gt; to the same URL-pattern trick when the scene isn't registered.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="63-asset-shapes-whats-actually-inside-an-item">6.3 Asset shapes — what's actually inside an item<a class="headerlink" href="#63-asset-shapes-whats-actually-inside-an-item" title="Permanent link">&para;</a></h3>
+<p>Sample one item per active CH4 collection and list the asset keys.
+This is the canonical map between <em>collection</em> (what you search
+for) and <em>asset key</em> (what <code>RasterioReader</code> actually opens).</p>
+<table>
+<thead>
+<tr>
+<th>Collection</th>
+<th>Headline asset</th>
+<th>Use it for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>l2b-ch4-mfa-v3a</code></td>
+<td><code>cmf.tif</code></td>
+<td>CH4 column-density retrieval</td>
+</tr>
+<tr>
+<td><code>l2b-rgb-v3a</code></td>
+<td><code>rgb.tif</code></td>
+<td>True-colour overlay</td>
+</tr>
+<tr>
+<td><code>l3a-ime-ch4-mfa-v3a</code></td>
+<td><code>ime-cmf-concentrations.tif</code></td>
+<td>Per-plume IME retrieval crop</td>
+</tr>
+<tr>
+<td><code>l3a-vis-ch4-mfa-v3a</code></td>
+<td><code>plume.tif</code> (band-4 alpha) + <code>plume-outline.geojson</code></td>
+<td>Per-plume mask / polygon</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">sample_collections</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;l2b-ch4-mfa-v3a&quot;</span><span class="p">,</span> <span class="s2">&quot;l2b-rgb-v3a&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;l3a-ime-ch4-mfa-v3a&quot;</span><span class="p">,</span> <span class="s2">&quot;l3a-vis-ch4-mfa-v3a&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+
+<span class="n">asset_rows</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">cid</span> <span class="ow">in</span> <span class="n">sample_collections</span><span class="p">:</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">BASE</span><span class="si">}</span><span class="s2">/stac/search&quot;</span><span class="p">,</span>
+        <span class="n">headers</span><span class="o">=</span><span class="n">H</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;collections&quot;</span><span class="p">:</span> <span class="n">cid</span><span class="p">,</span> <span class="s2">&quot;limit&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">feats</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">json</span><span class="p">()</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;features&quot;</span><span class="p">,</span> <span class="p">[])</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">feats</span><span class="p">:</span>
+        <span class="n">asset_rows</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;collection&quot;</span><span class="p">:</span> <span class="n">cid</span><span class="p">,</span> <span class="s2">&quot;assets&quot;</span><span class="p">:</span> <span class="s2">&quot;(empty)&quot;</span><span class="p">})</span>
+        <span class="k">continue</span>
+    <span class="n">keys</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">((</span><span class="n">feats</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;assets&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{})</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+    <span class="n">asset_rows</span><span class="o">.</span><span class="n">append</span><span class="p">({</span><span class="s2">&quot;collection&quot;</span><span class="p">:</span> <span class="n">cid</span><span class="p">,</span> <span class="s2">&quot;assets&quot;</span><span class="p">:</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">keys</span><span class="p">)})</span>
+
+<span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">asset_rows</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_html rendered_html output_subarea output_execute_result">
+<div>
+<style scoped="">
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+<thead>
+<tr style="text-align: right;">
+<th></th>
+<th>collection</th>
+<th>assets</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<th>0</th>
+<td>l2b-ch4-mfa-v3a</td>
+<td>artifact-mask.tif, cmf-unortho.tif, cmf.tif, u...</td>
+</tr>
+<tr>
+<th>1</th>
+<td>l2b-rgb-v3a</td>
+<td>rgb.tif</td>
+</tr>
+<tr>
+<th>2</th>
+<td>l3a-ime-ch4-mfa-v3a</td>
+<td>ime-cmf-concentrations.png, ime-cmf-concentrat...</td>
+</tr>
+<tr>
+<th>3</th>
+<td>l3a-vis-ch4-mfa-v3a</td>
+<td>plume-concentrations.tif, plume-outline.geojso...</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="7-reachable-products-reference">7 · Reachable products reference<a class="headerlink" href="#7-reachable-products-reference" title="Permanent link">&para;</a></h2>
+<p>Static reference tables — the canonical map of what's reachable
+from the API, by resource type. Numbers in §§ 5–6 are live; the
+tables here are documentation and don't drift with each notebook
+run.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="71-plume-level-products">7.1 Plume-level products<a class="headerlink" href="#71-plume-level-products" title="Permanent link">&para;</a></h3>
+<p>Every detection ships with a small bundle of per-plume products
+keyed off <code>plume_id</code>. Source paths: most assets live on the
+<code>/catalog/plume/{id}</code> REST response (URLs); a handful additionally
+appear as STAC item assets under <code>l3a-*-ch4-mfa-v3a</code> collections.</p>
+<table>
+<thead>
+<tr>
+<th>Asset key</th>
+<th>Format</th>
+<th>What it is</th>
+<th>Where to find it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>plume_tif</code></td>
+<td>RGBA GeoTIFF</td>
+<td>Per-plume binary mask — band 4 is the alpha channel</td>
+<td><code>/catalog/plume/{id}.plume_tif</code> and <code>l3a-vis-ch4-mfa-v3a</code> STAC item assets</td>
+</tr>
+<tr>
+<td><code>plume_png</code></td>
+<td>PNG</td>
+<td>Plume mask viz</td>
+<td><code>/catalog/plume/{id}.plume_png</code></td>
+</tr>
+<tr>
+<td><code>plume_rgb_png</code></td>
+<td>PNG</td>
+<td>Plume mask overlaid on RGB</td>
+<td><code>/catalog/plume/{id}.plume_rgb_png</code></td>
+</tr>
+<tr>
+<td><code>con_tif</code></td>
+<td>GeoTIFF</td>
+<td>Per-plume CH4 retrieval crop (column density)</td>
+<td><code>l3a-ime-ch4-mfa-v3a</code> STAC item assets, asset key <code>ime-cmf-concentrations.tif</code></td>
+</tr>
+<tr>
+<td><code>rgb_png</code> / <code>rgb.png</code></td>
+<td>PNG</td>
+<td>Per-plume RGB context tile</td>
+<td><code>/catalog/plume/{id}.rgb_png</code> and <code>l3a-vis-ch4-mfa-v3a</code></td>
+</tr>
+<tr>
+<td><code>ime_outline_geojson</code> / <code>plume-outline.geojson</code></td>
+<td>GeoJSON</td>
+<td>Plume polygon — preferred over band-4 mask extraction</td>
+<td><code>l3a-vis-ch4-mfa-v3a</code> STAC item assets</td>
+</tr>
+<tr>
+<td><code>plumes.csv</code></td>
+<td>CSV</td>
+<td>All plumes attributed to one source</td>
+<td><code>/catalog/source/{source_name}/plumes.csv</code></td>
+</tr>
+</tbody>
+</table>
+<p>The georeader wrapper <a href="../../modules/readers_module/#carbon-mapper-reader"><code>CMPlumeImage</code></a>
+exposes the GeoTIFFs (<code>plume_tif</code>, <code>plume-concentrations.tif</code>,
+<code>ime-cmf-concentrations.tif</code>, <code>rgb.tif</code>) and the canonical outline
+GeoJSON. PNG-only assets aren't wrapped (no native georeferencing).</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="72-stac-collections-current-ch4-v3a">7.2 STAC collections — current CH4 (v3a)<a class="headerlink" href="#72-stac-collections-current-ch4-v3a" title="Permanent link">&para;</a></h3>
+<p>Carbon Mapper's "active" Tanager-1 CH4 product family. Everything
+older / superseded still resolves under <a href="https://api.carbonmapper.org/api/v1/stac/collections"><code>/stac/collections</code></a>
+(86 total), but new ingestion should target the v3a family below.</p>
+<table>
+<thead>
+<tr>
+<th>Collection</th>
+<th>Level</th>
+<th>Items</th>
+<th>Temporal</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>l2b-ch4-mfa-v3a</code></td>
+<td>L2B</td>
+<td>1,675</td>
+<td>2025-07-11 → 2025-12-16</td>
+<td>CH4 retrieval scene — assets: <code>cmf.tif</code>, <code>cmf-unortho.tif</code>, <code>uncertainty.tif</code>, <code>uncertainty-unortho.tif</code>, <code>artifact-mask.tif</code>, <code>uas.txt</code></td>
+</tr>
+<tr>
+<td><code>l2b-rgb-v3a</code></td>
+<td>L2B</td>
+<td>1,672</td>
+<td>same</td>
+<td>True-colour sibling — <code>rgb.tif</code>. 3 short of the cmf collection (still being published)</td>
+</tr>
+<tr>
+<td><code>l3a-ime-ch4-mfa-v3a</code></td>
+<td>L3A</td>
+<td>1,450</td>
+<td>2023-10-25 → 2025-12-16</td>
+<td>Per-plume CH4 IME retrieval crop — <code>ime-cmf-concentrations.tif</code>, <code>ime-cmf-mask.tif</code>, <code>ime-cmf-outline.geojson</code></td>
+</tr>
+<tr>
+<td><code>l3a-vis-ch4-mfa-v3a</code></td>
+<td>L3A</td>
+<td>1,451</td>
+<td>same</td>
+<td>Per-plume CH4 visualisation — <code>plume.tif</code> (band-4 alpha mask), <code>plume-outline.geojson</code>, <code>plume-rgb.png</code>, <code>plume-concentrations.tif</code></td>
+</tr>
+<tr>
+<td><code>l4a-ch4-mfa-v3a</code></td>
+<td>L4A</td>
+<td>1,450</td>
+<td>same</td>
+<td>CH4 retrieval cube — collection-level metadata, no per-item assets</td>
+</tr>
+</tbody>
+</table>
+<p>Empty <code>*-v3a</code> placeholders (<code>l2b-ch4-mfma-v3a</code>,
+<code>l4a-combined-ch4-{quick-,}v3a</code>) exist in the catalog but are not
+currently published. CO2 collections trimmed from this table —
+this PR is CH4-only.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="73-source-level-products">7.3 Source-level products<a class="headerlink" href="#73-source-level-products" title="Permanent link">&para;</a></h3>
+<p>Sources are DBSCAN clusters of plumes at the same physical site.
+The full source list is small enough (~12 K rows) to fetch in one
+shot — the endpoint returns the entire FeatureCollection in
+~1.5 s. CH4 sources: 10,569; CO2 sources: 2,140; total: 12,709
+(as of probe time).</p>
+<h4 id="endpoints">Endpoints<a class="headerlink" href="#endpoints" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Returns</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/catalog/sources.geojson</code></td>
+<td>FeatureCollection of CMSource</td>
+<td>Strip the <code>?plume_gas=...</code> suffix from <code>source_name</code> before keying — see § 1.1</td>
+</tr>
+<tr>
+<td><code>/catalog/source/{source_name}</code></td>
+<td>Single source dict (flat REST)</td>
+<td></td>
+</tr>
+<tr>
+<td><code>/catalog/source/{source_name}/plumes.csv</code></td>
+<td>CSV of every plume attributed to the source</td>
+<td>One row per plume, full metadata</td>
+</tr>
+<tr>
+<td><code>/catalog/source/by-plume/{plume_id}</code></td>
+<td>Single source dict</td>
+<td>Resolve plume → source without scanning the GeoJSON</td>
+</tr>
+</tbody>
+</table>
+<h4 id="properties-on-each-source-feature">Properties on each source feature<a class="headerlink" href="#properties-on-each-source-feature" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>source_name</code></td>
+<td>str</td>
+<td>Deterministic key <code>{gas}_{sector}_{footprint_m}m_{lon}_{lat}</code></td>
+</tr>
+<tr>
+<td><code>gas</code></td>
+<td>str</td>
+<td><code>CH4</code> or <code>CO2</code></td>
+</tr>
+<tr>
+<td><code>sector</code></td>
+<td>str</td>
+<td>IPCC sector code (e.g. <code>1B2</code>, <code>6A</code>)</td>
+</tr>
+<tr>
+<td><code>plume_count</code></td>
+<td>int</td>
+<td>Plumes in the cluster</td>
+</tr>
+<tr>
+<td><code>plume_ids</code></td>
+<td>list[str]</td>
+<td>All <code>plume_id</code>s attributed to this source</td>
+</tr>
+<tr>
+<td><code>observation_scenes_names</code></td>
+<td>list[str]</td>
+<td>Scenes that contributed</td>
+</tr>
+<tr>
+<td><code>persistence</code></td>
+<td>float</td>
+<td>Cluster temporal stability (0–1)</td>
+</tr>
+<tr>
+<td><code>emission_auto</code></td>
+<td>float</td>
+<td>Site-aggregate emission (kg/h)</td>
+</tr>
+<tr>
+<td><code>emission_uncertainty_auto</code></td>
+<td>float</td>
+<td></td>
+</tr>
+<tr>
+<td><code>published_at_min</code> / <code>_max</code></td>
+<td>datetime</td>
+<td>First/last publication of any constituent plume</td>
+</tr>
+<tr>
+<td><code>timestamp_min</code> / <code>_max</code></td>
+<td>datetime</td>
+<td>First/last acquisition time</td>
+</tr>
+<tr>
+<td><code>detection_date_count</code> / <code>observation_date_count</code> / <code>date_count</code></td>
+<td>int</td>
+<td>Distinct-day counts (detection vs. all observations)</td>
+</tr>
+</tbody>
+</table>
+<p>The georeader wrapper <a href="../../modules/readers_module/#carbon-mapper-reader"><code>CMSource</code></a>
+exposes the headline fields as a frozen dataclass; the full
+<code>properties</code> dict is stashed on <code>CMSource.raw</code> for one-off access.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="8-cmplumeimage-per-plume-product-bundle">8 · <code>CMPlumeImage</code> — per-plume product bundle<a class="headerlink" href="#8-cmplumeimage-per-plume-product-bundle" title="Permanent link">&para;</a></h2>
+<p>The headline of this PR. One :class:<code>CMPlumeImage</code> is the cropped
+raster suite for one CH4 plume — binary mask, full column-density
+crop, IME-clipped retrieval, RGB context, plus the canonical
+outline polygon.</p>
+<p>Highlights:</p>
+<ul>
+<li><strong>Five lazy properties</strong> — <code>mask</code>, <code>concentrations</code>,
+  <code>ime_concentrations</code>, <code>rgb</code>, <code>outline</code>. Each opens its asset on
+  first access, cached after.</li>
+<li><strong>Three constructors</strong> — <code>from_plume_id</code> (one HTTP, handles v3a
+  and v3c), <code>from_cmrawplume</code> (zero HTTP if you have the typed
+  plume), <code>from_stac_item</code> (driving STAC search directly; v3a
+  only).</li>
+<li><strong>Outline canonical</strong> — fetches <code>plume-outline.geojson</code> via the
+  derived URL; falls back to band-4 alpha vectorize on fetch
+  failure (with a warning).</li>
+<li><strong>v3a + v3c handled transparently</strong> — URL-pattern derivation
+  rewrites the host to the Bearer-aware api gateway, then builds
+  every asset URL from a single seed (<code>plume_tif</code>).</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">georeader.readers.carbonmapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">CMPlumeImage</span>
+
+<span class="c1"># 1. Build from a plume_id — one HTTP round-trip</span>
+<span class="n">img</span> <span class="o">=</span> <span class="n">CMPlumeImage</span><span class="o">.</span><span class="n">from_plume_id</span><span class="p">(</span><span class="n">PLUME_ID</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="n">TOKEN</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">img</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>CMPlumeImage
+  plume_id:       tan20251212t185057c20s4001-E
+  assets present: ['plume.tif', 'plume-concentrations.tif', 'plume-outline.geojson', 'rgb.tif', 'ime-cmf-concentrations.tif', 'ime-cmf-mask.tif', 'ime-cmf-outline.geojson']
+  overview_level: full
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="81-lazy-properties">8.1 Lazy properties<a class="headerlink" href="#81-lazy-properties" title="Permanent link">&para;</a></h3>
+<p>Each property opens its asset on first access. No I/O happens
+during <code>from_plume_id</code> beyond the catalog metadata fetch.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">georeader.rasterio_reader</span><span class="w"> </span><span class="kn">import</span> <span class="n">RasterioReader</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">describe</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">reader</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">reader</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">:</span><span class="s2">22s</span><span class="si">}</span><span class="s2"> (absent)&quot;</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">:</span><span class="s2">22s</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">reader</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">  shape=</span><span class="si">{</span><span class="n">reader</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+
+
+<span class="nb">print</span><span class="p">(</span><span class="n">describe</span><span class="p">(</span><span class="s2">&quot;mask:&quot;</span><span class="p">,</span>               <span class="n">img</span><span class="o">.</span><span class="n">mask</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">describe</span><span class="p">(</span><span class="s2">&quot;concentrations:&quot;</span><span class="p">,</span>     <span class="n">img</span><span class="o">.</span><span class="n">concentrations</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">describe</span><span class="p">(</span><span class="s2">&quot;ime_concentrations:&quot;</span><span class="p">,</span> <span class="n">img</span><span class="o">.</span><span class="n">ime_concentrations</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">describe</span><span class="p">(</span><span class="s2">&quot;rgb:&quot;</span><span class="p">,</span>                <span class="n">img</span><span class="o">.</span><span class="n">rgb</span><span class="p">))</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>mask:                  RasterioReader  shape=(4, 101, 100)
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>concentrations:        RasterioReader  shape=(1, 85, 56)
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>ime_concentrations:    RasterioReader  shape=(1, 28, 28)
+</code>
+</pre>
+</div>
+</div>
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>rgb:                   RasterioReader  shape=(3, 101, 100)
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h3 id="82-outline-canonical-geojson">8.2 Outline (canonical GeoJSON)<a class="headerlink" href="#82-outline-canonical-geojson" title="Permanent link">&para;</a></h3>
+<p><code>outline</code> returns a shapely geometry in EPSG:4326. The canonical
+source is <code>plume-outline.geojson</code> (fetched from the v3a STAC
+asset, or the URL-pattern equivalent for v3c). If that fetch
+fails, the property falls back to vectorizing the band-4 alpha of
+<code>mask</code> and logs a warning.</p>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing code_cell rendered">
+<div class="input">
+
+<div class="highlight"><pre><span></span><code><span class="n">outline</span> <span class="o">=</span> <span class="n">img</span><span class="o">.</span><span class="n">outline</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;type:   </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">outline</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;area:   </span><span class="si">{</span><span class="n">outline</span><span class="o">.</span><span class="n">area</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">  (degrees², EPSG:4326)&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;bounds: </span><span class="si">{</span><span class="nb">tuple</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">b</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">b</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="n">outline</span><span class="o">.</span><span class="n">bounds</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+</div>
+<div class="output_wrapper">
+<div class="output">
+<div class="output_area">
+<div class="output_subarea output_stream output_stdout output_text">
+<pre>
+<code>type:   Polygon
+area:   0.000063  (degrees², EPSG:4326)
+bounds: (-104.177, 32.4778, -104.1687, 32.4927)
+</code>
+</pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="cell border-box-sizing text_cell rendered">
+<div class="inner_cell">
+<div class="text_cell_render border-box-sizing rendered_html">
+<h2 id="see-also">See also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../products_explore/"><code>products_explore.ipynb</code></a> — <code>CMPlumeImage</code> / <code>CMImageRaster</code> /
+  <code>CMPlumeRaster</code>, georeader-backed lazy raster wrappers that
+  consume the typed items returned here.</li>
+<li><a href="../../modules/readers_module/#carbon-mapper-reader">Carbon Mapper Reader API reference</a>
+  — full module / class / function listing rendered from
+  source.</li>
+<li><a href="https://api.carbonmapper.org/api/v1/docs">Carbon Mapper API docs</a>
+  — upstream OpenAPI schema and endpoint inventory.</li>
+</ul>
+</div>
+</div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/spaceml-org/georeader" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.0.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://pypi.org/project/georeader-spaceml" target="_blank" rel="noopener" title="pypi.org" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.8 200.5c-7.7-30.9-22.3-54.2-53.4-54.2h-40.1v47.4c0 36.8-31.2 67.8-66.8 67.8H172.7c-29.2 0-53.4 25-53.4 54.3v101.8c0 29 25.2 46 53.4 54.3 33.8 9.9 66.3 11.7 106.8 0 26.9-7.8 53.4-23.5 53.4-54.3v-40.7H226.2v-13.6h160.2c31.1 0 42.6-21.7 53.4-54.2 11.2-33.5 10.7-65.7 0-108.6M286.2 444.7a20.4 20.4 0 1 1 0-40.7 20.4 20.4 0 1 1 0 40.7M167.8 248.1h106.8c29.7 0 53.4-24.5 53.4-54.3V91.9c0-29-24.4-50.7-53.4-55.6-35.8-5.9-74.7-5.6-106.8.1-45.2 8-53.4 24.7-53.4 55.6v40.7h106.9v13.6h-147c-31.1 0-58.3 18.7-66.8 54.2-9.8 40.7-10.2 66.1 0 108.6 7.6 31.6 25.7 54.2 56.8 54.2H101v-48.8c0-35.3 30.5-66.4 66.8-66.4m-6.6-183.4a20.4 20.4 0 1 1 0 40.8 20.4 20.4 0 1 1 0-40.8"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+        <script src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
+      
+    
+  </body>
+</html>
