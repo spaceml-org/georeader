@@ -86,6 +86,7 @@ Grid Utilities:
     - :func:`meshgrid`: Generate coordinate arrays from transform
     - :func:`get_shape_transform_crs`: Compute output grid parameters
     - :func:`footprint`: Bounding polygon from lon/lat arrays
+    - :func:`polygon_to_image_coords`: Map a (lon, lat) polygon back to image (col, row) coordinates
 
 GLT Operations:
     - :func:`georreference`: Apply GLT for fast orthorectification
@@ -125,9 +126,9 @@ References
 - NASA EMIT L2A Products: https://lpdaac.usgs.gov/products/emitl2arflv001/
 """
 import georeader
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, MultiPolygon, LinearRing
 from georeader.abstract_reader import GeoData
-from scipy.interpolate import griddata
+from scipy.interpolate import griddata, LinearNDInterpolator, NearestNDInterpolator
 from georeader.window_utils import polygon_to_crs, transform_to_resolution_dst
 from typing import Tuple, Union, Optional, Any
 import rasterio
@@ -160,6 +161,147 @@ def footprint(lons:NDArray, lats:NDArray) -> Polygon:
     idxmaxlat = np.argmax(latsrav)
 
     return Polygon([(lonsrav[idx],latsrav[idx]) for idx in [idxminlon, idxminlat, idxmaxlon, idxmaxlat]])
+
+
+def polygon_to_image_coords(polygon: Union[Polygon, MultiPolygon],
+                            lons: NDArray, lats: NDArray,
+                            method: str = "linear") -> Union[Polygon, MultiPolygon]:
+    """
+    Map a polygon defined in the same CRS as ``lons``/``lats`` back to image
+    (column, row) coordinates of an irregularly-sampled image.
+
+    Inverts the per-pixel lon/lat lookup table so each polygon vertex is
+    expressed in pixel space: ``x = column``, ``y = row``. The resulting
+    geometry can be overlaid directly on the original ``(H, W)`` image (e.g.
+    via ``matplotlib.pyplot.imshow`` with ``origin="upper"``) without any
+    further reprojection.
+
+    Algorithm Overview
+    ------------------
+
+    ::
+
+        ┌────────────────────────────────────────────────────────────────────┐
+        │  POLYGON → IMAGE COORDINATE INVERSION                              │
+        │                                                                    │
+        │  Known per-pixel LUT:                                              │
+        │    pixel (r, c)  ──►  (lons[r, c], lats[r, c])                     │
+        │                                                                    │
+        │  We invert it at the polygon's vertices only:                      │
+        │    1. Build Delaunay triangulation of the H·W LUT points (once).   │
+        │    2. For each vertex (lon, lat), barycentric-interpolate          │
+        │       (col, row) within the enclosing triangle.                    │
+        │    3. Vertices outside the convex hull fall back to nearest-       │
+        │       neighbor lookup (linear method only).                        │
+        │                                                                    │
+        │  The triangulation is built once and reused across all rings of    │
+        │  all (multi)polygon parts.                                         │
+        │                                                                    │
+        └────────────────────────────────────────────────────────────────────┘
+
+    Args:
+        polygon: Shapely ``Polygon`` or ``MultiPolygon`` whose coordinates
+            share the CRS of ``lons``/``lats`` (typically EPSG:4326). Holes
+            (interior rings) are preserved.
+        lons: 2D array of pixel longitudes, shape ``(H, W)``.
+        lats: 2D array of pixel latitudes, shape ``(H, W)``.
+        method: Inversion method.
+
+            - ``"linear"`` (default): barycentric interpolation on a Delaunay
+              triangulation of the LUT. Sub-pixel accurate. Vertices outside
+              the convex hull of the LUT fall back to nearest-neighbor.
+            - ``"nearest"``: snap each vertex to the closest pixel index.
+              Faster and tolerant of vertices outside the LUT extent, but
+              yields integer-valued coordinates.
+
+    Returns:
+        Polygon or MultiPolygon (matching the input type) with vertices in
+        image ``(col, row)`` coordinates. An empty input returns an empty
+        geometry of the same type.
+
+    Raises:
+        ValueError: If ``method`` is not ``"linear"`` or ``"nearest"``, if
+            ``lons``/``lats`` have mismatched shapes, or if they are not 2D.
+        TypeError: If ``polygon`` is not a Polygon or MultiPolygon.
+
+    Examples
+    --------
+    Map a polygon to image coordinates and overlay on an image::
+
+        >>> import numpy as np
+        >>> from shapely.geometry import box
+        >>> from georeader.griddata import polygon_to_image_coords
+        >>>
+        >>> # Regular grid: lon spans [0, 1] over W=30, lat spans [45, 46] over H=20
+        >>> lons, lats = np.meshgrid(np.linspace(0, 1, 30), np.linspace(45, 46, 20))
+        >>> pol = box(0.0, 45.0, 0.5, 45.5)
+        >>> pol_img = polygon_to_image_coords(pol, lons, lats)
+        >>> # pol_img has x in [0, 14.5] (cols) and y in [0, 9.5] (rows)
+
+    See Also
+    --------
+    reproject : Forward direction (sensor → ortho via the same LUT).
+    footprint : Bounding polygon of the LUT in lon/lat space.
+    """
+    if method not in ("linear", "nearest"):
+        raise ValueError(
+            f"method must be 'linear' or 'nearest', got {method!r}"
+        )
+    if lons.shape != lats.shape:
+        raise ValueError(
+            f"lons and lats must share shape, got {lons.shape} vs {lats.shape}"
+        )
+    if lons.ndim != 2:
+        raise ValueError(f"lons and lats must be 2D, got ndim={lons.ndim}")
+    if not isinstance(polygon, (Polygon, MultiPolygon)):
+        raise TypeError(
+            f"polygon must be a Polygon or MultiPolygon, got {type(polygon).__name__}"
+        )
+
+    if polygon.is_empty:
+        return type(polygon)()
+
+    H, W = lons.shape
+    rows, cols = np.mgrid[0:H, 0:W]
+    pts = np.column_stack([lons.ravel(), lats.ravel()])
+    cols_flat = cols.ravel().astype(float)
+    rows_flat = rows.ravel().astype(float)
+
+    if method == "linear":
+        col_interp = LinearNDInterpolator(pts, cols_flat)
+        row_interp = LinearNDInterpolator(pts, rows_flat)
+        col_fallback = NearestNDInterpolator(pts, cols_flat)
+        row_fallback = NearestNDInterpolator(pts, rows_flat)
+    else:
+        col_interp = NearestNDInterpolator(pts, cols_flat)
+        row_interp = NearestNDInterpolator(pts, rows_flat)
+        col_fallback = None
+        row_fallback = None
+
+    def _ring_to_image(ring: LinearRing) -> LinearRing:
+        coords = np.asarray(ring.coords)
+        x = coords[:, 0]
+        y = coords[:, 1]
+        col = np.asarray(col_interp(x, y), dtype=float)
+        row = np.asarray(row_interp(x, y), dtype=float)
+        if col_fallback is not None:
+            nan = np.isnan(col) | np.isnan(row)
+            if nan.any():
+                col[nan] = col_fallback(x[nan], y[nan])
+                row[nan] = row_fallback(x[nan], y[nan])
+        return LinearRing(np.column_stack([col, row]))
+
+    def _polygon_to_image(poly: Polygon) -> Polygon:
+        if poly.is_empty:
+            return Polygon()
+        shell = _ring_to_image(poly.exterior)
+        holes = [_ring_to_image(interior) for interior in poly.interiors]
+        return Polygon(shell, holes)
+
+    if isinstance(polygon, Polygon):
+        return _polygon_to_image(polygon)
+
+    return MultiPolygon([_polygon_to_image(p) for p in polygon.geoms])
 
 
 # def bounds(lons:np.array, lats:np.array) -> Tuple[float, float, float, float]:
