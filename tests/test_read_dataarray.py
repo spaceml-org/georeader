@@ -11,15 +11,20 @@ Uses a temporary GeoTiff test file created via the test_raster_path fixture.
 The test file has: 15 bands, height=200, width=250, CRS=EPSG:32738, resolution=10.0m
 """
 
+import asyncio
 import itertools
 import math
+import os
 
 import numpy as np
 import pytest
 import rasterio
+import rasterio.warp
 import rasterio.windows
+from shapely.geometry import box
 
 from georeader import dataarray, rasterio_reader, read
+from georeader.geotensor import GeoTensor
 
 # Define windows for testing - based on the test image dimensions (height=200, width=250)
 # Normal window within bounds
@@ -97,25 +102,91 @@ TRIGGER_LOAD_OPTIONS = [True, False]
 TEST_COMBINATIONS = list(itertools.product(TEST_WINDOWS, TRIGGER_LOAD_OPTIONS))
 
 
-@pytest.mark.parametrize("window,trigger_load", TEST_COMBINATIONS)
-def test_read_window(test_raster_path, window, trigger_load):
+# =============================================================================
+# Parametrized reader fixture — runs each `read.*` test against both
+# RasterioReader (sync) and AsyncGeoTIFFReader (async). Mirrors the
+# reviewer's request to avoid copy-paste and exercise the read module's
+# polymorphism over the two reader types.
+# =============================================================================
+
+def _materialize_sync(view_or_tensor):
+    """Convert a lazy reader view (or pre-built GeoTensor) into a GeoTensor."""
+    if view_or_tensor is None or isinstance(view_or_tensor, GeoTensor):
+        return view_or_tensor
+    return view_or_tensor.load()
+
+
+def _materialize_async(view_or_tensor):
+    """Async sibling of _materialize_sync — drives ``view.load()`` via asyncio.run."""
+    if view_or_tensor is None or isinstance(view_or_tensor, GeoTensor):
+        return view_or_tensor
+    return asyncio.run(view_or_tensor.load())
+
+
+@pytest.fixture(params=["sync", "async"])
+def reader_and_materialize(request, test_raster_path):
+    """Yield ``(reader, materialize)`` for each reader backend.
+
+    The ``materialize`` helper turns whatever ``read.*`` returns
+    (lazy reader view, pre-built GeoTensor, or None for the
+    no-intersection-boundless-False branch) into a GeoTensor that the
+    test can assert against — handling sync ``.load()`` or async
+    ``await view.load()`` transparently.
+    """
+    if request.param == "sync":
+        reader = rasterio_reader.RasterioReader(test_raster_path)
+        yield reader, _materialize_sync
+        return
+
+    # async path — skip cleanly if the optional extra isn't installed.
+    pytest.importorskip("async_geotiff")
+    obstore = pytest.importorskip("obstore")
+    from georeader.async_geotiff_reader import AsyncGeoTIFFReader
+
+    store = obstore.store.LocalStore(prefix=os.path.dirname(test_raster_path))
+    fname = os.path.basename(test_raster_path)
+    reader = asyncio.run(AsyncGeoTIFFReader.open(fname, store=store))
+    yield reader, _materialize_async
+
+
+def _as_geotensor_for_reproject(reader, materialize):
+    """Coerce a reader into a GeoTensor so ``read.read_reproject`` can consume it.
+
+    ``read.read_reproject`` materialises source data internally via a
+    sync ``trigger_load=True`` ([read.py:1547](../georeader/read.py#L1547)
+    and [read.py:1605-1608](../georeader/read.py#L1605-L1608)) — fine
+    for sync readers, returns a coroutine for async. The
+    ``isinstance(data_in, GeoTensor)`` short-circuit at
+    [read.py:1605](../georeader/read.py#L1605) is the seam: if the
+    input is already in memory, the sync-load path is skipped.
+
+    So the canonical async pattern is: pre-load (1 ``await``) then
+    pass the GeoTensor. No ``aread_reproject`` needed — same function
+    works for both readers.
+    """
+    return materialize(reader.read_from_window(rasterio.windows.Window(
+        col_off=0, row_off=0, width=reader.shape[-1], height=reader.shape[-2],
+    )))
+
+
+@pytest.mark.parametrize("window", TEST_WINDOWS)
+def test_read_window(reader_and_materialize, test_raster_path, window):
     """
     Test reading data from a window using read.read_from_window.
 
-    This test verifies that:
-    1. The read_from_window function correctly slices data from a raster
-    2. The output shape matches the window dimensions
-    3. The bounds and transform of the output match expected values
-    4. The actual data values match what rasterio would read directly
+    Runs against both RasterioReader (sync) and AsyncGeoTIFFReader
+    (async) via the ``reader_and_materialize`` fixture.
 
-    Args:
-        test_raster_path: Path to the test raster file (fixture)
-        window: Window to read from
-        trigger_load: Whether to trigger loading data into memory
+    Verifies:
+    1. read_from_window correctly slices data from a raster
+    2. Output shape matches the window dimensions
+    3. Bounds and transform of the output match expected values
+    4. Actual data values match what rasterio would read directly
     """
-    rst = rasterio_reader.RasterioReader(test_raster_path)
+    reader, materialize = reader_and_materialize
 
-    chip_out = read.read_from_window(rst, window, trigger_load=trigger_load)
+    result = read.read_from_window(reader, window)
+    chip_out = materialize(result)
 
     # Skip fully out-of-bounds windows when not boundless
     if chip_out is None:
@@ -147,22 +218,35 @@ def test_read_window(test_raster_path, window, trigger_load):
 
 
 @pytest.mark.parametrize("window,trigger_load", TEST_COMBINATIONS)
-def test_read_bounds(test_raster_path, window, trigger_load):
+def test_read_window_sync_trigger_load(test_raster_path, window, trigger_load):
+    """Sync-only smoke test for ``trigger_load`` on ``read.read_from_window``.
+
+    The async path has no equivalent (``trigger_load`` would try to call
+    ``view.load()`` synchronously — for an async view that returns a
+    coroutine, not a GeoTensor). Keeping this here so the
+    ``trigger_load`` branch of :func:`read.read_from_window` stays
+    covered for the sync reader.
+    """
+    rst = rasterio_reader.RasterioReader(test_raster_path)
+
+    chip_out = read.read_from_window(rst, window, trigger_load=trigger_load)
+    if chip_out is None:
+        return
+
+    with rasterio.open(test_raster_path) as src:
+        chip_out_expected = src.read(window=window, boundless=True, fill_value=0)
+
+    assert np.allclose(chip_out_expected, chip_out.values)
+
+
+@pytest.mark.parametrize("window", TEST_WINDOWS)
+def test_read_bounds(reader_and_materialize, test_raster_path, window):
     """
     Test reading data from bounds using read.read_from_bounds.
 
-    This test verifies that:
-    1. The read_from_bounds function correctly reads data for a given bounding box
-    2. The output shape matches the expected dimensions
-    3. The bounds and transform of the output are correct
-    4. The actual data values match what rasterio would read directly
-
-    Args:
-        test_raster_path: Path to the test raster file (fixture)
-        window: Window to derive bounds from
-        trigger_load: Whether to trigger loading data into memory
+    Runs against both reader backends via ``reader_and_materialize``.
     """
-    rst = rasterio_reader.RasterioReader(test_raster_path)
+    reader, materialize = reader_and_materialize
 
     with rasterio.open(test_raster_path) as src:
         chip_out_expected = src.read(window=window, boundless=True, fill_value=0)
@@ -170,13 +254,12 @@ def test_read_bounds(test_raster_path, window, trigger_load):
         bounds_read = rasterio.windows.bounds(window, src.transform)
         crs_bounds = src.crs
 
-    chip_out = read.read_from_bounds(rst, bounds_read, crs_bounds=crs_bounds, trigger_load=trigger_load)
+    result = read.read_from_bounds(reader, bounds_read, crs_bounds=crs_bounds)
+    chip_out = materialize(result)
 
-    # Skip fully out-of-bounds windows when not boundless
     if chip_out is None:
         return
 
-    # Check that the output has the correct shape
     named_shape = dict(zip(chip_out.dims, chip_out.shape))
     assert named_shape["y"] == window.height, (
         f"Different height found: ({named_shape['y']}, {named_shape['x']}) expected ({window.height}, {window.width})"
@@ -184,31 +267,273 @@ def test_read_bounds(test_raster_path, window, trigger_load):
     assert named_shape["x"] == window.width, (
         f"Different width found: ({named_shape['y']}, {named_shape['x']}) expected ({window.height}, {window.width})"
     )
-
-    # Verify bounds and transform
     assert chip_out.bounds == bounds_read, f"Different bounds found: {chip_out.bounds} expected: {bounds_read}"
     assert chip_out.transform == expected_transform, (
         f"Different transform found: {chip_out.transform} expected: {expected_transform}"
     )
-
-    # Verify the actual data values match
     assert np.allclose(chip_out_expected, chip_out.values), "Content of the array is different"
 
 
 @pytest.mark.parametrize("window", TEST_WINDOWS)
-def test_read_reproject_same(test_raster_path, window):
+def test_read_polygon(reader_and_materialize, test_raster_path, window):
+    """Test reading data from a polygon (box) via read.read_from_polygon.
+
+    Uses the window's geographic bounds to build a rectangular polygon
+    and verifies the returned chip matches a direct rasterio read of
+    the same window.
+    """
+    reader, materialize = reader_and_materialize
+
+    with rasterio.open(test_raster_path) as src:
+        bounds_read = rasterio.windows.bounds(window, src.transform)
+        chip_out_expected = src.read(window=window, boundless=True, fill_value=0)
+        crs_bounds = src.crs
+
+    polygon = box(*bounds_read)
+    result = read.read_from_polygon(reader, polygon, crs_polygon=crs_bounds)
+    chip_out = materialize(result)
+
+    if chip_out is None:
+        return
+
+    named_shape = dict(zip(chip_out.dims, chip_out.shape))
+    assert named_shape["y"] == window.height
+    assert named_shape["x"] == window.width
+    assert chip_out.bounds == bounds_read
+    assert np.allclose(chip_out_expected, chip_out.values), "Content of the array is different"
+
+
+# In-bounds windows only — cross-CRS reprojection of out-of-bounds windows is
+# meaningless (bounds wrap or land in invalid lat/lon) and gives noisy failures
+# that don't tell us anything about the read.* polymorphism we're checking.
+IN_BOUNDS_WINDOWS = [WINDOW_NORMAL, WINDOW_BORDER_1, WINDOW_BORDER_2]
+
+
+@pytest.mark.parametrize("window", IN_BOUNDS_WINDOWS)
+def test_read_bounds_cross_crs(reader_and_materialize, test_raster_path, window):
+    """Coverage gap #9 — read.read_from_bounds with bounds in a different CRS.
+
+    The reviewer's wording "shall work with this reader as input
+    regardless of the crs passed because it reprojects the bounds not
+    the data" is exactly this path. Bounds reprojection happens in
+    :func:`window_utils.window_from_bounds` before any I/O — the
+    reader doesn't see the WGS84 bounds, only the resolved native-CRS
+    window.
+    """
+    reader, materialize = reader_and_materialize
+
+    with rasterio.open(test_raster_path) as src:
+        utm_bounds = rasterio.windows.bounds(window, src.transform)
+        src_crs = src.crs
+        chip_out_expected = src.read(window=window, boundless=True, fill_value=0)
+
+    del chip_out_expected  # bounds CRS round-trip shifts the window — byte parity isn't the point here
+    wgs_bounds = rasterio.warp.transform_bounds(src_crs, "EPSG:4326", *utm_bounds)
+    chip_out = materialize(read.read_from_bounds(reader, wgs_bounds, crs_bounds="EPSG:4326"))
+
+    if chip_out is None:
+        return
+    # CRS round-trip introduces a small bounds wiggle; allow ±2 pixels in shape.
+    named_shape = dict(zip(chip_out.dims, chip_out.shape))
+    assert abs(named_shape["y"] - window.height) <= 2
+    assert abs(named_shape["x"] - window.width) <= 2
+    # The reader's data stays in its native CRS — bounds are reprojected
+    # but data is not (the point of read.read_from_bounds with crs_bounds).
+    assert str(chip_out.crs) == str(src_crs)
+
+
+@pytest.mark.parametrize("window", IN_BOUNDS_WINDOWS)
+def test_read_polygon_cross_crs(reader_and_materialize, test_raster_path, window):
+    """Coverage gap #11 — read.read_from_polygon with polygon in a different CRS.
+
+    Same shape as :func:`test_read_bounds_cross_crs` but via the polygon path.
+    """
+    reader, materialize = reader_and_materialize
+
+    with rasterio.open(test_raster_path) as src:
+        utm_bounds = rasterio.windows.bounds(window, src.transform)
+        src_crs = src.crs
+
+    wgs_bounds = rasterio.warp.transform_bounds(src_crs, "EPSG:4326", *utm_bounds)
+    poly = box(*wgs_bounds)
+    chip_out = materialize(read.read_from_polygon(reader, poly, crs_polygon="EPSG:4326"))
+
+    if chip_out is None:
+        return
+    named_shape = dict(zip(chip_out.dims, chip_out.shape))
+    assert abs(named_shape["y"] - window.height) <= 2
+    assert abs(named_shape["x"] - window.width) <= 2
+    assert str(chip_out.crs) == str(src_crs)
+
+
+@pytest.mark.parametrize("pad", [(4, 4), (16, 16), (0, 8)])
+def test_read_bounds_pad_add(reader_and_materialize, test_raster_path, pad):
+    """Coverage gap #10 — read.read_from_bounds with ``pad_add``.
+
+    ``pad_add`` is documented for CNN inference / receptive field
+    context. Verify the output is larger than the unpadded read by
+    exactly ``2 * pad`` in each axis (pad is added on both sides).
+    """
+    reader, materialize = reader_and_materialize
+
+    with rasterio.open(test_raster_path) as src:
+        bounds_read = rasterio.windows.bounds(WINDOW_NORMAL, src.transform)
+        crs_bounds = src.crs
+
+    unpadded = materialize(read.read_from_bounds(reader, bounds_read, crs_bounds=crs_bounds))
+    padded = materialize(read.read_from_bounds(reader, bounds_read, crs_bounds=crs_bounds, pad_add=pad))
+
+    assert unpadded is not None and padded is not None
+    u_shape = dict(zip(unpadded.dims, unpadded.shape))
+    p_shape = dict(zip(padded.dims, padded.shape))
+    assert p_shape["y"] == u_shape["y"] + 2 * pad[0]
+    assert p_shape["x"] == u_shape["x"] + 2 * pad[1]
+
+
+def test_read_window_return_only_data_sync(test_raster_path):
+    """Coverage gap #8 — ``return_only_data=True`` returns a bare numpy array.
+
+    Sync-only: this branch calls ``data_sel.values`` on the reader's
+    view ([read.py:582-583](../georeader/read.py#L582-L583)). For an
+    async reader's view, ``.values`` would need to materialise via
+    ``await load()`` — which the sync read module can't do. The
+    documented workaround for async users is to call ``await
+    view.load()`` and then ``.values`` on the resulting GeoTensor.
+    """
+    rst = rasterio_reader.RasterioReader(test_raster_path)
+    arr = read.read_from_window(rst, WINDOW_NORMAL, return_only_data=True)
+    assert isinstance(arr, np.ndarray)
+    assert arr.shape[-2:] == (WINDOW_NORMAL.height, WINDOW_NORMAL.width)
+
+
+@pytest.mark.parametrize("window", TEST_WINDOWS)
+def test_read_center_coords(reader_and_materialize, test_raster_path, window):
+    """Test read.read_from_center_coords against both reader backends.
+
+    Computes the geographic center of the window and reads back a chip
+    of the same (height, width); compares to a direct rasterio read.
+    """
+    reader, materialize = reader_and_materialize
+
+    with rasterio.open(test_raster_path) as src:
+        bounds_read = rasterio.windows.bounds(window, src.transform)
+        chip_out_expected = src.read(window=window, boundless=True, fill_value=0)
+        crs_bounds = src.crs
+
+    center = ((bounds_read[0] + bounds_read[2]) / 2.0, (bounds_read[1] + bounds_read[3]) / 2.0)
+    shape = (window.height, window.width)
+
+    result = read.read_from_center_coords(
+        reader, center_coords=center, shape=shape, crs_center_coords=crs_bounds,
+    )
+    chip_out = materialize(result)
+
+    if chip_out is None:
+        return
+
+    named_shape = dict(zip(chip_out.dims, chip_out.shape))
+    assert named_shape["y"] == window.height
+    assert named_shape["x"] == window.width
+    assert np.allclose(chip_out_expected, chip_out.values), "Content of the array is different"
+
+
+def test_read_from_tile(reader_and_materialize, test_raster_path):
+    """Test read.read_from_tile against both reader backends.
+
+    Picks an XYZ tile whose footprint intersects the test raster (the
+    raster is in EPSG:32738 South-East Africa; pick a low-zoom tile
+    covering that area) and verifies that the returned chip has the
+    expected web-mercator shape and CRS.
+    """
+    reader, materialize = reader_and_materialize
+
+    # Compute a Z/X/Y tile covering the raster's geographic center.
+    with rasterio.open(test_raster_path) as src:
+        center_x = (src.bounds.left + src.bounds.right) / 2.0
+        center_y = (src.bounds.bottom + src.bounds.top) / 2.0
+        src_crs = src.crs
+
+    lon, lat = rasterio.warp.transform(src_crs, "EPSG:4326", [center_x], [center_y])
+    lon, lat = lon[0], lat[0]
+
+    z = 12
+    n = 2 ** z
+    xtile = int((lon + 180.0) / 360.0 * n)
+    ytile = int((1.0 - math.log(math.tan(math.radians(lat)) + 1.0 / math.cos(math.radians(lat))) / math.pi) / 2.0 * n)
+
+    result = read.read_from_tile(reader, x=xtile, y=ytile, z=z)
+    chip_out = materialize(result)
+
+    if chip_out is None:
+        return
+
+    # Web-mercator tile reads return EPSG:3857 by default.
+    assert str(chip_out.crs) == "EPSG:3857" or "3857" in str(chip_out.crs)
+    # Tile shape is non-degenerate.
+    named_shape = dict(zip(chip_out.dims, chip_out.shape))
+    assert named_shape["y"] > 0
+    assert named_shape["x"] > 0
+
+
+@pytest.mark.parametrize("window", TEST_WINDOWS)
+def test_read_reproject_like(reader_and_materialize, test_raster_path, window):
+    """Test read.read_reproject_like — reproject reader to match a GeoTensor template.
+
+    Constructs an in-memory GeoTensor whose bounds correspond to the
+    test window in the reader's native CRS. Asks the reader to
+    reproject onto that template and verifies shape, bounds, and (loose)
+    value equality with a direct rasterio read of the same window.
+
+    Async readers are coerced to a GeoTensor first via
+    :func:`_as_geotensor_for_reproject`; ``read.read_reproject_like``
+    then takes the in-memory short-circuit at
+    [read.py:1605](../georeader/read.py#L1605).
+    """
+    reader, materialize = reader_and_materialize
+    reader = _as_geotensor_for_reproject(reader, materialize)
+
+    with rasterio.open(test_raster_path) as src:
+        chip_out_expected = src.read(window=window, boundless=True, fill_value=0)
+        expected_transform = rasterio.windows.transform(window, src.transform)
+        bounds_read = rasterio.windows.bounds(window, src.transform)
+        crs_bounds = src.crs
+
+    template = GeoTensor(
+        np.zeros((1, window.height, window.width), dtype=np.float32),
+        transform=expected_transform,
+        crs=crs_bounds,
+    )
+
+    chip_out = read.read_reproject_like(reader, template)
+
+    if chip_out is None:
+        return
+
+    named_shape = dict(zip(chip_out.dims, chip_out.shape))
+    assert named_shape["y"] == window.height
+    assert named_shape["x"] == window.width
+    assert chip_out.bounds == bounds_read, f"Different bounds: {chip_out.bounds} vs {bounds_read}"
+    # Reprojection at same CRS / resolution is a pixel-aligned copy → exact match.
+    assert np.allclose(chip_out_expected, chip_out.values), "Content of the array is different"
+
+
+@pytest.mark.parametrize("window", TEST_WINDOWS)
+def test_read_reproject_same(reader_and_materialize, test_raster_path, window):
     """
     Test reprojecting data to the same CRS and resolution.
 
-    This test verifies that when reprojecting data to the same CRS with the same
-    resolution, we get back equivalent data. This is essentially a round-trip test
-    for the read_reproject function.
+    Round-trip test for read_reproject — reprojecting to the source's
+    own CRS at the same resolution should return pixel-aligned data.
 
-    Args:
-        test_raster_path: Path to the test raster file (fixture)
-        window: Window to derive bounds from
+    For async readers, pre-load the source into a GeoTensor before
+    calling read_reproject. ``read.read_reproject`` short-circuits the
+    sync materialisation when ``isinstance(data_in, GeoTensor)`` at
+    [read.py:1605](../georeader/read.py#L1605), so no ``aread_reproject``
+    sibling is needed — the existing function handles both readers via
+    this pattern.
     """
-    rst = rasterio_reader.RasterioReader(test_raster_path)
+    reader, materialize = reader_and_materialize
+    reader = _as_geotensor_for_reproject(reader, materialize)
 
     with rasterio.open(test_raster_path) as src:
         chip_out_expected = src.read(window=window, boundless=True, fill_value=0)
@@ -217,7 +542,7 @@ def test_read_reproject_same(test_raster_path, window):
         crs_bounds = src.crs
 
     chip_out = read.read_reproject(
-        rst,
+        reader,
         bounds=bounds_read,
         dst_crs=crs_bounds,
         resolution_dst_crs=(abs(expected_transform.a), abs(expected_transform.e)),
@@ -250,19 +575,18 @@ RESOLUTION_TEST = (5.0, 5.0)  # Test with 5m resolution (half of original 10m)
 
 
 @pytest.mark.parametrize("window", TEST_WINDOWS)
-def test_read_reproject_other_res(test_raster_path, window):
+def test_read_reproject_other_res(reader_and_materialize, test_raster_path, window):
     """
     Test reprojecting data to a different resolution.
 
-    This test verifies that read_reproject correctly handles resolution changes.
-    When changing from 10m to 5m resolution, the output should have 2x the number
-    of pixels in each dimension.
-
-    Args:
-        test_raster_path: Path to the test raster file (fixture)
-        window: Window to derive bounds from
+    Verifies read_reproject correctly handles resolution changes:
+    10m → 5m should yield 2x the pixels in each dimension. Runs
+    against both reader backends via ``reader_and_materialize`` —
+    async readers via the pre-load pattern (see
+    :func:`_as_geotensor_for_reproject`).
     """
-    rst = rasterio_reader.RasterioReader(test_raster_path)
+    reader, materialize = reader_and_materialize
+    reader = _as_geotensor_for_reproject(reader, materialize)
 
     with rasterio.open(test_raster_path) as src:
         expected_transform = rasterio.windows.transform(window, src.transform)
@@ -270,7 +594,7 @@ def test_read_reproject_other_res(test_raster_path, window):
         factor_diff_shape = np.array(src.res) / np.array(RESOLUTION_TEST)
         crs_bounds = src.crs
 
-    chip_out = read.read_reproject(rst, bounds=bounds_read, dst_crs=crs_bounds, resolution_dst_crs=RESOLUTION_TEST)
+    chip_out = read.read_reproject(reader, bounds=bounds_read, dst_crs=crs_bounds, resolution_dst_crs=RESOLUTION_TEST)
 
     # Skip fully out-of-bounds windows
     if chip_out is None:
@@ -303,29 +627,54 @@ def test_read_reproject_other_res(test_raster_path, window):
     )
 
 
-def test_read_after_set_window(test_raster_path):
+@pytest.fixture(params=["sync", "async"])
+def reader_pair_and_materialize(request, test_raster_path):
+    """Yield ``(reader_full, reader_focused, materialize)`` for both backends.
+
+    ``reader_full`` has no pre-set ``window_focus``; ``reader_focused`` is
+    constructed with a ``window_focus=Window(50, 50, 100, 100)``.
+    Used by :func:`test_read_after_set_window`.
+    """
+    focus = rasterio.windows.Window(col_off=50, row_off=50, width=100, height=100)
+
+    if request.param == "sync":
+        full = rasterio_reader.RasterioReader(test_raster_path)
+        focused = rasterio_reader.RasterioReader(test_raster_path, window_focus=focus)
+        yield full, focused, _materialize_sync
+        return
+
+    pytest.importorskip("async_geotiff")
+    obstore = pytest.importorskip("obstore")
+    from georeader.async_geotiff_reader import AsyncGeoTIFFReader
+
+    store = obstore.store.LocalStore(prefix=os.path.dirname(test_raster_path))
+    fname = os.path.basename(test_raster_path)
+    full = asyncio.run(AsyncGeoTIFFReader.open(fname, store=store))
+    focused = asyncio.run(AsyncGeoTIFFReader.open(fname, store=store))
+    focused.window_focus = focus
+    yield full, focused, _materialize_async
+
+
+def test_read_after_set_window(reader_pair_and_materialize, test_raster_path):
     """
     Test that reading from bounds works correctly with and without a window_focus set.
 
-    This test verifies that the read_from_bounds function produces the same results
-    regardless of whether a window_focus is set on the reader, ensuring consistent
-    behavior when using different reading patterns.
+    Verifies that read_from_bounds produces the same results regardless
+    of whether a ``window_focus`` was set on the reader before the call.
+    Runs against both reader backends to confirm the windowed-view
+    pattern is consistent between :class:`RasterioReader` and
+    :class:`AsyncGeoTIFFReader`.
     """
-    # Create a window that is within the image bounds (height=200, width=250)
-    window_focus = rasterio.windows.Window(col_off=50, row_off=50, width=100, height=100)
-
-    rst1 = rasterio_reader.RasterioReader(test_raster_path)
-    rst2 = rasterio_reader.RasterioReader(test_raster_path, window_focus=window_focus)
+    full_reader, focused_reader, materialize = reader_pair_and_materialize
 
     # Get bounds within the window_focus area using the raster's CRS
     with rasterio.open(test_raster_path) as src:
-        # Compute bounds for a small area within window_focus
         inner_window = rasterio.windows.Window(col_off=75, row_off=75, width=50, height=50)
         bounds_read = rasterio.windows.bounds(inner_window, src.transform)
         crs_bounds = src.crs
 
-    data1 = read.read_from_bounds(rst1, bounds_read, crs_bounds=crs_bounds)
-    data2 = read.read_from_bounds(rst2, bounds_read, crs_bounds=crs_bounds)
+    data1 = materialize(read.read_from_bounds(full_reader, bounds_read, crs_bounds=crs_bounds))
+    data2 = materialize(read.read_from_bounds(focused_reader, bounds_read, crs_bounds=crs_bounds))
 
     assert data1.bounds == data2.bounds, f"Different bounds found: {data1.bounds} expected: {data2.bounds}"
     assert data1.transform == data2.transform, (

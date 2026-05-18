@@ -1268,17 +1268,22 @@ class RasterioReader:
         from georeader import griddata
         return griddata.meshgrid(self.transform, self.width, self.height, source_crs=self.crs, dst_crs=dst_crs)
     
-    def __repr__(self)->str:
-        return f""" 
-         Paths: {self.paths}
-         Transform: {self.transform}
-         Shape: {self.shape}
-         Resolution: {self.res}
-         Bounds: {self.bounds}
-         CRS: {self.crs}
-         nodata: {self.nodata}
-         fill_value_default: {self.fill_value_default}
-        """
+    def __repr__(self) -> str:
+        # Continuation indent aligns multi-line Affine repr under the
+        # value column (9-space indent + 18-char label + ": ").
+        transform_indent = "\n" + " " * 29
+        transform_str = transform_indent.join(str(self.transform).splitlines())
+        return (
+            "\n"
+            f"         Paths:              {self.paths}\n"
+            f"         Shape:              {self.shape}\n"
+            f"         Resolution:         {self.res}\n"
+            f"         Bounds:             {self.bounds}\n"
+            f"         CRS:                {self.crs}\n"
+            f"         nodata:             {self.nodata}\n"
+            f"         fill_value_default: {self.fill_value_default}\n"
+            f"         Transform:          {transform_str}\n"
+        )
 
     def read(self, **kwargs) -> np.ndarray:
         """

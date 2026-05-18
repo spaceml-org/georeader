@@ -259,9 +259,11 @@ class AsyncGeoData(GeoDataBase):
 
     Inherits the metadata surface and derived properties (``transform``,
     ``crs``, ``shape``, ``width``, ``height``, ``bounds``, ``res``,
-    ``footprint``) from :class:`GeoDataBase`. Adds ``async`` read methods
-    (``load``, ``read_from_window``) and the read-tier metadata
-    properties (``dtype``, ``dims``, ``fill_value_default``).
+    ``footprint``) from :class:`GeoDataBase`. Adds an ``async`` ``load``
+    method, a **sync** ``read_from_window`` that returns a windowed view
+    (mirroring :class:`~georeader.rasterio_reader.RasterioReader`), and
+    the read-tier metadata properties (``dtype``, ``dims``,
+    ``fill_value_default``).
 
     Notes
     -----
@@ -269,6 +271,14 @@ class AsyncGeoData(GeoDataBase):
     materialises via a sync ``self.load()``). Properties cannot be ``async``,
     so callers materialise via ``await reader.load()`` and read
     ``.values`` on the returned :class:`~georeader.geotensor.GeoTensor`.
+
+    ``read_from_window`` is **sync** by design: like
+    :meth:`RasterioReader.read_from_window`, it only constructs a windowed
+    view of the reader and performs no I/O. This means
+    :func:`georeader.read.read_from_window` (and other ``read.*``
+    functions) work polymorphically with both sync and async readers —
+    the only difference is that the returned async view must be
+    materialised via ``await view.load()``.
     """
 
     async def load(self, boundless: bool = True) -> GeoTensor:
@@ -276,7 +286,7 @@ class AsyncGeoData(GeoDataBase):
             "load method must be implemented in the subclass"
         )
 
-    async def read_from_window(
+    def read_from_window(
         self, window: rasterio.windows.Window, boundless: bool = True
     ) -> Union["AsyncGeoData", GeoTensor]:
         raise NotImplementedError(

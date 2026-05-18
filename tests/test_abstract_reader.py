@@ -137,22 +137,27 @@ class TestAsyncGeoData:
         # Same coverage as bounds — corners match
         assert pol.bounds == reader.bounds
 
-    @pytest.mark.parametrize("method_name", ["load", "read_from_window"])
-    def test_default_read_methods_raise_not_implemented(self, method_name):
-        """Default ``load`` / ``read_from_window`` raise NotImplementedError on a bare subclass."""
+    def test_default_load_raises_not_implemented(self):
+        """Default async ``load`` raises NotImplementedError on a bare subclass."""
         import asyncio
 
         transform = from_origin(0, 100, 10, 10)
         reader = _FakeAsyncReader(transform=transform, crs="EPSG:32631", shape=(3, 100, 100))
 
-        method = getattr(reader, method_name)
-        if method_name == "load":
-            coro = method()
-        else:
-            coro = method(window=None, boundless=True)
+        with pytest.raises(NotImplementedError):
+            asyncio.run(reader.load())
+
+    def test_default_read_from_window_raises_not_implemented(self):
+        """Default sync ``read_from_window`` raises NotImplementedError on a bare subclass.
+
+        ``read_from_window`` is sync (returns a windowed view), mirroring
+        :meth:`RasterioReader.read_from_window`.
+        """
+        transform = from_origin(0, 100, 10, 10)
+        reader = _FakeAsyncReader(transform=transform, crs="EPSG:32631", shape=(3, 100, 100))
 
         with pytest.raises(NotImplementedError):
-            asyncio.run(coro)
+            reader.read_from_window(window=None, boundless=True)
 
 
 class TestSameExtent:
