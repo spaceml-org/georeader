@@ -2,12 +2,17 @@
 Async COG reader: thin adapter over ``developmentseed/async-geotiff``.
 
 This module provides :class:`AsyncGeoTIFFReader`, an ``async``-native reader
-for Cloud-Optimized GeoTIFFs (COGs). It is a thin (~80-LOC) adapter on top of
+for Cloud-Optimized GeoTIFFs (COGs). It is a thin adapter on top of
 `async-geotiff <https://github.com/developmentseed/async-geotiff>`_ that
-exposes the same metadata surface as :class:`~georeader.rasterio_reader.RasterioReader`
-and conforms to :class:`~georeader.abstract_reader.AsyncGeoData`. Use it for
-high-concurrency fan-out workloads (tile servers, async ML inference) where
-many reads happen concurrently from one process.
+provides the :class:`~georeader.abstract_reader.AsyncGeoData` protocol,
+the lazy windowed-view pattern that mirrors
+:class:`~georeader.rasterio_reader.RasterioReader`, and translation
+between georeader's ``GeoTensor`` / ``rasterio.windows.Window`` carriers
+and async-geotiff's ``RasterArray`` / ``Window`` types. The actual IFD
+walk, tile-fetch math, decompression, and request coalescing all live
+upstream. Use it for high-concurrency fan-out workloads (tile servers,
+async ML inference) where many reads happen concurrently from one
+process.
 
 Sync vs Async
 -------------

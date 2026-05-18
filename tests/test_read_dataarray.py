@@ -444,8 +444,14 @@ def test_read_from_tile(reader_and_materialize, test_raster_path):
     raster is in EPSG:32738 South-East Africa; pick a low-zoom tile
     covering that area) and verifies that the returned chip has the
     expected web-mercator shape and CRS.
+
+    Async readers hit ``read.read_from_tile``'s reproject-internally
+    branch (no ``read_from_tile`` method on the reader → falls through
+    to ``read.read_reproject`` at line 1867 of read.py), so they go
+    through the pre-load pattern via ``_as_geotensor_for_reproject``.
     """
     reader, materialize = reader_and_materialize
+    reader = _as_geotensor_for_reproject(reader, materialize)
 
     # Compute a Z/X/Y tile covering the raster's geographic center.
     with rasterio.open(test_raster_path) as src:
@@ -461,11 +467,15 @@ def test_read_from_tile(reader_and_materialize, test_raster_path):
     xtile = int((lon + 180.0) / 360.0 * n)
     ytile = int((1.0 - math.log(math.tan(math.radians(lat)) + 1.0 / math.cos(math.radians(lat))) / math.pi) / 2.0 * n)
 
-    result = read.read_from_tile(reader, x=xtile, y=ytile, z=z)
-    chip_out = materialize(result)
+    chip_out = read.read_from_tile(reader, x=xtile, y=ytile, z=z)
 
-    if chip_out is None:
-        return
+    # The tile is computed from the raster's geographic centre — it MUST
+    # intersect. A None here means the read_from_tile intersection logic
+    # has regressed (used to silently early-exit before the fix).
+    assert chip_out is not None, (
+        f"read_from_tile returned None for an intersecting tile "
+        f"(z={z}, x={xtile}, y={ytile})"
+    )
 
     # Web-mercator tile reads return EPSG:3857 by default.
     assert str(chip_out.crs) == "EPSG:3857" or "3857" in str(chip_out.crs)
