@@ -165,6 +165,31 @@ class GeoDataBase(Protocol):
     def height(self) -> int:
         return self.shape[-2]
 
+    @property
+    def res(self) -> Tuple[float, float]:
+        return window_utils.res(self.transform)
+
+    @property
+    def bounds(self) -> Tuple[float, float, float, float]:
+        return window_utils.window_bounds(
+            rasterio.windows.Window(
+                row_off=0, col_off=0, height=self.shape[-2], width=self.shape[-1]
+            ),
+            self.transform,
+        )
+
+    def footprint(self, crs: Optional[str] = None) -> Polygon:
+        pol = window_utils.window_polygon(
+            rasterio.windows.Window(
+                row_off=0, col_off=0, height=self.shape[-2], width=self.shape[-1]
+            ),
+            self.transform,
+        )
+        if (crs is None) or window_utils.compare_crs(self.crs, crs):
+            return pol
+
+        return window_utils.polygon_to_crs(pol, self.crs, crs)
+
 
 @dataclass
 class FakeGeoData:
@@ -197,56 +222,94 @@ class GeoData(GeoDataBase):
         raise NotImplementedError(
             "read_from_window method must be implemented in the subclass"
         )
-    
+
     @property
     def values(self) -> np.ndarray:
         # return np.zeros(self.shape, dtype=self.dtype)
         return self.load(boundless=True).values
-    
-    @property
-    def res(self) -> Tuple[float, float]:
-        return window_utils.res(self.transform)
-    
+
     @property
     def dtype(self) -> Any:
         raise NotImplementedError(
             "dtype property must be implemented in the subclass"
         )
-    
+
     @property
     def dims(self) -> list[str]:
         raise NotImplementedError(
             "dims property must be implemented in the subclass"
         )
-    
+
     @property
     def fill_value_default(self) -> Any:
         raise NotImplementedError(
             "fill_value_default property must be implemented in the subclass"
         )
 
-    @property
-    def bounds(self) -> Tuple[float, float, float, float]:
-        return window_utils.window_bounds(
-            rasterio.windows.Window(
-                row_off=0, col_off=0, height=self.shape[-2], width=self.shape[-1]
-            ),
-            self.transform,
-        )
-    
-    def footprint(self, crs: Optional[str] = None) -> Polygon:
-        pol = window_utils.window_polygon(
-            rasterio.windows.Window(
-                row_off=0, col_off=0, height=self.shape[-2], width=self.shape[-1]
-            ),
-            self.transform,
-        )
-        if (crs is None) or window_utils.compare_crs(self.crs, crs):
-            return pol
-
-        return window_utils.polygon_to_crs(pol, self.crs, crs)
 
 AbstractGeoData = GeoData
+
+
+class AsyncGeoData(GeoDataBase):
+    """Async mirror of :class:`GeoData`.
+
+    Concrete async readers (e.g. ``AsyncGeoTIFFReader``) satisfy this
+    interface. User code typed against ``AsyncGeoData`` accepts any
+    conforming async reader without isinstance checks.
+
+    Inherits the metadata surface and derived properties (``transform``,
+    ``crs``, ``shape``, ``width``, ``height``, ``bounds``, ``res``,
+    ``footprint``) from :class:`GeoDataBase`. Adds an ``async`` ``load``
+    method, a **sync** ``read_from_window`` that returns a windowed view
+    (mirroring :class:`~georeader.rasterio_reader.RasterioReader`), and
+    the read-tier metadata properties (``dtype``, ``dims``,
+    ``fill_value_default``).
+
+    Notes
+    -----
+    There is no ``values`` property here (unlike :class:`GeoData`, where it
+    materialises via a sync ``self.load()``). Properties cannot be ``async``,
+    so callers materialise via ``await reader.load()`` and read
+    ``.values`` on the returned :class:`~georeader.geotensor.GeoTensor`.
+
+    ``read_from_window`` is **sync** by design: like
+    :meth:`RasterioReader.read_from_window`, it only constructs a windowed
+    view of the reader and performs no I/O. This means
+    :func:`georeader.read.read_from_window` (and other ``read.*``
+    functions) work polymorphically with both sync and async readers —
+    the only difference is that the returned async view must be
+    materialised via ``await view.load()``.
+    """
+
+    async def load(self, boundless: bool = True) -> GeoTensor:
+        raise NotImplementedError(
+            "load method must be implemented in the subclass"
+        )
+
+    def read_from_window(
+        self, window: rasterio.windows.Window, boundless: bool = True
+    ) -> Union["AsyncGeoData", GeoTensor]:
+        raise NotImplementedError(
+            "read_from_window method must be implemented in the subclass"
+        )
+
+    @property
+    def dtype(self) -> Any:
+        raise NotImplementedError(
+            "dtype property must be implemented in the subclass"
+        )
+
+    @property
+    def dims(self) -> list[str]:
+        raise NotImplementedError(
+            "dims property must be implemented in the subclass"
+        )
+
+    @property
+    def fill_value_default(self) -> Any:
+        raise NotImplementedError(
+            "fill_value_default property must be implemented in the subclass"
+        )
 
 
 def same_extent(geo1: GeoData, geo2: GeoData, precision: float = 1e-3) -> bool:

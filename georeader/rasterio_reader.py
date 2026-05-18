@@ -152,7 +152,7 @@ References
 import rasterio
 import rasterio.windows
 import numpy as np
-from typing import Tuple, Dict, List, Optional, Union, Any
+from typing import Tuple, Dict, List, Optional, Union, Any, Callable
 import warnings
 import numbers
 from georeader import geotensor
@@ -214,6 +214,19 @@ class RasterioReader:
             transform, and shape. Defaults to True.
         rio_env_options (Optional[Dict[str, str]], optional): GDAL environment
             options for reading. Defaults to RIO_ENV_OPTIONS_DEFAULT.
+        opener (Optional[Callable], optional): Keyword-only. A callable passed
+            straight to ``rasterio.open(opener=...)`` for custom byte-range
+            transport. Mutually exclusive with ``fs``. When neither ``opener``
+            nor ``fs`` is set, rasterio routes bytes through GDAL VSI (the
+            default, fastest cloud path).
+        fs (Optional[fsspec.AbstractFileSystem], optional): Keyword-only.
+            Shortcut equivalent to ``opener=fs.open``. Useful for niche
+            backends (FTP, SFTP, GitHub) or custom auth that fsspec speaks
+            but GDAL VSI does not. Mutually exclusive with ``opener``.
+        rio_open_kwargs (Optional[Dict[str, Any]], optional): Keyword-only.
+            Arbitrary additional keyword arguments forwarded to every
+            ``rasterio.open(...)`` call (e.g. ``{"sharing": False}``). Escape
+            hatch for rasterio options not surfaced as first-class kwargs.
 
     Attributes:
         crs (rasterio.crs.CRS): Coordinate reference system.
@@ -303,7 +316,11 @@ class RasterioReader:
                  fill_value_default:Optional[Union[int, float]]=None,
                  stack:bool=True, indexes:Optional[List[int]]=None,
                  overview_level:Optional[int]=None, check:bool=True,
-                 rio_env_options:Optional[Dict[str, str]]=None):
+                 rio_env_options:Optional[Dict[str, str]]=None,
+                 *,
+                 opener:Optional[Callable]=None,
+                 fs:Optional[Any]=None,
+                 rio_open_kwargs:Optional[Dict[str, Any]]=None):
 
         # Syntactic sugar
         if isinstance(paths, str):
@@ -315,6 +332,22 @@ class RasterioReader:
         else:
             self.rio_env_options = rio_env_options
 
+        # Bytes-path knobs — at most one of opener / fs may be set. ``opener``
+        # is the canonical rasterio.open(opener=...) callback; ``fs`` is an
+        # fsspec shortcut equivalent to ``opener=fs.open``. Both default to
+        # None, in which case rasterio routes bytes through GDAL VSI.
+        # ``rio_open_kwargs`` is an escape hatch for arbitrary additional
+        # keyword arguments passed straight to rasterio.open() (e.g.
+        # ``{"sharing": False}``).
+        if opener is not None and fs is not None:
+            raise ValueError(
+                "RasterioReader: pass either `opener=` or `fs=`, not both. "
+                "`fs=` is a shortcut for `opener=fs.open`."
+            )
+        self._opener = opener
+        self._fs = fs
+        self._rio_open_kwargs = rio_open_kwargs
+
         self.paths = paths
 
         self.stack = stack
@@ -323,7 +356,8 @@ class RasterioReader:
         self.fill_value_default = fill_value_default
         self.overview_level = overview_level
         with rasterio.Env(**self._get_rio_options_path(paths[0])):
-            with rasterio.open(paths[0], "r", overview_level=overview_level) as src:
+            with rasterio.open(paths[0], "r", overview_level=overview_level,
+                               **self._resolve_open_kwargs()) as src:
                 self.real_transform = src.transform
                 self.crs = src.crs
                 self.dtype = src.profile["dtype"]
@@ -370,7 +404,8 @@ class RasterioReader:
         if check and len(self.paths) > 1:
             for p in self.paths:
                 with rasterio.Env(**self._get_rio_options_path(p)):
-                    with rasterio.open(p, "r", overview_level=overview_level) as src:
+                    with rasterio.open(p, "r", overview_level=overview_level,
+                                       **self._resolve_open_kwargs()) as src:
                         if not src.transform.almost_equals(self.real_transform, 1e-6):
                             raise ValueError(f"Different transform in {self.paths[0]} and {p}: {self.real_transform} {src.transform}")
                         if not str(src.crs).lower() == str(self.crs).lower():
@@ -606,7 +641,7 @@ class RasterioReader:
         tags = []
         for i, p in enumerate(self.paths):
             with rasterio.Env(**self._get_rio_options_path(p)):
-                with rasterio.open(p, mode="r") as src:
+                with rasterio.open(p, mode="r", **self._resolve_open_kwargs()) as src:
                     tags.append(src.tags())
 
         if (not self.stack) and (len(tags) == 1):
@@ -617,6 +652,27 @@ class RasterioReader:
     def _get_rio_options_path(self, path:str) -> Dict[str, str]:
         options = self.rio_env_options
         return geotensor.get_rio_options_path(options=options, path=path)
+
+    def _resolve_open_kwargs(self) -> Dict[str, Any]:
+        """Translate the constructor's opener/fs knobs into rasterio.open kwargs.
+
+        Returns the kwargs dict to splat at every ``rasterio.open(path, ...)``
+        call site. When neither ``opener`` nor ``fs`` was set on the
+        constructor, returns just ``rio_open_kwargs`` (or empty) — rasterio
+        then routes bytes through GDAL VSI as usual. When ``opener`` is set,
+        forwards it as ``opener=...``; when ``fs`` is set, equivalent to
+        ``opener=self._fs.open``.
+
+        Returns:
+            Dict[str, Any]: kwargs suitable for ``**`` splat into
+            ``rasterio.open(...)``.
+        """
+        kwargs: Dict[str, Any] = dict(self._rio_open_kwargs or {})
+        if self._opener is not None:
+            kwargs["opener"] = self._opener
+        elif self._fs is not None:
+            kwargs["opener"] = self._fs.open
+        return kwargs
     
     # This function does not work for e.g. returning the descriptions of the bands
     # @contextmanager
@@ -641,7 +697,7 @@ class RasterioReader:
         descriptions_all = []
         for i, p in enumerate(self.paths):
             with rasterio.Env(**self._get_rio_options_path(p)):
-                with rasterio.open(p) as src:
+                with rasterio.open(p, **self._resolve_open_kwargs()) as src:
                     desc = src.descriptions
 
             if self.stack:
@@ -725,12 +781,15 @@ class RasterioReader:
         """
         rst_reader = RasterioReader(list(self.paths),
                                     allow_different_shape=self.allow_different_shape,
-                                    window_focus=self.window_focus, 
+                                    window_focus=self.window_focus,
                                     fill_value_default=self.fill_value_default,
-                                    stack=self.stack, 
+                                    stack=self.stack,
                                     overview_level=self.overview_level,
-                                    check=False, 
-                                    rio_env_options=self.rio_env_options)
+                                    check=False,
+                                    rio_env_options=self.rio_env_options,
+                                    opener=self._opener,
+                                    fs=self._fs,
+                                    rio_open_kwargs=self._rio_open_kwargs)
 
         rst_reader.set_window(window, relative=True, boundless=boundless)
         rst_reader.set_indexes(self.indexes, relative=False)
@@ -875,11 +934,14 @@ class RasterioReader:
                 slice_.append(slice(0, spatial_shape[_i]))
 
         rst_reader = RasterioReader(paths, allow_different_shape=self.allow_different_shape,
-                                    window_focus=self.window_focus, 
+                                    window_focus=self.window_focus,
                                     fill_value_default=self.fill_value_default,
                                     stack=stack, overview_level=self.overview_level,
                                     check=False,
-                                    rio_env_options=self.rio_env_options)
+                                    rio_env_options=self.rio_env_options,
+                                    opener=self._opener,
+                                    fs=self._fs,
+                                    rio_open_kwargs=self._rio_open_kwargs)
         window_current = rasterio.windows.Window.from_slices(*slice_, boundless=boundless,
                                                              width=self.width, height=self.height)
 
@@ -893,10 +955,12 @@ class RasterioReader:
 
     def __copy__(self) -> '__class__':
         rst = RasterioReader(self.paths, allow_different_shape=self.allow_different_shape,
-                              window_focus=self.window_focus, 
+                              window_focus=self.window_focus,
                               fill_value_default=self.fill_value_default,
                               stack=self.stack, overview_level=self.overview_level,
-                              check=False, rio_env_options=self.rio_env_options)
+                              check=False, rio_env_options=self.rio_env_options,
+                              opener=self._opener, fs=self._fs,
+                              rio_open_kwargs=self._rio_open_kwargs)
         rst.set_indexes(self.indexes, relative=False)
         return rst
     
@@ -937,7 +1001,7 @@ class RasterioReader:
             RasterioReader: Constructor accepts `overview_level` parameter.
         """
         with rasterio.Env(**self._get_rio_options_path(self.paths[time_index])):
-            with rasterio.open(self.paths[time_index]) as src:
+            with rasterio.open(self.paths[time_index], **self._resolve_open_kwargs()) as src:
                 return src.overviews(index)
     
     def reader_overview(self, overview_level:int) -> '__class__':
@@ -996,13 +1060,16 @@ class RasterioReader:
             overview_level = len(self.overviews()) + overview_level
         
         rst = RasterioReader(self.paths, allow_different_shape=self.allow_different_shape,
-                             window_focus=None, 
+                             window_focus=None,
                              fill_value_default=self.fill_value_default,
                              stack=self.stack,
                              indexes=self.indexes,
                              overview_level=overview_level,
                              check=False,
-                             rio_env_options=self.rio_env_options)
+                             rio_env_options=self.rio_env_options,
+                             opener=self._opener,
+                             fs=self._fs,
+                             rio_open_kwargs=self._rio_open_kwargs)
 
         # if self.window_focus hasn't been changed we're good
         if self.window_focus.width == self.real_width and\
@@ -1030,7 +1097,7 @@ class RasterioReader:
 
         """
         with rasterio.Env(**self._get_rio_options_path(self.paths[time_idx])):
-            with rasterio.open(self.paths[time_idx]) as src:
+            with rasterio.open(self.paths[time_idx], **self._resolve_open_kwargs()) as src:
                 windows_return = [(block_idx, rasterio.windows.intersection(window, self.window_focus)) for block_idx, window in src.block_windows(bidx) if rasterio.windows.intersect(self.window_focus, window)]
 
         return windows_return
@@ -1201,17 +1268,22 @@ class RasterioReader:
         from georeader import griddata
         return griddata.meshgrid(self.transform, self.width, self.height, source_crs=self.crs, dst_crs=dst_crs)
     
-    def __repr__(self)->str:
-        return f""" 
-         Paths: {self.paths}
-         Transform: {self.transform}
-         Shape: {self.shape}
-         Resolution: {self.res}
-         Bounds: {self.bounds}
-         CRS: {self.crs}
-         nodata: {self.nodata}
-         fill_value_default: {self.fill_value_default}
-        """
+    def __repr__(self) -> str:
+        # Continuation indent aligns multi-line Affine repr under the
+        # value column (9-space indent + 18-char label + ": ").
+        transform_indent = "\n" + " " * 29
+        transform_str = transform_indent.join(str(self.transform).splitlines())
+        return (
+            "\n"
+            f"         Paths:              {self.paths}\n"
+            f"         Shape:              {self.shape}\n"
+            f"         Resolution:         {self.res}\n"
+            f"         Bounds:             {self.bounds}\n"
+            f"         CRS:                {self.crs}\n"
+            f"         nodata:             {self.nodata}\n"
+            f"         fill_value_default: {self.fill_value_default}\n"
+            f"         Transform:          {transform_str}\n"
+        )
 
     def read(self, **kwargs) -> np.ndarray:
         """
@@ -1355,7 +1427,8 @@ class RasterioReader:
 
             for i, p in enumerate(self.paths):
                 with rasterio.Env(**self._get_rio_options_path(p)):
-                    with rasterio.open(p, "r", overview_level=self.overview_level) as src:
+                    with rasterio.open(p, "r", overview_level=self.overview_level,
+                                       **self._resolve_open_kwargs()) as src:
                     # rasterio.read API: https://rasterio.readthedocs.io/en/latest/api/rasterio.io.html#rasterio.io.DatasetReader.read
                         read_data = src.read(**kwargs)
 

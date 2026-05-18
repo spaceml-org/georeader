@@ -1831,8 +1831,7 @@ def read_from_tile(
 
     if not intersects:
         assert not assert_if_not_intersects, "Tile does not intersect data"
-    else:
-        return
+        return  # Non-intersecting tile — return None (standard tile-server behaviour)
 
     if out_shape is not None and hasattr(data, "read_from_tile"):
         return data.read_from_tile(x, y, z, dst_crs=dst_crs, out_shape=out_shape)

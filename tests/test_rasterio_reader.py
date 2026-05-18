@@ -12,6 +12,7 @@ Properties: 15 bands, height=200, width=250, CRS=EPSG:32738, resolution=10m
 """
 
 import numpy as np
+import pytest
 import rasterio
 import rasterio.windows
 
@@ -663,3 +664,78 @@ class TestRasterioReaderCopy:
         assert copy.window_focus == reader.window_focus
         assert copy.width == 100
         assert copy.height == 100
+
+
+class TestBytesPathKnobs:
+    """Tests for the ``opener`` / ``fs`` / ``rio_open_kwargs`` keyword-only knobs.
+
+    The default path (no kwargs) routes bytes through GDAL VSI; these tests
+    exercise the two alternative paths against a local fixture and verify
+    they return the same data as the default path.
+    """
+
+    def test_default_path_unchanged(self, test_raster_path):
+        """Default constructor (no opener/fs/rio_open_kwargs) routes through GDAL VSI unchanged."""
+        reader = rasterio_reader.RasterioReader(test_raster_path)
+
+        # No knobs set — internal state confirms.
+        assert reader._opener is None
+        assert reader._fs is None
+        assert reader._rio_open_kwargs is None
+        # Resolved kwargs are empty — rasterio.open receives no extra kwargs,
+        # so GDAL VSI is the bytes path.
+        assert reader._resolve_open_kwargs() == {}
+        # And the reader actually reads.
+        assert reader.load().values.shape == (15, 200, 250)
+
+    def test_opener_callback_reads_same_data(self, test_raster_path):
+        """Opening via a hand-rolled ``opener=`` callback returns the same bytes as the default."""
+        baseline = rasterio_reader.RasterioReader(test_raster_path).load().values
+
+        # Hand-rolled opener: ignore mode, just return a binary file handle.
+        def _opener(path, mode="rb"):
+            return open(path, "rb")
+
+        reader = rasterio_reader.RasterioReader(test_raster_path, opener=_opener)
+        result = reader.load().values
+
+        assert np.array_equal(result, baseline)
+
+    def test_fs_shortcut_reads_same_data(self, test_raster_path):
+        """Opening via ``fs=fsspec.filesystem('file')`` returns the same bytes as the default."""
+        import fsspec
+
+        baseline = rasterio_reader.RasterioReader(test_raster_path).load().values
+
+        fs = fsspec.filesystem("file")
+        reader = rasterio_reader.RasterioReader(test_raster_path, fs=fs)
+        result = reader.load().values
+
+        assert np.array_equal(result, baseline)
+
+    def test_opener_and_fs_mutually_exclusive(self, test_raster_path):
+        """Passing both ``opener=`` and ``fs=`` raises ValueError at construction."""
+        import fsspec
+
+        def _opener(path, mode="rb"):
+            return open(path, "rb")
+
+        fs = fsspec.filesystem("file")
+
+        with pytest.raises(ValueError, match="opener.*fs"):
+            rasterio_reader.RasterioReader(test_raster_path, opener=_opener, fs=fs)
+
+    def test_kwargs_forwarded_through_read_from_window(self, test_raster_path):
+        """``opener=`` survives the recursive RasterioReader construction in ``read_from_window``."""
+
+        def _opener(path, mode="rb"):
+            return open(path, "rb")
+
+        reader = rasterio_reader.RasterioReader(test_raster_path, opener=_opener)
+        sub = reader.read_from_window(
+            rasterio.windows.Window(col_off=0, row_off=0, width=50, height=50)
+        )
+
+        assert sub._opener is _opener
+        # And the sub-reader can actually read.
+        assert sub.load().values.shape[-2:] == (50, 50)
