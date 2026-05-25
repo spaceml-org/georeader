@@ -516,15 +516,27 @@ class EMITImage:
     - EMIT Data Resources: https://github.com/nasa/EMIT-Data-Resources
     - EMIT Algorithms: Green et al. (2020) doi:10.1029/2020JD033451
     """
-    attributes_set_if_exists = ["_nc_ds_obs", "_mean_sza", "_mean_vza", 
-                                "_observation_bands", "_nc_ds_l2amask", "_mask_bands", 
-                                "_nc_ds", "obs_file",
-                                "l2amaskfile", "_sensor_band_params"]
-    def __init__(self, filename:str, glt:Optional[GeoTensor]=None, 
-                 band_selection:Optional[Union[int, Tuple[int, ...],slice]]=slice(None)):
+    attributes_set_if_exists = ["_nc_ds_obs", "_mean_sza", "_mean_vza",
+                                "_observation_bands", "_nc_ds_l2amask", "_mask_bands",
+                                "nc_ds", "obs_file",
+                                "l2amaskfile", "_sensor_band_params",
+                                # Option B: opt-in radiance cache. ``_cache`` is a
+                                # mutable dict shared by reference across all clones
+                                # built from the same parent — that's what makes the
+                                # cache visible end-to-end. ``cache_radiance`` is the
+                                # opt-in flag (rebind-on-clone is fine; we don't toggle
+                                # per-clone).
+                                "_cache", "cache_radiance"]
+
+    # Key under which the full-spectrum windowed radiance is stored in ``_cache``.
+    _CACHE_KEY_RADIANCE = "radiance_window"
+
+    def __init__(self, filename:str, glt:Optional[GeoTensor]=None,
+                 band_selection:Optional[Union[int, Tuple[int, ...],slice]]=slice(None),
+                 cache_radiance:bool=False):
         if not HAS_XARRAY:
             raise ImportError("xarray is required to read EMIT images. Please install it with: pip install xarray")
-        
+
         self.filename = filename
         self.nc_ds = safe_open_netcdf(self.filename, cache=False, load=False)
         self._nc_ds_obs = None
@@ -532,6 +544,11 @@ class EMITImage:
         self._observation_bands = None
         self._mask_bands = None
         self._sensor_band_params = None
+        # Opt-in radiance cache. Default off — the dict is created either way so the
+        # ``_cache is parent._cache`` invariant holds for clones even when caching
+        # is disabled.
+        self.cache_radiance:bool = cache_radiance
+        self._cache:Dict[str, Any] = {}
         # self.real_shape = (self.nc_ds['radiance'].shape[-1],) + self.nc_ds['radiance'].shape[:-1]
 
         self._mean_sza = None
@@ -913,10 +930,19 @@ class EMITImage:
                                resolution_dst_crs=resolution_dst_crs)
 
         out = EMITImage(self.filename, glt=glt, band_selection=self.band_selection)
-        # Copy _pol attribute if it exists
+
+        # Propagate eagerly-set and lazily-loaded attributes from the parent so
+        # the new instance shares the parent's NetCDF handles, sensor params,
+        # observation bands, mean angles, etc. without re-opening anything.
+        for attrname in self.attributes_set_if_exists:
+            if hasattr(self, attrname):
+                setattr(out, attrname, getattr(self, attrname))
+
+        # _pol is not in attributes_set_if_exists because it's CRS-dependent —
+        # it must be reprojected to the new CRS.
         if hasattr(self, '_pol'):
             setattr(out, '_pol', window_utils.polygon_to_crs(self._pol, self.crs, crs))
-        
+
         return out
 
 
@@ -924,10 +950,10 @@ class EMITImage:
         glt_window = self.glt.read_from_window(window, boundless=boundless)
         out = EMITImage(self.filename, glt=glt_window, band_selection=self.band_selection)
 
-        # copy attributes as in __copy__ method
+        # Propagate eagerly-set and lazily-loaded attributes from the parent.
         for attrname in self.attributes_set_if_exists:
             if hasattr(self, attrname):
-                setattr(out, attrname, self.nc_ds_obs)
+                setattr(out, attrname, getattr(self, attrname))
 
         return out
     
@@ -969,7 +995,7 @@ class EMITImage:
         Load the raw data, without orthorectification
 
         Args:
-            transpose (bool, optional): Transpose the data if it has 3 dimentsions to (C, H, W) 
+            transpose (bool, optional): Transpose the data if it has 3 dimentsions to (C, H, W)
                 Defaults to True. if False return (H, W, C)
 
         Returns:
@@ -978,16 +1004,53 @@ class EMITImage:
 
         slice_y, slice_x = self.window_raw.toslices()
 
-        if isinstance(self.band_selection, slice):
-            data = self.nc_ds['radiance'].values[slice_y, slice_x, self.band_selection]
+        if self.cache_radiance:
+            # Option B (opt-in): cache the full-spectrum windowed radiance so that
+            # subsequent loads of band subsets become pure in-memory slices.
+            # ``self._cache`` is a mutable dict shared with all clones built from
+            # this instance (via ``attributes_set_if_exists``), so a single
+            # decompression services every algorithm downstream.
+            cached = self._cache.get(self._CACHE_KEY_RADIANCE)
+            if cached is None:
+                radiance = self.nc_ds['radiance']
+                dims = radiance.dims
+                cached = radiance.isel({dims[0]: slice_y, dims[1]: slice_x}).values
+                self._cache[self._CACHE_KEY_RADIANCE] = cached
+            data = cached[..., self.band_selection]
         else:
-            data = self.nc_ds['radiance'].values[slice_y, slice_x][..., self.band_selection]
-        
+            # Default path: push the spatial (and, when possible, spectral) slice
+            # into the NetCDF read via xarray .isel(). Avoids materialising the
+            # full radiance variable in RAM, but re-reads from disk each call.
+            radiance = self.nc_ds['radiance']
+            dims = radiance.dims  # typically ('downtrack', 'crosstrack', 'bands')
+            radiance = radiance.isel({dims[0]: slice_y, dims[1]: slice_x})
+
+            if isinstance(self.band_selection, slice):
+                radiance = radiance.isel({dims[2]: self.band_selection})
+                data = radiance.values
+            else:
+                # Fancy indexing (list / array of indices) — push as far as we can
+                # into the read (spatial), then numpy-slice the band axis.
+                data = radiance.values[..., self.band_selection]
+
         # transpose to (C, H, W)
         if transpose and (len(data.shape) == 3):
             data = np.transpose(data, axes=(2, 0, 1))
-        
+
         return data
+
+    def clear_radiance_cache(self) -> None:
+        """Drop the cached radiance window if present.
+
+        After this call, the next ``load_raw()`` will re-read from disk. The
+        ``_cache`` dict object itself is not replaced — clones built via
+        ``__copy__`` / ``read_from_bands`` / ``to_crs`` / ``read_from_window``
+        share the same dict by reference, so clearing through any clone is
+        visible to all of them. Intended to be called from ``EmitProcessor.process``
+        after all per-scene products are computed, to release the ~1.5 GB
+        radiance array before the next scene is processed.
+        """
+        self._cache.pop(self._CACHE_KEY_RADIANCE, None)
 
 
     def georreference(self, data:np.array, 
