@@ -518,8 +518,7 @@ class EMITImage:
     """
     attributes_set_if_exists = ["_nc_ds_obs", "_mean_sza", "_mean_vza",
                                 "_observation_bands", "_nc_ds_l2amask", "_mask_bands",
-                                "nc_ds", "obs_file",
-                                "l2amaskfile", "_sensor_band_params",
+                                "obs_file", "l2amaskfile",
                                 # Option B: opt-in radiance cache. ``_cache`` is a
                                 # mutable dict shared by reference across all clones
                                 # built from the same parent — that's what makes the
@@ -533,12 +532,20 @@ class EMITImage:
 
     def __init__(self, filename:str, glt:Optional[GeoTensor]=None,
                  band_selection:Optional[Union[int, Tuple[int, ...],slice]]=slice(None),
-                 cache_radiance:bool=False):
+                 cache_radiance:bool=False,
+                 reuse_handles_from:Optional['EMITImage']=None):
         if not HAS_XARRAY:
             raise ImportError("xarray is required to read EMIT images. Please install it with: pip install xarray")
 
         self.filename = filename
-        self.nc_ds = safe_open_netcdf(self.filename, cache=False, load=False)
+        if reuse_handles_from is not None:
+            if reuse_handles_from.filename != self.filename:
+                raise ValueError("reuse_handles_from must reference the same EMIT file")
+            # Clone constructor path: reuse parent handles to avoid opening
+            # throwaway datasets that would immediately be overwritten.
+            self.nc_ds = reuse_handles_from.nc_ds
+        else:
+            self.nc_ds = safe_open_netcdf(self.filename, cache=False, load=False)
         self._nc_ds_obs = None
         self._nc_ds_l2amask = None
         self._observation_bands = None
@@ -600,14 +607,19 @@ class EMITImage:
         self.window_raw = rasterio.windows.Window(col_off=xmin-1, row_off=ymin-1, 
                                                   width=xmax-xmin+1, height=ymax-ymin+1)
 
-        # Load sensor_band_parameters from its group
-        self._sensor_band_params = safe_open_netcdf(self.filename, cache=False, load=False, group='sensor_band_parameters')
-        if "wavelengths" in self._sensor_band_params:
-            self.bandname_dimension = "wavelengths"
-        elif "radiance_wl" in self._sensor_band_params:
-            self.bandname_dimension = "radiance_wl"
+        # Load sensor_band_parameters from its group, unless we're cloning from
+        # an existing instance and can reuse the already-open handle.
+        if reuse_handles_from is not None:
+            self._sensor_band_params = reuse_handles_from._sensor_band_params
+            self.bandname_dimension = reuse_handles_from.bandname_dimension
         else:
-            raise ValueError(f"wavelengths or radiance_wl not found in sensor_band_parameters")
+            self._sensor_band_params = safe_open_netcdf(self.filename, cache=False, load=False, group='sensor_band_parameters')
+            if "wavelengths" in self._sensor_band_params:
+                self.bandname_dimension = "wavelengths"
+            elif "radiance_wl" in self._sensor_band_params:
+                self.bandname_dimension = "radiance_wl"
+            else:
+                raise ValueError(f"wavelengths or radiance_wl not found in sensor_band_parameters")
         
         self.band_selection = band_selection
         self.wavelengths = self._sensor_band_params[self.bandname_dimension].values[self.band_selection]
@@ -896,7 +908,12 @@ class EMITImage:
         return self._mean_vza
         
     def __copy__(self) -> '__class__':
-        out = EMITImage(self.filename, glt=self.glt.copy(), band_selection=self.band_selection)
+        out = EMITImage(
+            self.filename,
+            glt=self.glt.copy(),
+            band_selection=self.band_selection,
+            reuse_handles_from=self,
+        )
         
         # copy nc_ds_obs if it exists
         for attrname in self.attributes_set_if_exists:
@@ -929,7 +946,12 @@ class EMITImage:
         glt = read.read_to_crs(self.glt, crs, resampling=rasterio.warp.Resampling.nearest, 
                                resolution_dst_crs=resolution_dst_crs)
 
-        out = EMITImage(self.filename, glt=glt, band_selection=self.band_selection)
+        out = EMITImage(
+            self.filename,
+            glt=glt,
+            band_selection=self.band_selection,
+            reuse_handles_from=self,
+        )
 
         # Propagate eagerly-set and lazily-loaded attributes from the parent so
         # the new instance shares the parent's NetCDF handles, sensor params,
@@ -948,7 +970,12 @@ class EMITImage:
 
     def read_from_window(self, window:Optional[rasterio.windows.Window]=None, boundless:bool=True) -> '__class__':
         glt_window = self.glt.read_from_window(window, boundless=boundless)
-        out = EMITImage(self.filename, glt=glt_window, band_selection=self.band_selection)
+        out = EMITImage(
+            self.filename,
+            glt=glt_window,
+            band_selection=self.band_selection,
+            reuse_handles_from=self,
+        )
 
         # Propagate eagerly-set and lazily-loaded attributes from the parent.
         for attrname in self.attributes_set_if_exists:

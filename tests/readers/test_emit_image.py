@@ -26,6 +26,7 @@ The coverage targets two consumers of EMITImage:
 from __future__ import annotations
 import os
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 import pytest
@@ -175,7 +176,9 @@ class TestCloneStatePropagation:
     band parameters. Prior to the Phase 1 side-fix, ``read_from_bands`` left
     `_nc_ds` unset (dead-code list entry), ``to_crs`` did not propagate
     `attributes_set_if_exists` at all, and ``read_from_window`` had a
-    copy-paste bug.
+    copy-paste bug. The current implementation reuses handles at construction
+    time via ``reuse_handles_from`` and no longer relies on propagating handle
+    attrs through ``attributes_set_if_exists``.
     """
 
     def test_read_from_bands_shares_nc_ds(self, emit_image):
@@ -215,6 +218,40 @@ class TestCloneStatePropagation:
         native_b = emit_image._pol.bounds
         utm_b = utm._pol.bounds
         assert max(abs(b1 - b2) for b1, b2 in zip(native_b, utm_b)) > 1.0
+
+    def test_clone_constructors_do_not_reopen_netcdf_handles(self):
+        """Clone constructors should reuse parent handles and avoid new opens."""
+        with mock.patch(
+            "georeader.readers.emit.safe_open_netcdf",
+            wraps=emit.safe_open_netcdf,
+        ) as open_netcdf:
+            base = emit.EMITImage(str(_FIXTURE_RAD))
+            # Parent creation opens root + location + sensor_band_parameters.
+            assert open_netcdf.call_count >= 3
+
+            open_netcdf.reset_mock()
+
+            _ = base.copy()
+            _ = base.read_from_bands([0, 1, 2])
+            _ = base.to_crs("UTM")
+            win = rasterio.windows.Window(col_off=20, row_off=20, width=100, height=100)
+            _ = base.read_from_window(win)
+
+            assert open_netcdf.call_count == 0
+
+    def test_attributes_list_does_not_propagate_handle_attrs(self):
+        # Handle sharing is now constructor-level via reuse_handles_from.
+        assert "nc_ds" not in emit.EMITImage.attributes_set_if_exists
+        assert "_sensor_band_params" not in emit.EMITImage.attributes_set_if_exists
+
+    def test_reuse_handles_requires_same_filename(self):
+        base = emit.EMITImage(str(_FIXTURE_RAD))
+        with pytest.raises(ValueError, match="same EMIT file"):
+            emit.EMITImage(
+                "different_file.nc",
+                glt=base.glt.copy(),
+                reuse_handles_from=base,
+            )
 
 
 # ── load_raw correctness ──────────────────────────────────────────────────
