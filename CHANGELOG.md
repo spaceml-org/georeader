@@ -18,6 +18,13 @@
   `requests`. No Azure SDK dependency — token loading via Azure Key
   Vault is left to downstream consumers (e.g. UNEP IMEO MARS).
 
+## [2.3.0](https://github.com/spaceml-org/georeader/compare/v2.2.0...v2.3.0) (2026-05-29)
+
+
+### Features
+
+* **emit:** fix EMITImage clone propagation; add slice push-down + opt-in radiance cache ([#56](https://github.com/spaceml-org/georeader/issues/56)) ([4fd1018](https://github.com/spaceml-org/georeader/commit/4fd101811dc921dacd348597409183e23d0e4038))
+
 ## [2.2.0](https://github.com/spaceml-org/georeader/compare/v2.1.0...v2.2.0) (2026-05-14)
 
 
