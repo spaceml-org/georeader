@@ -56,21 +56,26 @@ users call the async ``open()`` classmethod which performs the IFD fetch::
     # Reads are async coroutines.
     gt = await reader.load()
 
-Why this reader does not warp
------------------------------
+Why this reader does not warp itself
+------------------------------------
 
 `async-geotiff explicitly disclaims <https://github.com/developmentseed/async-geotiff#anti-features>`_
-warping, resampling, and automatic overview selection. This reader follows
-suit. For cross-CRS reads, either fetch in the native CRS and post-warp via
-:func:`georeader.read.read_reproject_like`, or use
+warping, resampling, and automatic overview selection. The reader keeps that
+boundary — it only implements the primitive windowed read. The
+reproject/resize/tile family is provided by :mod:`georeader.asyncread`, which
+streams **only the input window required for the destination grid** (it does
+**not** load the entire raster first) and shares the warp loop with the sync
+:mod:`georeader.read` path.
+
+For cross-CRS reads, use :func:`georeader.asyncread.read_to_crs` /
+:func:`~georeader.asyncread.read_reproject_like`, or switch to
 :class:`~georeader.rasterio_reader.RasterioReader` (which has WarpedVRT
 integration on the sync path).
 
 Read by bounds / polygon / center / tile is provided by the
-:mod:`georeader.read` module functions, which work with any
-:class:`~georeader.abstract_reader.AsyncGeoData` (and
-:class:`~georeader.abstract_reader.GeoData`) input — this reader only
-implements the primitive ``read_from_window``.
+:mod:`georeader.asyncread` module functions, which work with any
+:class:`~georeader.abstract_reader.AsyncGeoData` input (sync equivalents in
+:mod:`georeader.read` for :class:`~georeader.abstract_reader.GeoData`).
 
 See Also
 --------
