@@ -186,6 +186,7 @@ References
 import itertools
 import numbers
 from collections import OrderedDict
+from dataclasses import dataclass, field
 from itertools import product
 from math import ceil, copysign
 from typing import Any, Dict, Optional, Tuple, Union
@@ -491,6 +492,50 @@ def window_from_tile(
     return window_from_polygon(data_in, polygon_crs_webmercator, WEB_MERCATOR_CRS, window_surrounding=True)
 
 
+def _window_intersects_data(data_in: GeoData, window: rasterio.windows.Window) -> bool:
+    """Return True iff `window` overlaps the data extent."""
+    named_shape = OrderedDict(zip(data_in.dims, data_in.shape))
+    window_data = rasterio.windows.Window(
+        col_off=0, row_off=0, width=named_shape["x"], height=named_shape["y"]
+    )
+    return bool(rasterio.windows.intersect([window_data, window]))
+
+
+def _build_no_intersect_result(
+    data_in: GeoData,
+    window: rasterio.windows.Window,
+    boundless: bool,
+    return_only_data: bool,
+) -> Union[GeoData, np.ndarray, None]:
+    """Build the result when `window` does not intersect `data_in`.
+
+    Returns None when boundless is False (caller signals "no data"); otherwise
+    returns a fill-valued array/GeoTensor matching the window shape. Pure CPU.
+    Shared between the sync `read_from_window` and `asyncread.read_from_window`
+    so the no-I/O fallback path stays identical.
+    """
+    if not boundless:
+        return None
+
+    named_shape = OrderedDict(zip(data_in.dims, data_in.shape))
+    expected_shapes = {"x": window.width, "y": window.height}
+    shape = tuple(
+        [named_shape[s] if s not in ["x", "y"] else expected_shapes[s] for s in data_in.dims]
+    )
+    data = np.zeros(shape, dtype=data_in.dtype)
+    fill_value_default = getattr(data_in, "fill_value_default", 0)
+    if fill_value_default != 0:
+        data += fill_value_default
+    if return_only_data:
+        return data
+    return GeoTensor(
+        data,
+        crs=data_in.crs,
+        transform=rasterio.windows.transform(window, transform=data_in.transform),
+        fill_value_default=fill_value_default,
+    )
+
+
 def read_from_window(
     data_in: GeoData,
     window: rasterio.windows.Window,
@@ -543,38 +588,10 @@ def read_from_window(
         The output transform is adjusted to correspond to the window's geographic location.
         For windows partially outside bounds, boundless=True pads with fill_value_default.
     """
-    # Create dict mapping dimension names to sizes: {'band': C, 'y': H, 'x': W}
-    named_shape = OrderedDict(zip(data_in.dims, data_in.shape))
-
-    # Define window covering entire data extent in pixel coordinates
-    window_data = rasterio.windows.Window(col_off=0, row_off=0, width=named_shape["x"], height=named_shape["y"])
-
-    # Get current transform for calculating new transform for the window
-    transform = data_in.transform
-
-    # Handle case where window doesn't intersect data at all
-    if not rasterio.windows.intersect([window_data, window]):
-        if not boundless:
-            return None  # No data to return
-
-        # Create array filled with fill_value_default matching window shape
-        expected_shapes = {"x": window.width, "y": window.height}
-        # Build shape tuple: (bands, window.height, window.width) or (window.height, window.width)
-        shape = tuple([named_shape[s] if s not in ["x", "y"] else expected_shapes[s] for s in data_in.dims])
-        data = np.zeros(shape, dtype=data_in.dtype)
-        fill_value_default = getattr(data_in, "fill_value_default", 0)
-        if fill_value_default != 0:
-            data += fill_value_default
-        if return_only_data:
-            return data
-
-        # Calculate transform for this window position
-        return GeoTensor(
-            data,
-            crs=data_in.crs,
-            transform=rasterio.windows.transform(window, transform=transform),
-            fill_value_default=fill_value_default,
-        )
+    # Handle case where window doesn't intersect data at all (pure CPU; no I/O).
+    # Shared with asyncread.read_from_window via the private helpers.
+    if not _window_intersects_data(data_in, window):
+        return _build_no_intersect_result(data_in, window, boundless, return_only_data)
 
     # Read data from window using the reader's method (handles padding automatically)
     data_sel = data_in.read_from_window(window=window, boundless=boundless)
@@ -1345,6 +1362,191 @@ def calculate_transform_window(
     return window_data, dst_transform
 
 
+@dataclass
+class _ReprojectPlan:
+    """Resolved parameters for `read_reproject`.
+
+    `_reproject_setup` produces this; the sync and async orchestrators decide
+    whether to fast-path, return empty, or proceed to a windowed read +
+    `_reproject_finalize`. Pure data — no I/O involved.
+    """
+
+    dst_transform: rasterio.Affine
+    dst_crs: Any
+    window_out: rasterio.windows.Window
+    crs_data_in: Any
+    polygon_dst_crs: Polygon
+    destination: np.ndarray
+    dst_nodata: Any
+    dtype_dst: Any
+    cast: bool
+    isbool_dtypein: bool
+    isbool_dtypedst: bool
+    named_shape: "OrderedDict[str, int]"
+    # Early-exit signals (mutually exclusive with the normal path):
+    fast_path_window: Optional[rasterio.windows.Window] = None  # source-aligned no-op window
+    nonintersecting: bool = False  # data does not overlap dst extent
+
+
+def _reproject_setup(
+    data_in: GeoData,
+    dst_crs: Optional[Any],
+    bounds: Optional[Tuple[float, float, float, float]],
+    resolution_dst_crs: Optional[Union[float, Tuple[float, float]]],
+    dst_transform: Optional[rasterio.Affine],
+    window_out: Optional[rasterio.windows.Window],
+    dtype_dst: Any,
+    dst_nodata: Optional[int],
+) -> _ReprojectPlan:
+    """Compute the reproject plan: destination grid, dtypes, allocation, early-exit flags.
+
+    Pure CPU; no I/O. Shared between `read.read_reproject` and `asyncread.read_reproject`.
+    Mirrors steps 1–6 of the original `read_reproject` body.
+    """
+    named_shape = OrderedDict(zip(data_in.dims, data_in.shape))
+
+    # STEP 1: destination transform
+    dst_transform = window_utils.figure_out_transform(
+        transform=dst_transform, bounds=bounds, resolution_dst=resolution_dst_crs
+    )
+
+    # STEP 2: destination window
+    if window_out is None:
+        assert bounds is not None, (
+            "Both window_out and bounds are None. This is needed to figure out the size of the output array"
+        )
+        window_out = rasterio.windows.from_bounds(*bounds, transform=dst_transform).round_lengths(
+            op="ceil", pixel_precision=PIXEL_PRECISION
+        )
+
+    crs_data_in = data_in.crs
+    if dst_crs is None:
+        dst_crs = crs_data_in
+
+    # STEP 3: same-CRS/aligned-grid fast path → caller should `read_from_window` and skip warp.
+    fast_path_window: Optional[rasterio.windows.Window] = None
+    if window_utils.compare_crs(dst_crs, crs_data_in):
+        transform_data = data_in.transform
+        if (
+            (dst_transform.a == transform_data.a)
+            and (dst_transform.b == transform_data.b)
+            and (dst_transform.d == transform_data.d)
+            and (dst_transform.e == transform_data.e)
+        ):
+            x_dst, y_dst = dst_transform.c, dst_transform.f
+            col_off, row_off = ~transform_data * (x_dst, y_dst)
+            window_in_data = rasterio.windows.Window(col_off, row_off, window_out.width, window_out.height)
+            if _is_exact_round(window_in_data.row_off) and _is_exact_round(window_in_data.col_off):
+                fast_path_window = window_in_data.round_offsets(
+                    op="floor", pixel_precision=PIXEL_PRECISION
+                )
+
+    # STEP 4: dtype handling
+    isbool_dtypein = data_in.dtype == "bool"
+    isbool_dtypedst = False
+    cast = True
+    if dtype_dst is None:
+        cast = False
+        dtype_dst = data_in.dtype
+        if isbool_dtypein:
+            isbool_dtypedst = True
+    elif np.dtype(dtype_dst) == "bool":
+        isbool_dtypedst = True
+
+    # STEP 5: pre-allocate output
+    dict_shape_window_out = {"x": window_out.width, "y": window_out.height}
+    shape_out = tuple(
+        [named_shape[s] if s not in ["x", "y"] else dict_shape_window_out[s] for s in named_shape]
+    )
+    dst_nodata_resolved = dst_nodata or data_in.fill_value_default
+    if isbool_dtypedst:
+        dst_nodata_resolved = bool(dst_nodata_resolved)
+    destination = np.full(shape_out, fill_value=dst_nodata_resolved, dtype=dtype_dst)
+
+    # STEP 6: intersection check
+    polygon_dst_crs = window_utils.window_polygon(window_out, dst_transform)
+    nonintersecting = not data_in.footprint(crs=dst_crs).intersects(polygon_dst_crs)
+
+    return _ReprojectPlan(
+        dst_transform=dst_transform,
+        dst_crs=dst_crs,
+        window_out=window_out,
+        crs_data_in=crs_data_in,
+        polygon_dst_crs=polygon_dst_crs,
+        destination=destination,
+        dst_nodata=dst_nodata_resolved,
+        dtype_dst=dtype_dst,
+        cast=cast,
+        isbool_dtypein=isbool_dtypein,
+        isbool_dtypedst=isbool_dtypedst,
+        named_shape=named_shape,
+        fast_path_window=fast_path_window,
+        nonintersecting=nonintersecting,
+    )
+
+
+def _reproject_finalize(
+    geotensor_in: GeoTensor,
+    plan: _ReprojectPlan,
+    resampling: rasterio.warp.Resampling,
+    return_only_data: bool,
+) -> Union[GeoTensor, np.ndarray]:
+    """Run the warp loop and pack the result. Pure CPU.
+
+    Steps 7 (type casting on the already-loaded input) and 8 (per-slice warp)
+    of the original `read_reproject` body. Shared with `asyncread.read_reproject`.
+    """
+    np_array_in = np.asanyarray(geotensor_in.values)
+
+    if plan.cast:
+        if plan.isbool_dtypedst:
+            np_array_in = np_array_in.astype(np.float32)
+        else:
+            np_array_in = np_array_in.astype(plan.dtype_dst)
+    elif plan.isbool_dtypein:
+        np_array_in = np_array_in.astype(np.float32)
+
+    index_iter = [
+        [(ns, i) for i in range(s)] for ns, s in plan.named_shape.items() if ns not in ["x", "y"]
+    ]
+    destination = plan.destination
+
+    for current_select_tuple in itertools.product(*index_iter):
+        i_sel_tuple = tuple(t[1] for t in current_select_tuple)
+
+        np_array_iter = np_array_in[i_sel_tuple]
+        if plan.isbool_dtypedst:
+            dst_iter_write = destination[i_sel_tuple].astype(np.float32)
+            dst_nodata_iter = float(plan.dst_nodata)
+        else:
+            dst_iter_write = destination[i_sel_tuple]
+            dst_nodata_iter = plan.dst_nodata
+
+        rasterio.warp.reproject(
+            np_array_iter,
+            dst_iter_write,
+            src_transform=geotensor_in.transform,
+            src_crs=plan.crs_data_in,
+            dst_transform=plan.dst_transform,
+            dst_crs=plan.dst_crs,
+            src_nodata=geotensor_in.fill_value_default,
+            dst_nodata=dst_nodata_iter,
+            resampling=resampling,
+        )
+
+        if plan.isbool_dtypedst:
+            destination[i_sel_tuple] = dst_iter_write > 0.5
+
+    if return_only_data:
+        return destination
+    return GeoTensor(
+        destination,
+        transform=plan.dst_transform,
+        crs=plan.dst_crs,
+        fill_value_default=plan.dst_nodata,
+    )
+
+
 def read_reproject(
     data_in: GeoData,
     dst_crs: Optional[str] = None,
@@ -1477,201 +1679,50 @@ def read_reproject(
         - Non-intersecting: Returns nodata-filled array if source doesn't overlap destination
     """
 
-    named_shape = OrderedDict(zip(data_in.dims, data_in.shape))
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # STEP 1: DETERMINE OUTPUT TRANSFORM
-    # ─────────────────────────────────────────────────────────────────────────
-    # The output transform defines the mapping from pixel coordinates to
-    # geographic coordinates in the destination CRS. It can be:
-    # - Provided directly (dst_transform)
-    # - Computed from bounds + resolution
-    # - Computed from bounds with inferred resolution
-    # 
-    # Shape tracking:
-    #   Input:  named_shape = {'band': C, 'y': H_in, 'x': W_in}
-    #   Output: will have {'band': C, 'y': H_out, 'x': W_out}
-    # ─────────────────────────────────────────────────────────────────────────
-    dst_transform = window_utils.figure_out_transform(
-        transform=dst_transform, bounds=bounds, resolution_dst=resolution_dst_crs
+    # The setup (output grid + alloc + intersection check) and warp loop are
+    # extracted into `_reproject_setup` / `_reproject_finalize` so the async
+    # sibling in `georeader.asyncread` can share the non-I/O code paths.
+    plan = _reproject_setup(
+        data_in=data_in,
+        dst_crs=dst_crs,
+        bounds=bounds,
+        resolution_dst_crs=resolution_dst_crs,
+        dst_transform=dst_transform,
+        window_out=window_out,
+        dtype_dst=dtype_dst,
+        dst_nodata=dst_nodata,
     )
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # STEP 2: COMPUTE OUTPUT DIMENSIONS
-    # ─────────────────────────────────────────────────────────────────────────
-    # The output window defines pixel dimensions (W_out, H_out). Either:
-    # - Provided directly (window_out)
-    # - Computed from bounds in dst_crs coordinate units
-    #
-    # Example: bounds=(0, 0, 1000, 1000) with 10m resolution → (100, 100) pixels
-    # ─────────────────────────────────────────────────────────────────────────
-    if window_out is None:
-        assert bounds is not None, (
-            "Both window_out and bounds are None. This is needed to figure out the size of the output array"
-        )
-        window_out = rasterio.windows.from_bounds(*bounds, transform=dst_transform).round_lengths(
-            op="ceil", pixel_precision=PIXEL_PRECISION
+    # Same-CRS aligned-grid fast path: skip warp, just window-read.
+    if plan.fast_path_window is not None:
+        return read_from_window(
+            data_in, plan.fast_path_window, return_only_data=return_only_data, trigger_load=True
         )
 
-    crs_data_in = data_in.crs
-    if dst_crs is None:
-        dst_crs = crs_data_in
+    # Source doesn't overlap destination → return the pre-allocated nodata fill.
+    if plan.nonintersecting:
+        return GeoTensor(
+            plan.destination,
+            transform=plan.dst_transform,
+            crs=plan.dst_crs,
+            fill_value_default=plan.dst_nodata,
+        )
 
-    # ─────────────────────────────────────────────────────────────────────────
-    # STEP 3: CHECK FOR NO-OP OPTIMIZATION
-    # ─────────────────────────────────────────────────────────────────────────
-    # If source and destination have:
-    #   - Same CRS
-    #   - Same pixel size (transform.a and transform.e)
-    #   - Grid-aligned origins (integer pixel offset)
-    # Then we can skip reprojection entirely and use a simple window read.
-    # This is ~10-100x faster for aligned data.
-    # ─────────────────────────────────────────────────────────────────────────
-    if window_utils.compare_crs(dst_crs, crs_data_in):
-        transform_data = data_in.transform
-        if (
-            (dst_transform.a == transform_data.a)
-            and (dst_transform.b == transform_data.b)
-            and (dst_transform.d == transform_data.d)
-            and (dst_transform.e == transform_data.e)
-        ):
-            # Find pixel offset between src and dst grids
-            # Uses inverse transform: geo coords → pixel coords
-            x_dst, y_dst = dst_transform.c, dst_transform.f
-            col_off, row_off = ~transform_data * (x_dst, y_dst)
-            window_in_data = rasterio.windows.Window(col_off, row_off, window_out.width, window_out.height)
-
-            # Only use fast path if offsets are exact integers (grids align)
-            if _is_exact_round(window_in_data.row_off) and _is_exact_round(window_in_data.col_off):
-                window_in_data = window_in_data.round_offsets(op="floor", pixel_precision=PIXEL_PRECISION)
-                return read_from_window(data_in, window_in_data, return_only_data=return_only_data, trigger_load=True)
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # STEP 4: HANDLE DATA TYPES
-    # ─────────────────────────────────────────────────────────────────────────
-    # Boolean arrays need special handling:
-    #   bool → float32 → interpolate → threshold(0.5) → bool
-    # This prevents interpolation artifacts in mask data while still
-    # allowing smooth boundaries (anti-aliasing effect).
-    # ─────────────────────────────────────────────────────────────────────────
-    isbool_dtypein = data_in.dtype == "bool"
-    isbool_dtypedst = False
-
-    cast = True
-    if dtype_dst is None:
-        cast = False
-        dtype_dst = data_in.dtype
-        if isbool_dtypein:
-            isbool_dtypedst = True
-    elif np.dtype(dtype_dst) == "bool":
-        isbool_dtypedst = True
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # STEP 5: ALLOCATE OUTPUT ARRAY
-    # ─────────────────────────────────────────────────────────────────────────
-    # Pre-allocate with nodata fill. Shape is built by replacing x,y dims
-    # with the new window dimensions while preserving other dims (band, time).
-    #
-    # Example shape transformation:
-    #   Input:  (4, 1000, 1000)  → 4 bands, 1000×1000 pixels
-    #   Output: (4, 500, 600)    → 4 bands, 500×600 pixels (new extent)
-    # ─────────────────────────────────────────────────────────────────────────
-    dict_shape_window_out = {"x": window_out.width, "y": window_out.height}
-    shape_out = tuple([named_shape[s] if s not in ["x", "y"] else dict_shape_window_out[s] for s in named_shape])
-    dst_nodata = dst_nodata or data_in.fill_value_default
-    if isbool_dtypedst:
-        dst_nodata = bool(dst_nodata)
-
-    destination = np.full(shape_out, fill_value=dst_nodata, dtype=dtype_dst)
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # STEP 6: CHECK INTERSECTION
-    # ─────────────────────────────────────────────────────────────────────────
-    # If the requested output region doesn't overlap the input data at all,
-    # return early with the nodata-filled array. Saves computation.
-    # ─────────────────────────────────────────────────────────────────────────
-    polygon_dst_crs = window_utils.window_polygon(window_out, dst_transform)
-
-    if not data_in.footprint(crs=dst_crs).intersects(polygon_dst_crs):
-        return GeoTensor(destination, transform=dst_transform, crs=dst_crs, fill_value_default=dst_nodata)
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # STEP 7: LOAD SOURCE DATA
-    # ─────────────────────────────────────────────────────────────────────────
-    # For lazy data (xarray/dask), read only the region that will contribute
-    # to the output, plus a 3-pixel buffer for interpolation edge handling.
-    # The buffer prevents edge artifacts from bilinear/cubic resampling.
-    # ─────────────────────────────────────────────────────────────────────────
+    # Windowed read of the input region that will contribute to the output,
+    # with a 3-pixel buffer for interpolation edge handling.
     if not isinstance(data_in, GeoTensor):
         geotensor_in = read_from_polygon(
-            data_in, polygon_dst_crs, crs_polygon=dst_crs, pad_add=(3, 3), return_only_data=False, trigger_load=True
+            data_in,
+            plan.polygon_dst_crs,
+            crs_polygon=plan.dst_crs,
+            pad_add=(3, 3),
+            return_only_data=False,
+            trigger_load=True,
         )
     else:
         geotensor_in = data_in
 
-    np_array_in = np.asanyarray(geotensor_in.values)
-
-    # Type casting for interpolation compatibility
-    if cast:
-        if isbool_dtypedst:
-            np_array_in = np_array_in.astype(np.float32)
-        else:
-            np_array_in = np_array_in.astype(dtype_dst)
-    elif isbool_dtypein:
-        np_array_in = np_array_in.astype(np.float32)
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # STEP 8: ITERATE OVER NON-SPATIAL DIMENSIONS
-    # ─────────────────────────────────────────────────────────────────────────
-    # rasterio.warp.reproject operates on 2D arrays. For multi-band or
-    # multi-temporal data, we iterate over all (time, band) combinations.
-    #
-    # Example: shape (4, 3, H, W) with dims ('time', 'band', 'y', 'x')
-    #   → iterates over 4×3=12 slices: (0,0), (0,1), (0,2), (1,0), ...
-    # ─────────────────────────────────────────────────────────────────────────
-    index_iter = [[(ns, i) for i in range(s)] for ns, s in named_shape.items() if ns not in ["x", "y"]]
-
-    for current_select_tuple in itertools.product(*index_iter):
-        # Extract the index tuple: (('time', 0), ('band', 1)) → (0, 1)
-        i_sel_tuple = tuple(t[1] for t in current_select_tuple)
-
-        np_array_iter = np_array_in[i_sel_tuple]
-        if isbool_dtypedst:
-            dst_iter_write = destination[i_sel_tuple].astype(np.float32)
-            dst_nodata_iter = float(dst_nodata)
-        else:
-            dst_iter_write = destination[i_sel_tuple]
-            dst_nodata_iter = dst_nodata
-
-        # ─────────────────────────────────────────────────────────────────────
-        # CORE REPROJECTION: rasterio.warp.reproject
-        # ─────────────────────────────────────────────────────────────────────
-        # This is where the actual coordinate transformation happens:
-        # 1. For each output pixel, compute its geographic coordinates
-        # 2. Transform those coords from dst_crs to src_crs
-        # 3. Sample the input raster at those locations using resampling
-        # 4. Write the result to the output array
-        # ─────────────────────────────────────────────────────────────────────
-        rasterio.warp.reproject(
-            np_array_iter,
-            dst_iter_write,
-            src_transform=geotensor_in.transform,
-            src_crs=crs_data_in,
-            dst_transform=dst_transform,
-            dst_crs=dst_crs,
-            src_nodata=geotensor_in.fill_value_default,
-            dst_nodata=dst_nodata_iter,
-            resampling=resampling,
-        )
-
-        # Convert interpolated floats back to boolean via thresholding
-        if isbool_dtypedst:
-            destination[i_sel_tuple] = dst_iter_write > 0.5
-
-    if return_only_data:
-        return destination
-
-    return GeoTensor(destination, transform=dst_transform, crs=dst_crs, fill_value_default=dst_nodata)
+    return _reproject_finalize(geotensor_in, plan, resampling=resampling, return_only_data=return_only_data)
 
 
 def read_from_tile(
