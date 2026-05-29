@@ -76,25 +76,81 @@ async def read_from_window(
     trigger_load: bool = False,
     boundless: bool = True,
 ) -> Union[AsyncGeoData, GeoTensor, np.ndarray, None]:
-    """Async sibling of :func:`georeader.read.read_from_window`.
+    """Read a pixel window from an async reader.
+
+    Mirrors :func:`georeader.read.read_from_window` for
+    :class:`AsyncGeoData` inputs. The async path has two branches:
+
+    1. **No-intersection branch (pure CPU, no ``await``):** if the requested
+       window does not overlap the data extent, the function returns a
+       synthetic padded array / :class:`GeoTensor` (when ``boundless=True``)
+       or ``None`` (when ``boundless=False``) directly. No I/O happens.
+    2. **Intersecting branch:** constructs the windowed view via the
+       reader's sync ``read_from_window`` (no I/O — just a view object),
+       then ``await``s ``view.load()`` only when materialisation is
+       requested. This is the single I/O hop.
+
+    Args:
+        data_in: Async reader (e.g. :class:`AsyncGeoTIFFReader`).
+        window: Pixel window to read (``col_off``, ``row_off``, ``width``,
+            ``height``) in the reader's coordinates.
+        return_only_data: If True, materialise and return only the numpy
+            array (drops the :class:`GeoTensor` wrapper). Forces an
+            ``await``.
+        trigger_load: If True, materialise and return a :class:`GeoTensor`.
+            Forces an ``await``. Ignored when ``return_only_data=True``.
+        boundless: If True, windows extending past the raster are padded
+            with ``data_in.fill_value_default``; if False, returns ``None``
+            on disjoint windows.
 
     Returns:
-        - When ``return_only_data=True``: ``np.ndarray`` (forces materialise).
-        - When ``trigger_load=True``: :class:`GeoTensor`.
-        - Otherwise: the unmaterialised windowed view (an :class:`AsyncGeoData`
-          subclass). Call ``await view.load()`` to materialise.
+        - ``np.ndarray`` when ``return_only_data=True``;
+        - :class:`GeoTensor` when ``trigger_load=True``;
+        - the lazy windowed view (an :class:`AsyncGeoData` instance) when
+          neither flag is set — call ``await view.load()`` yourself to
+          materialise at your own cadence;
+        - ``None`` when ``boundless=False`` and the window misses the data.
 
-    The no-intersection branch never awaits — it returns the synthetic padded
-    array / GeoTensor directly. The single ``await`` is on
-    ``view.load()`` when materialisation is requested.
+    Example:
+        >>> import rasterio.windows
+        >>> from georeader import asyncread
+        >>>
+        >>> window = rasterio.windows.Window(
+        ...     col_off=10, row_off=10, width=64, height=64
+        ... )
+        >>> # Materialise immediately
+        >>> gt = await asyncread.read_from_window(reader, window, trigger_load=True)
+        >>> print(gt.shape)  # (bands, 64, 64)
+        >>>
+        >>> # Or compose more before materialising — useful for fan-out
+        >>> view = await asyncread.read_from_window(reader, window)
+        >>> gt = await view.load()
+
+    See Also:
+        :func:`georeader.read.read_from_window`: sync counterpart with the
+        full parameter treatment.
     """
+    # No-intersection branch: handled entirely in CPU via shared helpers.
+    # No await — we never reach the reader's I/O.
     if not _window_intersects_data(data_in, window):
         return _build_no_intersect_result(data_in, window, boundless, return_only_data)
 
+    # `AsyncGeoData.read_from_window` is **sync** by contract — it returns
+    # a windowed VIEW (another AsyncGeoData), not a GeoTensor. No I/O has
+    # happened yet; the bytes only travel when someone calls `view.load()`.
     view = data_in.read_from_window(window=window, boundless=boundless)
 
-    # If a concrete reader happens to return a GeoTensor here (e.g. a fully
-    # eager async reader), accept it; otherwise materialise the view.
+    # The view-vs-GeoTensor dispatch below covers three caller intents:
+    #
+    #   1. Some hypothetical AsyncGeoData implementation might choose to
+    #      return a GeoTensor directly (e.g. an eager in-memory shim). The
+    #      isinstance check lets it pass through without a redundant
+    #      `await view.load()` — that would try to await on a non-awaitable.
+    #   2. Materialise NOW if the caller asked for it via `trigger_load` or
+    #      `return_only_data`. This is the single I/O hop in the async path.
+    #   3. Otherwise return the lazy view so the caller can fan out / await
+    #      at their own cadence (the recommended pattern for
+    #      `asyncio.gather`-style concurrency).
     if isinstance(view, GeoTensor):
         data_sel: Union[AsyncGeoData, GeoTensor] = view
     elif return_only_data or trigger_load:
@@ -116,7 +172,45 @@ async def read_from_bounds(
     trigger_load: bool = False,
     boundless: bool = True,
 ) -> Union[AsyncGeoData, GeoTensor, np.ndarray, None]:
-    """Async sibling of :func:`georeader.read.read_from_bounds`."""
+    """Read a geographic bounding box from an async reader.
+
+    Mirrors :func:`georeader.read.read_from_bounds`. The function converts
+    geographic ``bounds`` into a pixel window (in the reader's CRS),
+    optionally pads it, rounds it outward, and delegates to
+    :func:`read_from_window`. The single ``await`` is the windowed
+    materialisation inside ``read_from_window``.
+
+    Args:
+        data_in: Async reader.
+        bounds: ``(xmin, ymin, xmax, ymax)``. Interpreted in ``crs_bounds``
+            (defaults to the reader's CRS).
+        crs_bounds: Optional CRS for ``bounds`` (e.g. ``"EPSG:4326"``);
+            only the bounds are reprojected — the data stays in the
+            reader's CRS.
+        pad_add: ``(pad_rows, pad_cols)`` to expand the window before
+            reading (useful for interpolation edge context).
+        return_only_data: See :func:`read_from_window`.
+        trigger_load: See :func:`read_from_window`.
+        boundless: See :func:`read_from_window`.
+
+    Returns:
+        Same return contract as :func:`read_from_window`.
+
+    Example:
+        >>> # Bounds in WGS84 against a UTM raster — only the bounds get
+        >>> # reprojected; the returned chip is still in the reader's CRS.
+        >>> gt = await asyncread.read_from_bounds(
+        ...     reader,
+        ...     bounds=(3.00, 41.55, 3.01, 41.56),
+        ...     crs_bounds="EPSG:4326",
+        ...     trigger_load=True,
+        ... )
+
+    See Also:
+        :func:`georeader.read.read_from_bounds`: sync counterpart.
+        :func:`read_to_crs`: when you also want to warp the *data* (not just
+        the bounds) to a different CRS.
+    """
     window_in = window_from_bounds(data_in, bounds, crs_bounds)
     if any(p > 0 for p in pad_add):
         window_in = pad_window(window_in, pad_add)
@@ -140,7 +234,41 @@ async def read_from_polygon(
     boundless: bool = True,
     window_surrounding: bool = False,
 ) -> Union[AsyncGeoData, GeoTensor, np.ndarray, None]:
-    """Async sibling of :func:`georeader.read.read_from_polygon`."""
+    """Read the bounding rectangle of a polygon from an async reader.
+
+    Mirrors :func:`georeader.read.read_from_polygon`. Reads the **minimum
+    bounding rectangle** containing ``polygon`` — not the polygon shape
+    itself. For actual polygon masking, combine the result with
+    :func:`rasterio.features.geometry_mask` post-read.
+
+    Useful for irregular AOIs (admin boundaries, watersheds, fields) where
+    a rectangular bounds call would over-fetch. ``MultiPolygon`` returns a
+    single rectangle containing all parts.
+
+    Args:
+        data_in: Async reader.
+        polygon: Shapely ``Polygon`` or ``MultiPolygon`` in ``crs_polygon``.
+        crs_polygon: Optional CRS for ``polygon`` (e.g. ``"EPSG:4326"``).
+        pad_add: ``(pad_rows, pad_cols)`` to expand the window before
+            reading.
+        return_only_data: See :func:`read_from_window`.
+        trigger_load: See :func:`read_from_window`.
+        boundless: See :func:`read_from_window`.
+        window_surrounding: If True, adds a 1-pixel buffer around the
+            polygon's bbox to guarantee complete coverage when polygon
+            vertices align exactly with pixel boundaries.
+
+    Returns:
+        Same return contract as :func:`read_from_window`.
+
+    Example:
+        >>> from shapely.geometry import box
+        >>> aoi = box(500200, 4599400, 500800, 4600000)  # UTM 31N
+        >>> gt = await asyncread.read_from_polygon(reader, aoi, trigger_load=True)
+
+    See Also:
+        :func:`georeader.read.read_from_polygon`: sync counterpart.
+    """
     window_in = window_from_polygon(
         data_in, polygon, crs_polygon, window_surrounding=window_surrounding
     )
@@ -165,7 +293,40 @@ async def read_from_center_coords(
     trigger_load: bool = False,
     boundless: bool = True,
 ) -> Union[AsyncGeoData, GeoTensor, np.ndarray, None]:
-    """Async sibling of :func:`georeader.read.read_from_center_coords`."""
+    """Read a fixed-shape chip centred on a geographic coordinate.
+
+    Mirrors :func:`georeader.read.read_from_center_coords`. Useful for ML
+    training-chip extraction around points of interest — the
+    ``center_coords`` map to pixel ``(height/2, width/2)`` in the output.
+
+    Args:
+        data_in: Async reader.
+        center_coords: ``(x, y)`` in ``crs_center_coords`` (defaults to the
+            reader's CRS). For WGS84, this is ``(lon, lat)``.
+        shape: Output chip size as ``(height, width)`` in pixels.
+        crs_center_coords: Optional CRS for ``center_coords``.
+        return_only_data: See :func:`read_from_window`.
+        trigger_load: See :func:`read_from_window`.
+        boundless: See :func:`read_from_window`. When ``True``, chips that
+            partially fall outside the raster are padded to maintain
+            ``shape`` exactly — handy for fixed-size ML inputs.
+
+    Returns:
+        Same return contract as :func:`read_from_window`.
+
+    Example:
+        >>> # 256x256 chip centred on Madrid, sampled in WGS84
+        >>> gt = await asyncread.read_from_center_coords(
+        ...     reader,
+        ...     center_coords=(-3.7038, 40.4168),
+        ...     shape=(256, 256),
+        ...     crs_center_coords="EPSG:4326",
+        ...     trigger_load=True,
+        ... )
+
+    See Also:
+        :func:`georeader.read.read_from_center_coords`: sync counterpart.
+    """
     window = window_from_center_coords(data_in, center_coords, shape, crs_center_coords)
     return await read_from_window(
         data_in,
@@ -188,14 +349,71 @@ async def read_reproject(
     return_only_data: bool = False,
     dst_nodata: Optional[int] = None,
 ) -> Union[GeoTensor, np.ndarray]:
-    """Async sibling of :func:`georeader.read.read_reproject`.
+    """Reproject from an async reader to a target CRS / resolution / extent.
 
-    Streams only the input window that contributes to the destination grid —
-    matches the sync path's "windowed read + per-slice warp" semantics
-    exactly. The non-I/O setup and warp loop are shared with the sync path via
-    :func:`georeader.read._reproject_setup` and
-    :func:`georeader.read._reproject_finalize`.
+    Mirrors :func:`georeader.read.read_reproject`. Streams **only the input
+    window required for the destination grid** — does not pre-load the
+    entire raster. The non-I/O code paths (destination grid setup,
+    intersection check, dtype handling, per-band warp loop) are shared with
+    the sync path via :func:`georeader.read._reproject_setup` and
+    :func:`georeader.read._reproject_finalize`, so the warp result is
+    bit-identical to ``read.read_reproject`` on the same input.
+
+    The orchestration has three branches:
+
+    1. **No-op fast path** — when source and destination CRS match and the
+       grids align, the function skips the warp and does a plain
+       ``await read_from_window(...)`` on the source-aligned window. This
+       is ~10–100× faster for aligned data.
+    2. **Non-intersecting** — when the destination extent does not overlap
+       the source, returns the pre-allocated nodata-filled
+       :class:`GeoTensor` directly. No I/O.
+    3. **Normal path** — windowed read of the input region
+       (``await read_from_polygon(..., trigger_load=True)`` with a 3-pixel
+       buffer for interpolation edges) followed by the in-process warp.
+
+    Args:
+        data_in: Async reader (or pre-loaded :class:`GeoTensor`).
+        dst_crs: Destination CRS. ``None`` reuses ``data_in.crs`` (useful
+            for resolution-only changes).
+        bounds: ``(xmin, ymin, xmax, ymax)`` in ``dst_crs``. Mutually
+            exclusive with ``window_out`` — provide one.
+        resolution_dst_crs: Target resolution in ``dst_crs`` units. ``float``
+            applies to both axes; tuple is ``(res_x, res_y)``.
+        dst_transform: Pre-computed output transform (useful for aligning
+            to an existing grid). When set, ``bounds`` and ``window_out``
+            describe the same grid the transform encodes.
+        window_out: Pre-computed output window. Defines output dimensions.
+        resampling: Resampling algorithm from :class:`rasterio.warp.Resampling`.
+            Default is ``cubic_spline`` (smooth, good for continuous data);
+            use ``nearest`` for categorical data.
+        dtype_dst: Output dtype. ``None`` matches ``data_in.dtype``.
+        return_only_data: If True, return only the numpy array.
+        dst_nodata: Fill value for out-of-bounds destination pixels.
+            ``None`` uses ``data_in.fill_value_default``.
+
+    Returns:
+        :class:`GeoTensor` (or ``np.ndarray`` when ``return_only_data=True``)
+        on the destination grid.
+
+    Example:
+        >>> # Reproject onto an EPSG:4326 grid at 0.0001° resolution
+        >>> gt = await asyncread.read_reproject(
+        ...     reader,
+        ...     dst_crs="EPSG:4326",
+        ...     bounds=(3.00, 41.55, 3.01, 41.56),
+        ...     resolution_dst_crs=0.0001,
+        ... )
+
+    See Also:
+        :func:`georeader.read.read_reproject`: sync counterpart with the
+        full parameter and example treatment.
+        :func:`read_to_crs`, :func:`read_reproject_like`: thin wrappers
+        for the common "just change CRS" and "match a template grid" cases.
     """
+    # The three-branch structure mirrors `read.read_reproject` exactly —
+    # only the I/O step (Branch 3) uses `await` here. See `_ReprojectPlan`
+    # for the branch semantics.
     plan = _reproject_setup(
         data_in=data_in,
         dst_crs=dst_crs,
@@ -207,6 +425,7 @@ async def read_reproject(
         dst_nodata=dst_nodata,
     )
 
+    # Branch 1 — Fast path. Aligned grids: warp-free windowed read.
     if plan.fast_path_window is not None:
         gt = await read_from_window(
             data_in,
@@ -216,6 +435,8 @@ async def read_reproject(
         )
         return gt  # type: ignore[return-value]
 
+    # Branch 2 — Non-intersecting. Return the nodata-filled destination
+    # without any I/O.
     if plan.nonintersecting:
         return GeoTensor(
             plan.destination,
@@ -224,6 +445,11 @@ async def read_reproject(
             fill_value_default=plan.dst_nodata,
         )
 
+    # Branch 3 — Normal path. One await against the reader for ONLY the
+    # input region required by the destination grid (3-pixel pad for edge
+    # context). When `data_in` is already a GeoTensor the data is in memory
+    # so no fetch happens — `read_reproject` accepting a GeoTensor is the
+    # "warp this array" entry point and we honour it here too.
     if isinstance(data_in, GeoTensor):
         geotensor_in: GeoTensor = data_in
     else:
@@ -236,6 +462,7 @@ async def read_reproject(
             trigger_load=True,
         )  # type: ignore[assignment]
 
+    # Warp is in-process CPU — no `await`, by design. See module docstring.
     return _reproject_finalize(
         geotensor_in, plan, resampling=resampling, return_only_data=return_only_data
     )
@@ -250,7 +477,37 @@ async def read_reproject_like(
     return_only_data: bool = False,
     dst_nodata: Optional[int] = None,
 ) -> Union[GeoTensor, np.ndarray]:
-    """Async sibling of :func:`georeader.read.read_reproject_like`."""
+    """Reproject from an async reader onto another grid's CRS + transform + shape.
+
+    Mirrors :func:`georeader.read.read_reproject_like`. The canonical use
+    case is **stack alignment**: read several rasters and force them onto
+    the exact pixel grid of a reference :class:`GeoTensor` so they can be
+    concatenated, differenced, or fed to a CNN as channels.
+
+    Args:
+        data_in: Async reader to reproject.
+        data_like: Reference object with ``crs``, ``transform``, ``shape``,
+            and ``res`` — typically another :class:`GeoTensor`.
+        resolution_dst: Override ``data_like``'s resolution while still
+            using its CRS and transform (rare; useful for pyramid building).
+        resampling: See :func:`read_reproject`.
+        dtype_dst: See :func:`read_reproject`.
+        return_only_data: See :func:`read_reproject`.
+        dst_nodata: See :func:`read_reproject`.
+
+    Returns:
+        :class:`GeoTensor` matching ``data_like``'s grid exactly
+        (``crs``, ``transform``, spatial shape).
+
+    Example:
+        >>> # Align an async-fetched chip to the same grid as an existing chip
+        >>> aligned = await asyncread.read_reproject_like(reader, reference_geotensor)
+        >>> assert aligned.crs == reference_geotensor.crs
+        >>> assert aligned.shape[-2:] == reference_geotensor.shape[-2:]
+
+    See Also:
+        :func:`georeader.read.read_reproject_like`: sync counterpart.
+    """
     shape_out = data_like.shape[-2:]
     if resolution_dst is not None:
         if isinstance(resolution_dst, float):
@@ -281,7 +538,36 @@ async def read_to_crs(
     resolution_dst_crs: Optional[Union[float, Tuple[float, float]]] = None,
     return_only_data: bool = False,
 ) -> Union[AsyncGeoData, GeoTensor, np.ndarray]:
-    """Async sibling of :func:`georeader.read.read_to_crs`."""
+    """Reproject an async reader to a different CRS.
+
+    Mirrors :func:`georeader.read.read_to_crs`. Convenience wrapper around
+    :func:`read_reproject` for the common case of "just change the CRS" —
+    the destination transform and window are computed via
+    :func:`~georeader.read.calculate_transform_window` from the source's
+    bounds at the requested ``resolution_dst_crs``.
+
+    Args:
+        data_in: Async reader.
+        dst_crs: Destination CRS (e.g. ``"EPSG:4326"``, ``"EPSG:3857"``).
+        resampling: See :func:`read_reproject`.
+        resolution_dst_crs: Target resolution in ``dst_crs`` units. ``None``
+            picks a resolution that matches the source's pixel size.
+        return_only_data: See :func:`read_reproject`.
+
+    Returns:
+        :class:`GeoTensor` in ``dst_crs``. When ``data_in.crs == dst_crs``
+        the function short-circuits and returns ``data_in`` unchanged (no
+        I/O, no warp).
+
+    Example:
+        >>> # UTM 31N → Web Mercator
+        >>> gt_3857 = await asyncread.read_to_crs(reader, dst_crs="EPSG:3857")
+        >>> print(gt_3857.crs)  # 'EPSG:3857'
+
+    See Also:
+        :func:`georeader.read.read_to_crs`: sync counterpart.
+        :func:`read_reproject_like`: when you have a template grid to match.
+    """
     if window_utils.compare_crs(data_in.crs, dst_crs):
         return data_in
 
@@ -306,12 +592,50 @@ async def resize(
     resampling: rasterio.warp.Resampling = rasterio.warp.Resampling.cubic_spline,
     return_only_data: bool = False,
 ) -> Union[GeoTensor, np.ndarray]:
-    """Async sibling of :func:`georeader.read.resize`.
+    """Resample an async reader to a different resolution (same CRS).
 
-    Note: when ``anti_aliasing=True`` and the input is lazy, the anti-aliasing
-    step materialises the input via the lazy view's ``.values``. Pass an
-    already-materialised :class:`GeoTensor` if you need to avoid the eager
-    load — this matches the sync path's contract.
+    Mirrors :func:`georeader.read.resize`. Useful for downsampling
+    high-res imagery, upsampling coarse data, matching resolution across
+    multi-source datasets, or building image pyramids.
+
+    For downsampling (``resolution_dst > resolution_src``), the function
+    applies a Gaussian anti-aliasing filter by default to prevent
+    aliasing artifacts (moiré patterns, jagged edges). For upsampling,
+    anti-aliasing is a no-op.
+
+    Args:
+        data_in: Async reader (or pre-loaded :class:`GeoTensor`).
+        resolution_dst: Target resolution in the source CRS units. ``float``
+            applies to both axes; tuple is ``(res_y, res_x)``.
+        window_out: Pre-computed output window. ``None`` computes from the
+            scale factor (rounded up to ensure complete coverage).
+        anti_aliasing: Apply a Gaussian filter before downsampling.
+            Strongly recommended for downsampling continuous data.
+        anti_aliasing_sigma: Custom Gaussian σ. ``None`` uses ``(scale-1)/2``.
+        resampling: Resampling algorithm.
+        return_only_data: See :func:`read_reproject`.
+
+    Returns:
+        :class:`GeoTensor` at the requested resolution, same CRS as input.
+
+    .. warning::
+
+       When ``anti_aliasing=True`` and the input is a lazy async reader,
+       :func:`georeader.read.apply_anti_aliasing` runs sync and reads the
+       full extent eagerly via the reader's sync ``.values``-like access.
+       To stream only a windowed region first, pre-load that region with
+       :func:`read_from_bounds` (or similar) and pass the resulting
+       :class:`GeoTensor` here. Or pass ``anti_aliasing=False`` to skip
+       the filter entirely.
+
+    Example:
+        >>> # Sentinel-2 native 10m → 30m (Landsat-like resolution)
+        >>> gt_30m = await asyncread.resize(reader, resolution_dst=30.0)
+        >>> print(gt_30m.res)  # (30.0, 30.0)
+
+    See Also:
+        :func:`georeader.read.resize`: sync counterpart with the full
+        parameter and example treatment.
     """
     resolution_or = data_in.res
     if isinstance(resolution_dst, numbers.Number):
@@ -359,7 +683,67 @@ async def read_from_tile(
     resolution_dst_crs: Optional[Union[float, Tuple[float, float]]] = None,
     assert_if_not_intersects: bool = False,
 ) -> Optional[GeoTensor]:
-    """Async sibling of :func:`georeader.read.read_from_tile`."""
+    """Read an XYZ web-map tile from an async reader.
+
+    Mirrors :func:`georeader.read.read_from_tile`. The primary use case is
+    serving tiles for Leaflet / OpenLayers / Mapbox / etc. from arbitrary
+    COG data: the function fetches **only the bytes for the requested
+    tile region** from the source raster, then reprojects that small chip
+    into Web Mercator (the standard web-map CRS).
+
+    Tile coordinates follow the OSM Slippy Map / TMS convention:
+
+    - The world is split into ``2**z`` × ``2**z`` tiles at zoom ``z``.
+    - ``(x, y) = (0, 0)`` is the top-left (north-west).
+    - ``x`` increases eastward; ``y`` increases southward.
+
+    Algorithm:
+
+    1. Convert ``(x, y, z)`` to geographic bounds in Web Mercator via
+       :func:`mercantile.xy_bounds`.
+    2. Early-return ``None`` if the tile does not intersect the data
+       footprint (matches typical tile-server "empty tile" behaviour).
+    3. If the reader exposes its own ``read_from_tile`` (sync or async),
+       delegate to it for the optimised native-format path.
+    4. Otherwise, fall through to :func:`read_from_polygon` (when the tile
+       happens to be in the data's CRS and no resize is requested) or
+       :func:`read_reproject` (the general case — windowed read of the
+       tile region, then warp into the destination CRS at the requested
+       output shape).
+
+    Args:
+        data: Async reader.
+        x: Tile column index (``0`` to ``2**z - 1``).
+        y: Tile row index (``0`` to ``2**z - 1``).
+        z: Zoom level (typically 0–22).
+        dst_crs: Output CRS. Defaults to Web Mercator (``EPSG:3857``), the
+            standard for web maps. Set to ``None`` to use the data's
+            native CRS.
+        out_shape: Output tile dimensions as ``(height, width)``. Defaults
+            to ``(256, 256)`` — the de-facto web-tile standard.
+        resolution_dst_crs: Override the output resolution explicitly.
+            Ignored when ``out_shape`` is provided.
+        assert_if_not_intersects: Raise ``AssertionError`` instead of
+            returning ``None`` for non-intersecting tiles.
+
+    Returns:
+        :class:`GeoTensor` of shape ``(bands, out_shape[0], out_shape[1])``,
+        georeferenced to ``dst_crs`` at the tile's geographic location, or
+        ``None`` when the tile misses the data and ``assert_if_not_intersects``
+        is ``False``.
+
+    Example:
+        >>> import mercantile
+        >>>
+        >>> # Pick a tile at zoom 14 covering a lon/lat point
+        >>> t = mercantile.tile(3.0029, 41.5502, 14)
+        >>> tile_gt = await asyncread.read_from_tile(reader, x=t.x, y=t.y, z=t.z)
+        >>> if tile_gt is not None:
+        ...     print(tile_gt.shape)  # (bands, 256, 256)
+
+    See Also:
+        :func:`georeader.read.read_from_tile`: sync counterpart.
+    """
     bounds_wgs = mercantile.xy_bounds(int(x), int(y), int(z))
     polygon_crs_webmercator = box(
         bounds_wgs.left, bounds_wgs.bottom, bounds_wgs.right, bounds_wgs.top
@@ -371,8 +755,25 @@ async def read_from_tile(
         assert not assert_if_not_intersects, "Tile does not intersect data"
         return None
 
-    # Fast-path delegation when the reader implements its own tile reader.
-    # Support both sync (rare) and async (likely) overrides.
+    # Optional fast-path delegation.
+    #
+    # `AsyncGeoData` does NOT require `read_from_tile` on the protocol —
+    # it's an opt-in optimisation. A reader can expose one if the
+    # underlying format (or a server-side tiling API) makes per-tile
+    # reads cheaper than going through the generic windowed-read +
+    # warp path below.
+    #
+    # We dispatch dynamically because:
+    #   - sync overrides exist (e.g. RasterioReader.read_from_tile uses
+    #     a WarpedVRT — sync, but still cheap). `inspect.iscoroutinefunction`
+    #     keeps us from `await`-ing a non-coroutine and crashing.
+    #   - async overrides will be the common case for future readers that
+    #     wrap a server-side tile endpoint (XYZ source, COG-tile API).
+    #
+    # `out_shape is None` means "don't resize", which the generic path
+    # below handles specifically — skip delegation in that case so we
+    # don't have to plumb the no-resize semantics through every
+    # custom override.
     if out_shape is not None and hasattr(data, "read_from_tile"):
         reader_tile = data.read_from_tile  # type: ignore[attr-defined]
         if inspect.iscoroutinefunction(reader_tile):
