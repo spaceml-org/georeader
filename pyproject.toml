@@ -41,6 +41,10 @@ mypy = "^1.5.1"
 pre-commit = "^3.4.0"
 tox = "^4.11.1"
 scikit-image = "^0.24.0"
+# Runs the docs/ notebooks as integration tests (`make test-notebooks`).
+# ipykernel provides the kernel nbmake executes the notebooks in.
+nbmake = "^1"
+ipykernel = "^6.29.5"
 # CI installs the dev group; pull in the carbonmapper extras here
 # explicitly so the carbonmapper reader's tests run in CI even though
 # the dependencies are gated as optional for end users.

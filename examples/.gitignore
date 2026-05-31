@@ -1,0 +1,6 @@
+# Data files for the docs/ notebook integration tests live here but are NOT
+# committed (rasters are large and some are under non-redistributable licences).
+# Ignore everything except this file and the README.
+*
+!.gitignore
+!README.md

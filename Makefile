@@ -55,6 +55,11 @@ test-cov: ## Run tests with coverage report
 	@echo "🧪 Running tests with coverage"
 	@poetry run pytest tests/ -v --cov=georeader --cov-report=term-missing --cov-report=html
 
+.PHONY: test-notebooks
+test-notebooks: ## Run docs/ notebooks as integration tests (needs 'make install-all'; skips notebooks whose data/credentials are missing)
+	@echo "🧪 Running notebook integration tests"
+	@poetry run pytest --nbmake docs/ -v --nbmake-timeout=600
+
 .PHONY: build
 build: clean-build ## Build wheel file using poetry
 	@echo "📦 Building wheel file"
