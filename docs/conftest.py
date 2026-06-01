@@ -29,7 +29,7 @@ Providing the inputs (see ``examples/README.md`` for details)
 * ``examples/`` data files.
 * PRISMA / EnMAP (Azure):  ``SAS_TOKEN``, ``AZURE_STORAGE_ACCOUNT``, ``CONTAINER_NAME``
 * EMIT (NASA Earthdata):        ``EARTHDATA_TOKEN`` or ``~/.georeader/auth_emit.json``
-* Carbon Mapper:                ``CARBONMAPPER_TOKEN`` (or ``CARBONMAPPER_EMAIL`` + ``CARBONMAPPER_PASSWORD``) or ``~/.georeader/auth_carbonmapper.json``
+* Carbon Mapper:                ``CARBONMAPPER_TOKEN`` or ``~/.georeader/auth_carbonmapper.json``
 * Google Earth Engine:          ``EARTHENGINE_SERVICE_ACCOUNT_KEY`` (service-account JSON key: a file path or the raw JSON)
 
 In GitHub Actions these can be wired as repository secrets and exported as the
@@ -115,13 +115,13 @@ NOTEBOOK_REQUIREMENTS: dict[str, list[Requirement]] = {
     "prisma_with_cloudsen12.ipynb": [
         Requirement(
             files=["PRISMA/PRS_L1_STD_OFFL_20241109073054_20241109073059_0001.he5"],
-            env=["SAS_TOKEN"],
+            env=["SAS_TOKEN","AZURE_STORAGE_ACCOUNT","CONTAINER_NAME"],
         ),
     ],
     "enmap_with_cloudsen12.ipynb": [
         Requirement(
             files=[f"EnMAP/{_ENMAP_TILE}/{_ENMAP_TILE}-METADATA.XML"],
-            env=["SAS_TOKEN"],
+            env=["SAS_TOKEN","AZURE_STORAGE_ACCOUNT","CONTAINER_NAME"],
         ),
     ],
     # --- EMIT: local file, NASA Earthdata token or auth file ----------------
@@ -136,7 +136,7 @@ NOTEBOOK_REQUIREMENTS: dict[str, list[Requirement]] = {
     "simultaneous_prisma_emit.ipynb": [
         Requirement(
             files=["PRISMA/PRS_L1_STD_OFFL_20230929102749_20230929102753_0001.he5"],
-            env=["SAS_TOKEN"],
+            env=["SAS_TOKEN","AZURE_STORAGE_ACCOUNT","CONTAINER_NAME"],
         ),
         Requirement(
             files=["EMIT/EMIT_L1B_RAD_001_20230929T122534_2327208_039.nc"],
@@ -159,13 +159,13 @@ NOTEBOOK_REQUIREMENTS: dict[str, list[Requirement]] = {
     # --- Carbon Mapper API token --------------------------------------------
     "api_explore.ipynb": [
         Requirement(
-            env=["CARBONMAPPER_TOKEN", "CARBONMAPPER_EMAIL"],
+            env=["CARBONMAPPER_TOKEN"],
             paths=["~/.georeader/auth_carbonmapper.json"],
         ),
     ],
     "products_explore.ipynb": [
         Requirement(
-            env=["CARBONMAPPER_TOKEN", "CARBONMAPPER_EMAIL"],
+            env=["CARBONMAPPER_TOKEN"],
             paths=["~/.georeader/auth_carbonmapper.json"],
         ),
     ],
