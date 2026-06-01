@@ -707,8 +707,11 @@ class EnMAP:
             gain = self.gain_arr[name_coef]
             offset = self.offs_arr[name_coef]
             invalids = raster_product.values == raster_product.fill_value_default
-            raster_product.values = (
-                gain[:, np.newaxis, np.newaxis] * raster_product.values
+            # Arithmetic on a GeoTensor returns a new (float) GeoTensor preserving
+            # georeferencing; we cannot mutate .values in place here because the
+            # dtype changes from integer QCAL to float radiance.
+            raster_product = (
+                gain[:, np.newaxis, np.newaxis] * raster_product
                 + offset[:, np.newaxis, np.newaxis]
             ) * SC_COEFF
             raster_product.values[invalids] = self.fill_value_default

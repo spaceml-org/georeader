@@ -292,11 +292,12 @@ class SpotVGT:
         """
         
         sm = self.load_sm(boundless=boundless)
-        valids = sm.copy()
         invalids = mask_only_sm(sm.values)
-        valids.values = ~invalids
-        valids.fill_value_default = False
-        
+        # ~invalids is boolean while sm is integer; build a new GeoTensor rather
+        # than assigning into .values (which forbids dtype changes in place).
+        valids = geotensor.GeoTensor(~invalids, transform=sm.transform, crs=sm.crs,
+                                     fill_value_default=False)
+
         return valids
     
     def load_sm_cloud_mask(self, mask_undefined:bool=False, boundless:bool=True) -> geotensor.GeoTensor:
