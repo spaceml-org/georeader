@@ -369,9 +369,11 @@ class ProbaV:
         Returns:
             geotensor.GeoTensor: mask with the same shape as the image
         """
-        valids = self.load_sm(boundless=boundless)
-        valids.values = ~mask_only_sm(valids.values)
-        valids.fill_value_default = False
+        sm = self.load_sm(boundless=boundless)
+        # ~mask_only_sm(...) is boolean while sm is integer; build a new GeoTensor
+        # rather than assigning into .values (which forbids dtype changes in place).
+        valids = geotensor.GeoTensor(~mask_only_sm(sm.values), transform=sm.transform,
+                                     crs=sm.crs, fill_value_default=False)
         return valids
 
     def load_sm_cloud_mask(

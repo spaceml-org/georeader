@@ -564,7 +564,9 @@ def interpolate_20mbands_s2ee(geotensor:GeoTensor,
     if need_pad:
         slice_rows = slice(pad_r[0], None if pad_r[1] <= 0 else -pad_r[1])
         slice_cols = slice(pad_c[0], None if pad_c[1] <= 0 else -pad_c[1])
-        b20ms2_20m10m.values = b20ms2_20m10m.values[(slice(None), slice_rows, slice_cols)]
+        # Slicing returns a new GeoTensor with an updated transform; assigning a
+        # cropped array into .values is rejected because the shape changes.
+        b20ms2_20m10m = b20ms2_20m10m[(slice(None), slice_rows, slice_cols)]
     
     geotensor.values[indexes_20m,...] = np.round(b20ms2_20m10m.values * 10_000).astype(np.uint16)
 
