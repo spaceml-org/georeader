@@ -62,17 +62,20 @@ network access.
 
 ## Credentials
 
-Set these as environment variables locally (e.g. `export SAS_TOKEN=...`) or as
-**GitHub Actions repository secrets** exported before `make test-notebooks`.
-When a credential is present, the notebook downloads its own data and the test
-runs; otherwise the test is skipped.
+Set these as environment variables. The easiest way locally is to copy
+[`../.env.sample`](../.env.sample) to a repo-root `.env` (git-ignored) and fill in
+what you have — `docs/conftest.py` loads it automatically before running the
+notebooks. They can also be exported in your shell, or wired as **GitHub Actions
+repository secrets** (see `.github/workflows/test.yml`). When a credential is
+present the notebook downloads its own data and the test runs; otherwise it is
+skipped.
 
 | Provider | Notebooks | Variables / files |
 |---|---|---|
 | **Azure** (PRISMA / EnMAP) | `prisma_with_cloudsen12`, `enmap_with_cloudsen12`, `simultaneous_prisma_emit` | `SAS_TOKEN`, `AZURE_STORAGE_ACCOUNT`, `CONTAINER_NAME` |
 | **NASA Earthdata** (EMIT) | `emit_explore`, `simultaneous_prisma_emit` | `EARTHDATA_TOKEN` (bearer token from <https://urs.earthdata.nasa.gov/profile>) **or** `~/.georeader/auth_emit.json` `{"user": "...", "password": "..."}` |
 | **Carbon Mapper** | `carbonmapper/api_explore`, `carbonmapper/products_explore` | `CARBONMAPPER_TOKEN` (or `CARBONMAPPER_EMAIL` + `CARBONMAPPER_PASSWORD`) **or** `~/.georeader/auth_carbonmapper.json` |
-| **Google Earth Engine** | `run_in_gee_image`, `s2_mosaic_from_gee`, `convert_to_radiance` | (`EARTHENGINE_TOKEN` **or** a pre-authorized `~/.config/earthengine/credentials`) **and** `EARTHENGINE_PROJECT` (Cloud project required by `ee.Initialize()`) |
+| **Google Earth Engine** | `run_in_gee_image`, `s2_mosaic_from_gee`, `convert_to_radiance` | `EARTHENGINE_SERVICE_ACCOUNT_KEY` — a service-account JSON key, as a file path or raw JSON (no Cloud project required). Auth is wired by `georeader.readers.ee_image.initialize()`. |
 
 ## `cloudsen12_models`
 

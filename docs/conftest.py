@@ -30,7 +30,7 @@ Providing the inputs (see ``examples/README.md`` for details)
 * PRISMA / EnMAP (Azure):  ``SAS_TOKEN``, ``AZURE_STORAGE_ACCOUNT``, ``CONTAINER_NAME``
 * EMIT (NASA Earthdata):        ``EARTHDATA_TOKEN`` or ``~/.georeader/auth_emit.json``
 * Carbon Mapper:                ``CARBONMAPPER_TOKEN`` (or ``CARBONMAPPER_EMAIL`` + ``CARBONMAPPER_PASSWORD``) or ``~/.georeader/auth_carbonmapper.json``
-* Google Earth Engine:          (``EARTHENGINE_TOKEN`` or ``~/.config/earthengine/credentials``) AND ``EARTHENGINE_PROJECT``
+* Google Earth Engine:          ``EARTHENGINE_SERVICE_ACCOUNT_KEY`` (service-account JSON key: a file path or the raw JSON)
 
 In GitHub Actions these can be wired as repository secrets and exported as the
 matching environment variables before ``make test-notebooks`` runs.
@@ -45,7 +45,18 @@ from pathlib import Path
 import pytest
 
 # Resolve examples/ relative to this file (docs/conftest.py -> repo root -> examples/)
-_EXAMPLES_DIR = Path(__file__).resolve().parent.parent / "examples"
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_EXAMPLES_DIR = _REPO_ROOT / "examples"
+
+# Load credentials/config from a repo-root .env file if present (and python-dotenv
+# is installed) so they are available both for the gating below and for the
+# notebook kernels (which inherit this process's environment). See .env.sample.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(_REPO_ROOT / ".env")
+except ImportError:
+    pass
 
 
 def _file_available(path: Path) -> bool:
@@ -158,21 +169,18 @@ NOTEBOOK_REQUIREMENTS: dict[str, list[Requirement]] = {
             paths=["~/.georeader/auth_carbonmapper.json"],
         ),
     ],
-    # --- Google Earth Engine: auth (token or credentials file) AND a Cloud
-    # project (ee.Initialize() requires `project=`, supplied via EARTHENGINE_PROJECT).
-    # Two groups -> both must be satisfied, so the notebook is skipped (not failed)
-    # when either is missing.
+    # --- Google Earth Engine: a service-account key (a path to the JSON key
+    # file or the raw JSON string). The notebooks initialize EE via
+    # georeader.readers.ee_image.initialize(); a Cloud project is not required
+    # for service-account auth.
     "convert_to_radiance.ipynb": [
-        Requirement(env=["EARTHENGINE_TOKEN"], paths=["~/.config/earthengine/credentials"]),
-        Requirement(env=["EARTHENGINE_PROJECT"]),
+        Requirement(env=["EARTHENGINE_SERVICE_ACCOUNT_KEY"]),
     ],
     "run_in_gee_image.ipynb": [
-        Requirement(env=["EARTHENGINE_TOKEN"], paths=["~/.config/earthengine/credentials"]),
-        Requirement(env=["EARTHENGINE_PROJECT"]),
+        Requirement(env=["EARTHENGINE_SERVICE_ACCOUNT_KEY"]),
     ],
     "s2_mosaic_from_gee.ipynb": [
-        Requirement(env=["EARTHENGINE_TOKEN"], paths=["~/.config/earthengine/credentials"]),
-        Requirement(env=["EARTHENGINE_PROJECT"]),
+        Requirement(env=["EARTHENGINE_SERVICE_ACCOUNT_KEY"]),
     ],
 }
 

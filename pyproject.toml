@@ -50,6 +50,8 @@ ipykernel = "^6.29.5"
 # the dependencies are gated as optional for end users.
 pydantic = ">=2"
 requests = ">=2"
+# Loads the repo-root .env (credentials/config) in docs/conftest.py for the notebook tests.
+python-dotenv = "^1.0.0"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = "^1.4.2"

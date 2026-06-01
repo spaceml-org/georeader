@@ -183,7 +183,42 @@ except ImportError:
 
 from georeader.readers.ee_utils import gee_method_with_timeout, DEFAULT_EE_TIMEOUT
 
-def export_image_fast(image:ee.Image, 
+
+def initialize(project: Optional[str] = None) -> None:
+    """Initialize Earth Engine from environment variables.
+
+    If ``EARTHENGINE_SERVICE_ACCOUNT_KEY`` is set, authenticate with a service
+    account (no Cloud project required): the value is either a path to the JSON
+    key file **or** the raw JSON string (handy for CI secrets), used with
+    :class:`ee.ServiceAccountCredentials`. Otherwise fall back to an interactive
+    ``ee.Authenticate()`` and initialize with the Cloud project from ``project``
+    or ``$EARTHENGINE_PROJECT``.
+
+    Args:
+        project: Google Cloud project id, used only for the interactive (non
+            service-account) fallback. Defaults to ``$EARTHENGINE_PROJECT``.
+
+    Example:
+        >>> from georeader.readers import ee_image
+        >>> ee_image.initialize()  # uses EARTHENGINE_SERVICE_ACCOUNT_KEY
+    """
+    import os
+
+    project = project or os.environ.get("EARTHENGINE_PROJECT")
+    key = os.environ.get("EARTHENGINE_SERVICE_ACCOUNT_KEY")
+    if key:
+        # key is either a path to the JSON key file or the raw JSON string;
+        # ee.ServiceAccountCredentials derives the service-account email from it.
+        if os.path.isfile(key):
+            credentials = ee.ServiceAccountCredentials(email=None, key_file=key)
+        else:
+            credentials = ee.ServiceAccountCredentials(email=None, key_data=key)
+        ee.Initialize(credentials)
+    else:
+        ee.Authenticate()
+        ee.Initialize(project=project)
+
+def export_image_fast(image:ee.Image,
                       geometry:Union[ee.Geometry, Polygon, MultiPolygon],
                       cat_bands:bool=True,
                       fill_value_default:Optional[float]=0,
