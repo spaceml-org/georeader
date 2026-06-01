@@ -61,6 +61,12 @@ test-notebooks: ## Run docs/ notebooks as integration tests (needs 'make install
 	@poetry run python -m ipykernel install --user --name georeader --display-name "Python (georeader)"
 	@poetry run pytest --nbmake docs/ -v --nbmake-timeout=600 --nbmake-kernel=georeader
 
+.PHONY: regenerate-notebooks
+regenerate-notebooks: ## Re-execute docs/ notebooks and write their outputs back for the docs (same run/skip logic as test-notebooks)
+	@echo "📝 Regenerating notebook outputs"
+	@poetry run python -m ipykernel install --user --name georeader --display-name "Python (georeader)"
+	@poetry run pytest --nbmake --overwrite docs/ -v --nbmake-timeout=600 --nbmake-kernel=georeader
+
 .PHONY: build
 build: clean-build ## Build wheel file using poetry
 	@echo "📦 Building wheel file"
