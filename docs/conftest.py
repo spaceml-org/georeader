@@ -27,10 +27,10 @@ Google public bucket, a public Hugging Face GeoTIFF, ...).
 Providing the inputs (see ``examples/README.md`` for details)
 -------------------------------------------------------------
 * ``examples/`` data files.
-* PRISMA / EnMAP (IMEO Azure):  ``SAS_TOKEN``, ``AZURE_STORAGE_ACCOUNT``, ``CONTAINER_NAME``
+* PRISMA / EnMAP (Azure):  ``SAS_TOKEN``, ``AZURE_STORAGE_ACCOUNT``, ``CONTAINER_NAME``
 * EMIT (NASA Earthdata):        ``EARTHDATA_TOKEN`` or ``~/.georeader/auth_emit.json``
 * Carbon Mapper:                ``CARBONMAPPER_TOKEN`` (or ``CARBONMAPPER_EMAIL`` + ``CARBONMAPPER_PASSWORD``) or ``~/.georeader/auth_carbonmapper.json``
-* Google Earth Engine:          ``EARTHENGINE_TOKEN`` or ``~/.config/earthengine/credentials``
+* Google Earth Engine:          (``EARTHENGINE_TOKEN`` or ``~/.config/earthengine/credentials``) AND ``EARTHENGINE_PROJECT``
 
 In GitHub Actions these can be wired as repository secrets and exported as the
 matching environment variables before ``make test-notebooks`` runs.
@@ -47,6 +47,26 @@ import pytest
 # Resolve examples/ relative to this file (docs/conftest.py -> repo root -> examples/)
 _EXAMPLES_DIR = Path(__file__).resolve().parent.parent / "examples"
 
+
+def _file_available(path: Path) -> bool:
+    """True if ``path`` exists as real data (not an un-smudged Git LFS pointer).
+
+    Some example rasters are stored with Git LFS. On a clone without git-lfs the
+    file is present but is a tiny text pointer, which would make a notebook fail
+    rather than skip. Treat such pointers as "not available" so the notebook is
+    skipped cleanly.
+    """
+    if not path.exists():
+        return False
+    try:
+        if path.stat().st_size < 1024:
+            with open(path, "rb") as fh:
+                if fh.read(40).startswith(b"version https://git-lfs"):
+                    return False
+    except OSError:
+        return False
+    return True
+
 _ENMAP_TILE = "ENMAP01-____L1B-DT0000074101_20240511T080843Z_001_V010402_20240514T093550Z"
 
 
@@ -59,7 +79,7 @@ class Requirement:
     paths: list[str] = field(default_factory=list)
 
     def satisfied(self) -> bool:
-        if any((_EXAMPLES_DIR / f).exists() for f in self.files):
+        if any(_file_available(_EXAMPLES_DIR / f) for f in self.files):
             return True
         if any(os.environ.get(e) for e in self.env):
             return True
@@ -80,7 +100,7 @@ class Requirement:
 
 # Keyed by notebook basename (basenames are unique across docs/).
 NOTEBOOK_REQUIREMENTS: dict[str, list[Requirement]] = {
-    # --- PRISMA / EnMAP: local file or IMEO Azure download ------------------
+    # --- PRISMA / EnMAP: local file or Azure download -----------------------
     "prisma_with_cloudsen12.ipynb": [
         Requirement(
             files=["PRISMA/PRS_L1_STD_OFFL_20241109073054_20241109073059_0001.he5"],
@@ -114,13 +134,17 @@ NOTEBOOK_REQUIREMENTS: dict[str, list[Requirement]] = {
         ),
     ],
     # --- Local-only data files ----------------------------------------------
-    "query_mosaic_s2_images.ipynb": [Requirement(files=["liria.geojson"])],
     "reading_overlapping_sentinel2_aviris.ipynb": [
         Requirement(files=["ang20190928t185111-4_r6871_c424_rgb.tif"]),
     ],
-    # Proba-V is downloaded from the public VITO data pool at run time; only
-    # the Sentinel-2 crop needs to be supplied locally.
-    "read_overlapping_probav_and_sentinel2.ipynb": [Requirement(files=["S2L1C.tif"])],
+    # Both the Sentinel-2 crop and the Proba-V product must be supplied locally.
+    # The VITO data pool that used to serve the Proba-V file is no longer
+    # reachable, so it can no longer be downloaded at run time. Two groups -> the
+    # notebook runs only if *both* files are present in examples/.
+    "read_overlapping_probav_and_sentinel2.ipynb": [
+        Requirement(files=["S2L1C.tif"]),
+        Requirement(files=["PROBAV_S1_TOA_X07Y05_20190209_100M_V101.HDF5"]),
+    ],
     # --- Carbon Mapper API token --------------------------------------------
     "api_explore.ipynb": [
         Requirement(
@@ -134,16 +158,33 @@ NOTEBOOK_REQUIREMENTS: dict[str, list[Requirement]] = {
             paths=["~/.georeader/auth_carbonmapper.json"],
         ),
     ],
-    # --- Google Earth Engine credentials ------------------------------------
+    # --- Google Earth Engine: auth (token or credentials file) AND a Cloud
+    # project (ee.Initialize() requires `project=`, supplied via EARTHENGINE_PROJECT).
+    # Two groups -> both must be satisfied, so the notebook is skipped (not failed)
+    # when either is missing.
     "convert_to_radiance.ipynb": [
         Requirement(env=["EARTHENGINE_TOKEN"], paths=["~/.config/earthengine/credentials"]),
+        Requirement(env=["EARTHENGINE_PROJECT"]),
     ],
     "run_in_gee_image.ipynb": [
         Requirement(env=["EARTHENGINE_TOKEN"], paths=["~/.config/earthengine/credentials"]),
+        Requirement(env=["EARTHENGINE_PROJECT"]),
     ],
     "s2_mosaic_from_gee.ipynb": [
         Requirement(env=["EARTHENGINE_TOKEN"], paths=["~/.config/earthengine/credentials"]),
+        Requirement(env=["EARTHENGINE_PROJECT"]),
     ],
+}
+
+
+# Notebooks that are *always* skipped, regardless of available data or
+# credentials, because they cannot run for reasons unrelated to missing local
+# inputs (e.g. they depend on a decommissioned service). Keyed by basename.
+ALWAYS_SKIP: dict[str, str] = {
+    # Queries the Copernicus Open Access Hub (scihub.copernicus.eu), which was
+    # decommissioned. Needs migrating to the Copernicus Data Space Ecosystem
+    # before it can run again.
+    "query_mosaic_s2_images.ipynb": "reads from the decommissioned scihub.copernicus.eu",
 }
 
 
@@ -153,7 +194,14 @@ def pytest_collection_modifyitems(config, items):
         if item.fspath.ext != ".ipynb":
             continue
 
-        requirements = NOTEBOOK_REQUIREMENTS.get(Path(item.fspath).name)
+        name = Path(item.fspath).name
+
+        always_skip_reason = ALWAYS_SKIP.get(name)
+        if always_skip_reason:
+            item.add_marker(pytest.mark.skip(reason=always_skip_reason))
+            continue
+
+        requirements = NOTEBOOK_REQUIREMENTS.get(name)
         if not requirements:
             continue
 

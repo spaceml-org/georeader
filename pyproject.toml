@@ -73,6 +73,9 @@ ipykernel = "^6.29.5"
 pyarrow = "^18.0.0"
 fastparquet = "^2024.5.0"
 matplotlib = "^3.9.2"
+# Engine pandas uses to read the Sentinel-2 SRF .xlsx in S2_SAFE_reader.read_srf
+# (needed by docs/Sentinel-2/explore_metadata_s2.ipynb).
+openpyxl = "^3.1.5"
 folium = "^0.18.0"
 earthengine-api = "^1.2.0"
 pysolar = "^0.11"
