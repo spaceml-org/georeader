@@ -1,29 +1,32 @@
 name: Notebook integration tests
 
 # Runs the docs/ notebooks as integration tests. Kept separate from the unit
-# tests so it can be (a) limited to PRs that touch relevant files and (b)
-# non-blocking — several notebooks hit external services (public buckets,
-# Hugging Face, PyPI/GitHub) that can be flaky, and that should never block a
-# merge. docs/conftest.py skips any notebook whose data/credentials are absent.
+# tests so it can be (a) run on demand and (b) non-blocking — several notebooks
+# hit external services (public buckets, Hugging Face, PyPI/GitHub) that can be
+# flaky, and that should never block a merge. docs/conftest.py skips any notebook
+# whose data/credentials are absent.
+#
+# These notebooks are expensive, so they do NOT run on every push. Instead they
+# run once each time the `integration-tests` label is added to a PR (the label is
+# then removed automatically so it can be re-added to re-run), and on manual
+# dispatch via the Actions "Run workflow" button.
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
-    paths:
-      - "docs/**"
-      - "examples/**"
-      - "georeader/**"
-      - "pyproject.toml"
-      - "poetry.lock"
-      - ".github/workflows/test-notebooks.yml"
+    types: [labeled]
   workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   test-notebooks:
     name: Run notebook integration tests
     runs-on: ubuntu-latest
+    # Run on manual dispatch, or when the `integration-tests` label is added to a PR.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.label.name == 'integration-tests'
     # Non-blocking: a failure here (e.g. a flaky external service) must not fail
     # the workflow run or block PR merges.
     continue-on-error: true
@@ -88,3 +91,14 @@ jobs:
           # Earth Engine: service-account key (raw JSON); no Cloud project needed
           EARTHENGINE_SERVICE_ACCOUNT_KEY: ${{ secrets.EARTHENGINE_SERVICE_ACCOUNT_KEY }}
         run: poetry run pytest --nbmake docs/ -v --nbmake-timeout=600 --nbmake-kernel=georeader
+
+      # Remove the label again so re-adding it re-triggers the suite (like marsml).
+      # Skipped on manual dispatch (no PR number).
+      - name: Remove integration-tests label
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr edit ${{ github.event.pull_request.number }} \
+            --remove-label "integration-tests" -R ${{ github.repository }} \
+            || echo "Label 'integration-tests' not present"
