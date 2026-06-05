@@ -18,6 +18,13 @@
   `requests`. No Azure SDK dependency — token loading via Azure Key
   Vault is left to downstream consumers (e.g. UNEP IMEO MARS).
 
+## [2.3.1](https://github.com/spaceml-org/georeader/compare/v2.3.0...v2.3.1) (2026-06-05)
+
+
+### Bug Fixes
+
+* turn notebooks into skippable integration tests and fix bugs of GeoTensor 2.0 version on setters ([#59](https://github.com/spaceml-org/georeader/issues/59)) ([122705c](https://github.com/spaceml-org/georeader/commit/122705c0a43599f97fba909cfaa2fcd53d9acb8e))
+
 ## [2.3.0](https://github.com/spaceml-org/georeader/compare/v2.2.0...v2.3.0) (2026-05-29)
 
 
