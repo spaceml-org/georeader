@@ -1318,3 +1318,85 @@ class TestGeoTensorBitwiseOperations:
         assert isinstance(result, GeoTensor)
         expected = np.array([[True, True], [False, True]])
         assert np.array_equal(result.values, expected)
+
+
+class TestValuesSetter:
+    """Tests for the strict (fail-loud) GeoTensor.values setter."""
+
+    def _gt(self, shape=(3, 4, 5), dtype=np.float32):
+        data = np.arange(int(np.prod(shape)), dtype=dtype).reshape(shape)
+        transform = from_origin(0, shape[-2], 1, 1)
+        return GeoTensor(data, transform=transform, crs="EPSG:32631", fill_value_default=0)
+
+    def test_inplace_same_shape_and_dtype(self):
+        """Same shape and dtype writes through into the existing buffer."""
+        gt = self._gt()
+        new = np.ones_like(gt.values)
+        gt.values = new
+        assert np.array_equal(gt.values, new)
+        assert gt.dtype == np.float32
+
+    def test_inplace_writes_through_buffer(self):
+        """The write mutates the underlying buffer (no rebinding to a new array)."""
+        gt = self._gt()
+        view = gt.values  # shares memory with gt
+        gt.values = np.full(gt.shape, 7.0, dtype=np.float32)
+        # The pre-existing view sees the mutation -> same buffer was written.
+        assert np.all(view == 7.0)
+
+    def test_inplace_preserves_metadata(self):
+        """Setting values must not touch transform / crs / fill_value_default."""
+        gt = self._gt()
+        transform, crs, fill = gt.transform, gt.crs, gt.fill_value_default
+        gt.values = np.zeros(gt.shape, dtype=np.float32)
+        assert gt.transform == transform
+        assert gt.crs == crs
+        assert gt.fill_value_default == fill
+
+    def test_accepts_array_like(self):
+        """A non-ndarray array-like of matching shape/dtype is accepted."""
+        # Python float lists become float64 via np.asarray, so use a float64 tensor.
+        gt = self._gt(shape=(2, 2), dtype=np.float64)
+        gt.values = [[1.0, 2.0], [3.0, 4.0]]
+        assert np.array_equal(gt.values, np.array([[1.0, 2.0], [3.0, 4.0]]))
+
+    def test_shape_mismatch_raises(self):
+        """A shape change is rejected loudly instead of silently failing."""
+        gt = self._gt(shape=(3, 4, 5))
+        with pytest.raises(ValueError, match="shape"):
+            gt.values = np.ones((4, 5), dtype=np.float32)
+
+    def test_squeeze_shape_change_raises(self):
+        """Assigning a squeezed array (shape change) raises rather than corrupts."""
+        gt = self._gt(shape=(1, 4, 5))
+        with pytest.raises(ValueError, match="shape"):
+            gt.values = gt.values.squeeze()
+
+    def test_dtype_mismatch_raises_no_silent_cast(self):
+        """A dtype change must raise rather than silently cast/truncate."""
+        gt = self._gt(shape=(2, 3), dtype=np.uint16)
+        # Float radiance into a uint16 buffer would silently truncate -> forbidden.
+        with pytest.raises(TypeError, match="dtype"):
+            gt.values = np.array([[0.5, 1.5, 2.5], [3.5, 4.5, 5.5]], dtype=np.float64)
+
+    def test_bool_into_int_raises(self):
+        """Assigning a boolean mask into an integer GeoTensor raises (dtype change)."""
+        gt = self._gt(shape=(4, 5), dtype=np.uint8)
+        with pytest.raises(TypeError, match="dtype"):
+            gt.values = gt.values > 2
+
+    def test_item_assignment_still_works(self):
+        """In-place item/mask assignment (not the setter) is unaffected."""
+        gt = self._gt(shape=(4, 5), dtype=np.float32)
+        mask = gt.values > 10
+        gt.values[mask] = -1.0
+        assert np.all(gt.values[mask] == -1.0)
+
+    def test_astype_is_the_dtype_change_path(self):
+        """astype() returns a new GeoTensor with the new dtype, preserving georef."""
+        gt = self._gt(shape=(2, 3), dtype=np.uint16)
+        gt2 = gt.astype(np.float32)
+        assert isinstance(gt2, GeoTensor)
+        assert gt2.dtype == np.float32
+        assert gt2.transform == gt.transform
+        assert gt2.crs == gt.crs

@@ -1,0 +1,7 @@
+# Git LFS — data files for the docs/ notebook integration tests.
+# Only the specific small/medium example rasters committed to the repo are
+# tracked here; the large PRISMA/EMIT products in examples/{PRISMA,EMIT}/ stay
+# git-ignored and are fetched from Azure / NASA Earthdata at run time instead.
+examples/S2L1C.tif filter=lfs diff=lfs merge=lfs -text
+examples/ang20190928t185111-4_r6871_c424_rgb.tif filter=lfs diff=lfs merge=lfs -text
+examples/PROBAV_S1_TOA_X07Y05_20190209_100M_V101.HDF5 filter=lfs diff=lfs merge=lfs -text

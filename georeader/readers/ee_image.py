@@ -183,7 +183,42 @@ except ImportError:
 
 from georeader.readers.ee_utils import gee_method_with_timeout, DEFAULT_EE_TIMEOUT
 
-def export_image_fast(image:ee.Image, 
+
+def initialize(project: Optional[str] = None) -> None:
+    """Initialize Earth Engine from environment variables.
+
+    If ``EARTHENGINE_SERVICE_ACCOUNT_KEY`` is set, authenticate with a service
+    account (no Cloud project required): the value is either a path to the JSON
+    key file **or** the raw JSON string (handy for CI secrets), used with
+    :class:`ee.ServiceAccountCredentials`. Otherwise fall back to an interactive
+    ``ee.Authenticate()`` and initialize with the Cloud project from ``project``
+    or ``$EARTHENGINE_PROJECT``.
+
+    Args:
+        project: Google Cloud project id, used only for the interactive (non
+            service-account) fallback. Defaults to ``$EARTHENGINE_PROJECT``.
+
+    Example:
+        >>> from georeader.readers import ee_image
+        >>> ee_image.initialize()  # uses EARTHENGINE_SERVICE_ACCOUNT_KEY
+    """
+    import os
+
+    project = project or os.environ.get("EARTHENGINE_PROJECT")
+    key = os.environ.get("EARTHENGINE_SERVICE_ACCOUNT_KEY")
+    if key:
+        # key is either a path to the JSON key file or the raw JSON string;
+        # ee.ServiceAccountCredentials derives the service-account email from it.
+        if os.path.isfile(key):
+            credentials = ee.ServiceAccountCredentials(email=None, key_file=key)
+        else:
+            credentials = ee.ServiceAccountCredentials(email=None, key_data=key)
+        ee.Initialize(credentials)
+    else:
+        ee.Authenticate()
+        ee.Initialize(project=project)
+
+def export_image_fast(image:ee.Image,
                       geometry:Union[ee.Geometry, Polygon, MultiPolygon],
                       cat_bands:bool=True,
                       fill_value_default:Optional[float]=0,
@@ -529,7 +564,9 @@ def interpolate_20mbands_s2ee(geotensor:GeoTensor,
     if need_pad:
         slice_rows = slice(pad_r[0], None if pad_r[1] <= 0 else -pad_r[1])
         slice_cols = slice(pad_c[0], None if pad_c[1] <= 0 else -pad_c[1])
-        b20ms2_20m10m.values = b20ms2_20m10m.values[(slice(None), slice_rows, slice_cols)]
+        # Slicing returns a new GeoTensor with an updated transform; assigning a
+        # cropped array into .values is rejected because the shape changes.
+        b20ms2_20m10m = b20ms2_20m10m[(slice(None), slice_rows, slice_cols)]
     
     geotensor.values[indexes_20m,...] = np.round(b20ms2_20m10m.values * 10_000).astype(np.uint16)
 

@@ -909,10 +909,12 @@ class S2Image:
     def load_mask(self) -> GeoTensor:
         reader_ref = self._get_reader()
         geotensor_ref = reader_ref.load(boundless=True)
-        geotensor_ref.values = (geotensor_ref.values == 0) | (
-            geotensor_ref.values == (2**16) - 1
-        )
-        return geotensor_ref
+        # Boolean mask from an integer band: build a new GeoTensor rather than
+        # assigning into .values (which forbids dtype changes in place).
+        mask = (geotensor_ref.values == 0) | (geotensor_ref.values == (2**16) - 1)
+        return GeoTensor(mask, transform=geotensor_ref.transform,
+                         crs=geotensor_ref.crs,
+                         fill_value_default=geotensor_ref.fill_value_default)
 
 
 class S2ImageL2A(S2Image):

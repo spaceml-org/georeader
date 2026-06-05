@@ -41,11 +41,17 @@ mypy = "^1.5.1"
 pre-commit = "^3.4.0"
 tox = "^4.11.1"
 scikit-image = "^0.24.0"
+# Runs the docs/ notebooks as integration tests (`make test-notebooks`).
+# ipykernel provides the kernel nbmake executes the notebooks in.
+nbmake = "^1"
+ipykernel = "^6.29.5"
 # CI installs the dev group; pull in the carbonmapper extras here
 # explicitly so the carbonmapper reader's tests run in CI even though
 # the dependencies are gated as optional for end users.
 pydantic = ">=2"
 requests = ">=2"
+# Loads the repo-root .env (credentials/config) in docs/conftest.py for the notebook tests.
+python-dotenv = "^1.0.0"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = "^1.4.2"
@@ -69,6 +75,9 @@ ipykernel = "^6.29.5"
 pyarrow = "^18.0.0"
 fastparquet = "^2024.5.0"
 matplotlib = "^3.9.2"
+# Engine pandas uses to read the Sentinel-2 SRF .xlsx in S2_SAFE_reader.read_srf
+# (needed by docs/Sentinel-2/explore_metadata_s2.ipynb).
+openpyxl = "^3.1.5"
 folium = "^0.18.0"
 earthengine-api = "^1.2.0"
 pysolar = "^0.11"

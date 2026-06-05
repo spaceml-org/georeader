@@ -335,8 +335,7 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
         if masking_function is not None:
             invalid_geotensor = masking_function(invalid_geotensor)
 
-        invalid_geotensor.values = invalid_geotensor.values.astype(bool)
-        invalid_geotensor.values =  invalid_geotensor.values.squeeze()
+        invalid_geotensor = invalid_geotensor.astype(bool).squeeze()
         assert len(invalid_geotensor.shape) == 2, f"Invalid mask expected 2 dims found {invalid_geotensor.shape}"
 
         invalid_values|= invalid_geotensor.values
@@ -344,8 +343,7 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
         # Apply masking funtion to the readed data
         invalid_geotensor = masking_function(data_return)
 
-        invalid_geotensor.values = invalid_geotensor.values.astype(bool)
-        invalid_geotensor.values = invalid_geotensor.values.squeeze()
+        invalid_geotensor = invalid_geotensor.astype(bool).squeeze()
         assert len(invalid_geotensor.shape) == 2, f"Invalid mask expected 2 dims found {invalid_geotensor.shape}"
         invalid_values |= invalid_geotensor.values
 
@@ -406,8 +404,7 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
                 if masking_function is not None:
                     invalid_geotensor = masking_function(invalid_geotensor)
 
-                invalid_geotensor.values = invalid_geotensor.values.astype(bool)
-                invalid_geotensor.values = invalid_geotensor.values.squeeze()
+                invalid_geotensor = invalid_geotensor.astype(bool).squeeze()
                 assert len(invalid_geotensor.shape) == 2, f"Invalid mask expected 2 dims found {invalid_geotensor.shape}"
                 if np.all(invalid_geotensor.values):
                     continue
@@ -421,8 +418,7 @@ def spatial_mosaic(data_list:Union[List[GeoData], List[Tuple[GeoData,GeoData]]],
             if (geomask is None) and (masking_function is not None):
                 invalid_geotensor = masking_function(data_read)
 
-                invalid_geotensor.values = invalid_geotensor.values.astype(bool)
-                invalid_geotensor.values = invalid_geotensor.values.squeeze()
+                invalid_geotensor = invalid_geotensor.astype(bool).squeeze()
                 assert len(invalid_geotensor.shape) == 2, f"Invalid mask expected 2 dims found {invalid_geotensor.shape}"
                 if np.all(invalid_geotensor.values):
                     continue

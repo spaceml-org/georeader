@@ -459,6 +459,40 @@ class GeoTensor(np.ndarray):
         """Return a view of the array (memory shared with original)"""
         return self.view(np.ndarray)
 
+    @values.setter
+    def values(self, new_values: NDArray) -> None:
+        """Write ``new_values`` into the existing buffer (in-place).
+
+        Because :class:`GeoTensor` *is* a numpy ndarray, the underlying buffer
+        cannot be rebound: only same-shape, same-dtype in-place writes are
+        allowed. Any shape or dtype mismatch raises immediately rather than
+        silently casting/truncating the data (e.g. float -> uint16).
+
+        Args:
+            new_values (NDArray): array matching ``self``; must have identical
+                shape and dtype.
+
+        Raises:
+            ValueError: if ``new_values.shape`` differs from ``self.shape``.
+            TypeError: if ``new_values.dtype`` differs from ``self.dtype``.
+        """
+        arr = np.asarray(new_values)
+        if arr.shape != self.shape:
+            raise ValueError(
+                f"Cannot set GeoTensor.values in place: shape {arr.shape} != {self.shape}. "
+                "GeoTensor is a numpy subclass and cannot change shape via assignment. "
+                "Build a new GeoTensor instead, e.g. "
+                "GeoTensor(arr, gt.transform, gt.crs, gt.fill_value_default), "
+                "or use slicing / .squeeze() which preserve georeferencing."
+            )
+        if arr.dtype != self.dtype:
+            raise TypeError(
+                f"Cannot set GeoTensor.values in place: dtype {arr.dtype} != {self.dtype}. "
+                "GeoTensor is a numpy subclass and cannot change dtype via assignment. "
+                "Use gt = gt.astype(dtype) to get a new GeoTensor with the desired dtype."
+            )
+        self[...] = arr
+
     @property
     def dims(self) -> Tuple[str]:
         # TODO allow different ordering of dimensions?
