@@ -18,6 +18,13 @@
   `requests`. No Azure SDK dependency — token loading via Azure Key
   Vault is left to downstream consumers (e.g. UNEP IMEO MARS).
 
+## [2.4.0](https://github.com/spaceml-org/georeader/compare/v2.3.1...v2.4.0) (2026-06-12)
+
+
+### Features
+
+* **enmap:** add opt-in radiance cache to EnMAP reader ([#62](https://github.com/spaceml-org/georeader/issues/62)) ([84e847a](https://github.com/spaceml-org/georeader/commit/84e847a91c20822487792d5e2c970eeef13ef6b8))
+
 ## [2.3.1](https://github.com/spaceml-org/georeader/compare/v2.3.0...v2.3.1) (2026-06-05)
 
 
