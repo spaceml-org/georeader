@@ -1,0 +1,3172 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="🛰️ Process raster data in python">
+      
+      
+        <meta name="author" content="Gonzalo Mateo-García">
+      
+      
+        <link rel="canonical" href="https://spaceml-org.github.io/georeader/modules/vectorize_module/">
+      
+      
+        <link rel="prev" href="../rasterize_module/">
+      
+      
+        <link rel="next" href="../ee_image/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../images/logo_georeader.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>vectorize - georeader</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../../css/ansi-colours.css">
+    
+      <link rel="stylesheet" href="../../css/jupyter-cells.css">
+    
+      <link rel="stylesheet" href="../../css/pandas-dataframe.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="deep-orange">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#georeadervectorize" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="georeader" class="md-header__button md-logo" aria-label="georeader" data-md-component="logo">
+      
+  <img src="../../images/logo_georeader.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            georeader
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              vectorize
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="deep-orange"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="deep-orange"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/spaceml-org/georeader" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    spaceml-org/georeader
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="georeader" class="md-nav__button md-logo" aria-label="georeader" data-md-component="logo">
+      
+  <img src="../../images/logo_georeader.png" alt="logo">
+
+    </a>
+    georeader
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/spaceml-org/georeader" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    spaceml-org/georeader
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../read_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GeoReader concepts and protocols
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Modules
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Modules
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reflectance_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    reflectance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../geotensor_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GeoTensor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rasterio_reader/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RasterioReader
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rasterize_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    rasterize
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    vectorize
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    vectorize
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Functions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get_polygons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_polygons
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#georeader.vectorize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        vectorize
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="vectorize">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#georeader.vectorize--vectorization-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vectorization Process
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#georeader.vectorize--polygon-simplification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Polygon Simplification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#georeader.vectorize--filtering-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filtering Options
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#georeader.vectorize--module-functions-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module Functions Overview
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#georeader.vectorize--quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#georeader.vectorize--see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#georeader.vectorize--references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#georeader.vectorize.get_polygons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_polygons
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#georeader.vectorize.transform_polygon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        transform_polygon
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ee_image/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ee_image
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../readers_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    readers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced modules
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Advanced modules
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced_modules/save_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    save
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced_modules/plot_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    plot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced_modules/mosaic_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    mosaic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced_modules/slices_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    slices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced_modules/griddata_module/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    griddata
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_1" id="__nav_5_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Read overlapping rasters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Read overlapping rasters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../read_overlapping_probav_and_sentinel2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overlapping S2 and Proba-V
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reading_overlapping_sentinel2_aviris/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overlapping S2 and AVIRIS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../geotensor_numpy_api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GeoTensor numpy API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced/tiling_and_stitching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tile and stitch AI predictions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sentinel-2
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sentinel-2
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../Sentinel-2/run_in_gee_image/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    From Google Earth Engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../read_S2_SAFE_from_bucket/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    From the public bucket
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../Sentinel-2/explore_metadata_s2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metadata
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../Sentinel-2/query_mosaic_s2_images/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mosaic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../Sentinel-2/s2_mosaic_from_gee/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mosaic from GEE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../Sentinel-2/convert_to_radiance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ToA reflectance to radiance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hyperspectral sensors
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Hyperspectral sensors
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../emit_explore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    EMIT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../simultaneous_prisma_emit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PRISMA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../enmap_with_cloudsen12/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    EnMAP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../prisma_with_cloudsen12/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PRISMA cloud detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Carbon Mapper
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Carbon Mapper
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../carbonmapper/api_explore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API + typed models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../carbonmapper/products_explore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Products
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_7" id="__nav_5_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Advanced
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../advanced/error_read_write_in_remote_path/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VSIL cache problem
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Functions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Parameters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get_polygons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_polygons
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#georeader.vectorize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        vectorize
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="vectorize">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#georeader.vectorize--vectorization-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vectorization Process
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#georeader.vectorize--polygon-simplification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Polygon Simplification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#georeader.vectorize--filtering-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filtering Options
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#georeader.vectorize--module-functions-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module Functions Overview
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#georeader.vectorize--quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#georeader.vectorize--see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#georeader.vectorize--references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#georeader.vectorize.get_polygons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_polygons
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#georeader.vectorize.transform_polygon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        transform_polygon
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="georeadervectorize">georeader.vectorize<a class="headerlink" href="#georeadervectorize" title="Permanent link">&para;</a></h1>
+<p>This module provides functions to convert raster data (binary masks, segmentation outputs) into vector geometries (polygons).</p>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>Vectorization is essential for:</p>
+<ul>
+<li>Converting segmentation masks to GeoJSON/Shapefile</li>
+<li>Extracting object boundaries from classification results</li>
+<li>Creating vector features from raster analysis</li>
+</ul>
+<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">georeader</span><span class="w"> </span><span class="kn">import</span> <span class="n">vectorize</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">georeader.geotensor</span><span class="w"> </span><span class="kn">import</span> <span class="n">GeoTensor</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">rasterio</span>
+
+<span class="c1"># Example 1: Get polygons from GeoTensor (automatically in the GeoTensor&#39;s CRS)</span>
+<span class="n">mask_data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">100</span><span class="p">,</span> <span class="mi">100</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+<span class="n">mask_data</span><span class="p">[</span><span class="mi">20</span><span class="p">:</span><span class="mi">80</span><span class="p">,</span> <span class="mi">20</span><span class="p">:</span><span class="mi">80</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># A square region</span>
+<span class="n">transform</span> <span class="o">=</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">Affine</span><span class="p">(</span><span class="mf">10.0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">500000</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mf">10.0</span><span class="p">,</span> <span class="mi">4500000</span><span class="p">)</span>
+<span class="n">gt_mask</span> <span class="o">=</span> <span class="n">GeoTensor</span><span class="p">(</span><span class="n">mask_data</span><span class="p">,</span> <span class="n">transform</span><span class="p">,</span> <span class="n">crs</span><span class="o">=</span><span class="s2">&quot;EPSG:32610&quot;</span><span class="p">)</span>
+
+<span class="c1"># Polygons are automatically in the GeoTensor&#39;s CRS (EPSG:32610)</span>
+<span class="n">polygons</span> <span class="o">=</span> <span class="n">vectorize</span><span class="o">.</span><span class="n">get_polygons</span><span class="p">(</span><span class="n">gt_mask</span><span class="p">,</span> <span class="n">min_area</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+
+<span class="c1"># For CRS reprojection, use window_utils.polygon_to_crs</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">georeader</span><span class="w"> </span><span class="kn">import</span> <span class="n">window_utils</span>
+<span class="n">polygon_wgs84</span> <span class="o">=</span> <span class="n">window_utils</span><span class="o">.</span><span class="n">polygon_to_crs</span><span class="p">(</span><span class="n">polygons</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> 
+                                             <span class="n">crs_polygon</span><span class="o">=</span><span class="s2">&quot;EPSG:32610&quot;</span><span class="p">,</span>
+                                             <span class="n">dst_crs</span><span class="o">=</span><span class="s2">&quot;EPSG:4326&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="key-functions">Key Functions<a class="headerlink" href="#key-functions" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>get_polygons</code></td>
+<td>Extract polygons from binary mask with optional area filtering</td>
+</tr>
+</tbody>
+</table>
+<h2 id="parameters">Parameters<a class="headerlink" href="#parameters" title="Permanent link">&para;</a></h2>
+<h3 id="get_polygons"><code>get_polygons</code><a class="headerlink" href="#get_polygons" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>binary_mask</code>: Input mask (GeoTensor or numpy array)</li>
+<li><code>min_area</code>: Minimum polygon area in pixel units (default: 25.5), applied before affine transform</li>
+<li>Returns: List of shapely Polygon objects (in CRS coordinates if transform provided, else pixel coordinates)</li>
+</ul>
+<hr />
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<a id="georeader.vectorize"></a>
+    <div class="doc doc-contents first">
+
+        <p>Vectorize Module: Convert raster masks to vector polygons.</p>
+<p>This module provides functions to extract polygon geometries from binary
+raster masks. Essential for converting classification results, segmentation
+outputs, and masks into GIS-compatible vector formats.</p>
+<h3 id="georeader.vectorize--vectorization-process">Vectorization Process<a class="headerlink" href="#georeader.vectorize--vectorization-process" title="Permanent link">&para;</a></h3>
+<p>Converting binary rasters to polygon geometries::</p>
+<div class="highlight"><pre><span></span><code>┌─────────────────────────────────────────────────────────────────────────┐
+│                    VECTORIZATION PROCESS                                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  Raster (Binary Mask)                Vector (Polygons)                  │
+│  ────────────────────                ─────────────────                  │
+│                                                                          │
+│  ┌─┬─┬─┬─┬─┬─┬─┬─┐                       ╔═══════════╗                  │
+│  │0│0│0│1│1│1│0│0│                      ╔╝           ╚╗                 │
+│  ├─┼─┼─┼─┼─┼─┼─┼─┤                     ╔╝             ╚╗                │
+│  │0│0│1│1│1│1│1│0│   ═══════════►     ╔╝               ╚╗               │
+│  ├─┼─┼─┼─┼─┼─┼─┼─┤   Vectorize        ║    Polygon 1    ║               │
+│  │0│1│1│1│1│1│1│0│                    ╚╗               ╔╝               │
+│  ├─┼─┼─┼─┼─┼─┼─┼─┤                     ╚╗             ╔╝                │
+│  │0│0│1│1│1│1│0│0│                      ╚╗           ╔╝                 │
+│  └─┴─┴─┴─┴─┴─┴─┴─┘                       ╚═══════════╝                  │
+│                                                                          │
+│  1 = foreground (vectorized)                                            │
+│  0 = background (ignored)                                               │
+└─────────────────────────────────────────────────────────────────────────┘
+</code></pre></div>
+<h3 id="georeader.vectorize--polygon-simplification">Polygon Simplification<a class="headerlink" href="#georeader.vectorize--polygon-simplification" title="Permanent link">&para;</a></h3>
+<p>Reducing vertex count while preserving shape::</p>
+<div class="highlight"><pre><span></span><code>┌─────────────────────────────────────────────────────────────────────────┐
+│              POLYGON SIMPLIFICATION (tolerance parameter)                │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  Raw (pixelated)              Simplified (tolerance=1)                  │
+│  ────────────────              ──────────────────────                   │
+│                                                                          │
+│  ┌─┐                                ╭───────╮                            │
+│  │ └─┐                             ╱         ╲                           │
+│  │   └─┐                          ╱           ╲                          │
+│  │     └─┐   ────────────►       │             │    Fewer vertices,     │
+│  │       │   simplify            │             │    smoother edges      │
+│  │     ┌─┘                        ╲           ╱                          │
+│  │   ┌─┘                           ╲         ╱                           │
+│  └───┘                              ╰───────╯                            │
+│                                                                          │
+│  tolerance=0: Keep all vertices (staircase pattern)                     │
+│  tolerance=1: Simplify ~1 pixel tolerance (DEFAULT)                     │
+│  tolerance&gt;1: More aggressive simplification                            │
+└─────────────────────────────────────────────────────────────────────────┘
+</code></pre></div>
+<h3 id="georeader.vectorize--filtering-options">Filtering Options<a class="headerlink" href="#georeader.vectorize--filtering-options" title="Permanent link">&para;</a></h3>
+<p>Removing small or unwanted polygons::</p>
+<div class="highlight"><pre><span></span><code>┌─────────────────────────────────────────────────────────────────────────┐
+│                    POLYGON FILTERING                                     │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  Parameters:                                                             │
+│  ───────────                                                             │
+│                                                                          │
+│  min_area=25.5 (default)    Remove polygons smaller than ~5x5 pixels    │
+│                             Helps filter noise and artifacts             │
+│                                                                          │
+│  polygon_buffer=0           Buffer/erode polygons by N pixels           │
+│                             Positive: expand                             │
+│                             Negative: shrink (erode)                     │
+│                                                                          │
+│  Before (min_area=0):                After (min_area=25):               │
+│  ┌────────────────────┐              ┌────────────────────┐             │
+│  │  ■   ┌───────┐     │              │      ┌───────┐     │             │
+│  │ ■ ■  │       │  ■  │   ═══════►   │      │       │     │             │
+│  │      │       │     │   Filter     │      │       │     │             │
+│  │ ■    └───────┘     │              │      └───────┘     │             │
+│  └────────────────────┘              └────────────────────┘             │
+│     ↑ small polygons removed                                            │
+└─────────────────────────────────────────────────────────────────────────┘
+</code></pre></div>
+<h3 id="georeader.vectorize--module-functions-overview">Module Functions Overview<a class="headerlink" href="#georeader.vectorize--module-functions-overview" title="Permanent link">&para;</a></h3>
+
+
+<details class="vectorization" open>
+  <summary>Vectorization</summary>
+  <ul>
+<li>:func:<code>get_polygons</code>: Extract polygons from binary mask</li>
+<li>:func:<code>vectorize_raster</code>: Vectorize with geographic coordinates</li>
+</ul>
+</details>
+
+<details class="utilities" open>
+  <summary>Utilities</summary>
+  <ul>
+<li>Automatic CRS handling from GeoData inputs</li>
+<li>Integration with shapely for geometry operations</li>
+</ul>
+</details>        <h3 id="georeader.vectorize--quick-start">Quick Start<a class="headerlink" href="#georeader.vectorize--quick-start" title="Permanent link">&para;</a></h3>
+<p>Extract polygons from a binary mask::</p>
+<div class="highlight"><pre><span></span><code>from georeader import vectorize
+import numpy as np
+
+# Binary mask (e.g., from classification)
+mask = (classified_image == 1).astype(np.uint8)
+
+# Extract polygons
+polygons = vectorize.get_polygons(
+    mask,
+    min_area=100,        # Minimum 10x10 pixel area
+    tolerance=1.5,       # Simplification tolerance
+    transform=transform  # Affine transform for georeferencing
+)
+
+# Polygons are in CRS units (georeferenced)
+for poly in polygons:
+    print(f&quot;Area: {poly.area} sq. CRS units&quot;)
+</code></pre></div>
+<p>Vectorize a GeoTensor mask::</p>
+<div class="highlight"><pre><span></span><code># GeoTensor carries its own transform
+polygons = vectorize.get_polygons(
+    water_mask_geotensor,  # GeoTensor with transform
+    min_area=50,
+    polygon_buffer=-1      # Erode by 1 pixel
+)
+</code></pre></div>
+<h3 id="georeader.vectorize--see-also">See Also<a class="headerlink" href="#georeader.vectorize--see-also" title="Permanent link">&para;</a></h3>
+<p>georeader.rasterize : Inverse operation (vector → raster)
+georeader.geotensor : Input format with transform
+rasterio.features.shapes : Underlying implementation</p>
+<h3 id="georeader.vectorize--references">References<a class="headerlink" href="#georeader.vectorize--references" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Rasterio shapes: https://rasterio.readthedocs.io/en/latest/api/rasterio.features.html</li>
+<li>Shapely simplify: https://shapely.readthedocs.io/en/latest/manual.html#object.simplify</li>
+</ul>
+
+
+
+
+
+
+
+
+  <div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="georeader.vectorize.get_polygons" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">get_polygons</span><span class="p">(</span><span class="n">binary_mask</span><span class="p">,</span> <span class="n">min_area</span><span class="o">=</span><span class="mf">25.5</span><span class="p">,</span> <span class="n">polygon_buffer</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">tolerance</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">transform</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+<a href="#georeader.vectorize.get_polygons" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Convert a binary raster mask to vector polygons.</p>
+<p>Extracts connected regions of True/nonzero pixels as polygon geometries.
+Includes options for filtering small polygons, buffering/eroding boundaries,
+and simplifying vertex counts.</p>
+<p>If <code>binary_mask</code> is a GeoTensor (has .transform attribute), polygons are
+returned in geographic coordinates. If it's a numpy array, polygons are in
+pixel coordinates unless a transform is provided.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>binary_mask</code>
+            </td>
+            <td>
+                  <code><span title="typing.Union">Union</span>[<span title="numpy.ndarray">ndarray</span>, <span title="georeader.abstract_reader.GeoData">GeoData</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>2D binary mask where nonzero
+pixels represent features to vectorize. Accepts GeoTensor (uses its
+transform) or numpy array.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>min_area</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Minimum polygon area in square pixels to include.
+Polygons smaller than this are filtered out. Default 25.5 (~5x5 px).
+Set to 0 to keep all polygons.</p>
+              </div>
+            </td>
+            <td>
+                  <code>25.5</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>polygon_buffer</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Buffer distance in pixels to apply to polygons.
+Default 0 (no buffering).</p>
+<ul>
+<li>Positive: Expand/dilate polygons</li>
+<li>Negative: Shrink/erode polygons (useful to remove edge noise)</li>
+</ul>
+              </div>
+            </td>
+            <td>
+                  <code>0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>tolerance</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Simplification tolerance in pixels. Higher values
+produce simpler polygons with fewer vertices. Default 1.0.
+Set to 0 for no simplification (keeps staircase pixel edges).</p>
+              </div>
+            </td>
+            <td>
+                  <code>1.0</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>transform</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="rasterio.Affine">Affine</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Affine transform to convert pixel
+coordinates to geographic coordinates. Only used if binary_mask is
+a numpy array. If binary_mask is GeoTensor, uses its transform.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.List">List</span>[<span title="shapely.geometry.Polygon">Polygon</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>List[Polygon]: List of shapely Polygon objects. Coordinates are in:
+- Geographic CRS units if transform provided or binary_mask is GeoTensor
+- Pixel coordinates otherwise</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <p>Vectorize a classification result:</p>
+    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">georeader</span><span class="w"> </span><span class="kn">import</span> <span class="n">vectorize</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Binary mask from classification</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">water_mask</span> <span class="o">=</span> <span class="p">(</span><span class="n">classification</span> <span class="o">==</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Extract water body polygons</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">polygons</span> <span class="o">=</span> <span class="n">vectorize</span><span class="o">.</span><span class="n">get_polygons</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">water_mask</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">min_area</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>  <span class="c1"># Filter out tiny artifacts</span>
+<span class="gp">... </span>    <span class="n">tolerance</span><span class="o">=</span><span class="mf">2.0</span>  <span class="c1"># Simplify boundaries</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">polygons</span><span class="p">)</span><span class="si">}</span><span class="s2"> water bodies&quot;</span><span class="p">)</span>
+</code></pre></div>
+    <p>Vectorize with erosion to remove edge noise:</p>
+    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="n">polygons</span> <span class="o">=</span> <span class="n">vectorize</span><span class="o">.</span><span class="n">get_polygons</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">noisy_mask</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">min_area</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">polygon_buffer</span><span class="o">=-</span><span class="mi">2</span>  <span class="c1"># Erode 2 pixels</span>
+<span class="gp">... </span><span class="p">)</span>
+</code></pre></div>
+    <p>Vectorize GeoTensor (auto-uses transform):</p>
+    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">georeader.geotensor</span><span class="w"> </span><span class="kn">import</span> <span class="n">GeoTensor</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># mask_gt is a GeoTensor with transform</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">polygons</span> <span class="o">=</span> <span class="n">vectorize</span><span class="o">.</span><span class="n">get_polygons</span><span class="p">(</span><span class="n">mask_gt</span><span class="p">,</span> <span class="n">min_area</span><span class="o">=</span><span class="mi">200</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Polygons are in geographic coordinates</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">poly</span> <span class="ow">in</span> <span class="n">polygons</span><span class="p">:</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Area: </span><span class="si">{</span><span class="n">poly</span><span class="o">.</span><span class="n">area</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> sq. CRS units&quot;</span><span class="p">)</span>
+</code></pre></div>
+    <p>Get pixel-coordinate polygons from numpy array:</p>
+    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="n">polygons_px</span> <span class="o">=</span> <span class="n">vectorize</span><span class="o">.</span><span class="n">get_polygons</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">mask_array</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">transform</span><span class="o">=</span><span class="kc">None</span>  <span class="c1"># No transform = pixel coordinates</span>
+<span class="gp">... </span><span class="p">)</span>
+</code></pre></div>
+
+
+<details class="note" open>
+  <summary>Note</summary>
+  <ul>
+<li>Polygons are simplified AFTER buffering, so buffer then simplify</li>
+<li>For very large masks, consider processing in tiles</li>
+<li>MultiPolygon results are returned as separate Polygon objects</li>
+</ul>
+</details>
+
+<details class="see-also" open>
+  <summary>See Also</summary>
+  <p>transform_polygon: Transform polygon between coordinate systems.
+georeader.rasterize: Inverse operation (vector → raster).</p>
+</details>
+            <details class="quote">
+              <summary>Source code in <code>georeader/vectorize.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">get_polygons</span><span class="p">(</span><span class="n">binary_mask</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">GeoData</span><span class="p">],</span> <span class="n">min_area</span><span class="p">:</span><span class="nb">float</span><span class="o">=</span><span class="mf">25.5</span><span class="p">,</span>
+                 <span class="n">polygon_buffer</span><span class="p">:</span><span class="nb">int</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">tolerance</span><span class="p">:</span><span class="nb">float</span><span class="o">=</span><span class="mf">1.</span><span class="p">,</span> <span class="n">transform</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">rasterio</span><span class="o">.</span><span class="n">Affine</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Polygon</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Convert a binary raster mask to vector polygons.</span>
+
+<span class="sd">    Extracts connected regions of True/nonzero pixels as polygon geometries.</span>
+<span class="sd">    Includes options for filtering small polygons, buffering/eroding boundaries,</span>
+<span class="sd">    and simplifying vertex counts.</span>
+
+<span class="sd">    If `binary_mask` is a GeoTensor (has .transform attribute), polygons are</span>
+<span class="sd">    returned in geographic coordinates. If it&#39;s a numpy array, polygons are in</span>
+<span class="sd">    pixel coordinates unless a transform is provided.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        binary_mask (Union[np.ndarray, GeoData]): 2D binary mask where nonzero</span>
+<span class="sd">            pixels represent features to vectorize. Accepts GeoTensor (uses its</span>
+<span class="sd">            transform) or numpy array.</span>
+<span class="sd">        min_area (float): Minimum polygon area in square pixels to include.</span>
+<span class="sd">            Polygons smaller than this are filtered out. Default 25.5 (~5x5 px).</span>
+<span class="sd">            Set to 0 to keep all polygons.</span>
+<span class="sd">        polygon_buffer (int): Buffer distance in pixels to apply to polygons.</span>
+<span class="sd">            Default 0 (no buffering).</span>
+
+<span class="sd">            - Positive: Expand/dilate polygons</span>
+<span class="sd">            - Negative: Shrink/erode polygons (useful to remove edge noise)</span>
+
+<span class="sd">        tolerance (float): Simplification tolerance in pixels. Higher values</span>
+<span class="sd">            produce simpler polygons with fewer vertices. Default 1.0.</span>
+<span class="sd">            Set to 0 for no simplification (keeps staircase pixel edges).</span>
+<span class="sd">        transform (Optional[rasterio.Affine]): Affine transform to convert pixel</span>
+<span class="sd">            coordinates to geographic coordinates. Only used if binary_mask is</span>
+<span class="sd">            a numpy array. If binary_mask is GeoTensor, uses its transform.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        List[Polygon]: List of shapely Polygon objects. Coordinates are in:</span>
+<span class="sd">            - Geographic CRS units if transform provided or binary_mask is GeoTensor</span>
+<span class="sd">            - Pixel coordinates otherwise</span>
+
+<span class="sd">    Examples:</span>
+<span class="sd">        Vectorize a classification result:</span>
+
+<span class="sd">        &gt;&gt;&gt; import numpy as np</span>
+<span class="sd">        &gt;&gt;&gt; from georeader import vectorize</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; # Binary mask from classification</span>
+<span class="sd">        &gt;&gt;&gt; water_mask = (classification == 1).astype(np.uint8)</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; # Extract water body polygons</span>
+<span class="sd">        &gt;&gt;&gt; polygons = vectorize.get_polygons(</span>
+<span class="sd">        ...     water_mask,</span>
+<span class="sd">        ...     min_area=100,  # Filter out tiny artifacts</span>
+<span class="sd">        ...     tolerance=2.0  # Simplify boundaries</span>
+<span class="sd">        ... )</span>
+<span class="sd">        &gt;&gt;&gt; print(f&quot;Found {len(polygons)} water bodies&quot;)</span>
+
+<span class="sd">        Vectorize with erosion to remove edge noise:</span>
+
+<span class="sd">        &gt;&gt;&gt; polygons = vectorize.get_polygons(</span>
+<span class="sd">        ...     noisy_mask,</span>
+<span class="sd">        ...     min_area=50,</span>
+<span class="sd">        ...     polygon_buffer=-2  # Erode 2 pixels</span>
+<span class="sd">        ... )</span>
+
+<span class="sd">        Vectorize GeoTensor (auto-uses transform):</span>
+
+<span class="sd">        &gt;&gt;&gt; from georeader.geotensor import GeoTensor</span>
+<span class="sd">        &gt;&gt;&gt; # mask_gt is a GeoTensor with transform</span>
+<span class="sd">        &gt;&gt;&gt; polygons = vectorize.get_polygons(mask_gt, min_area=200)</span>
+<span class="sd">        &gt;&gt;&gt; # Polygons are in geographic coordinates</span>
+<span class="sd">        &gt;&gt;&gt; for poly in polygons:</span>
+<span class="sd">        ...     print(f&quot;Area: {poly.area:.2f} sq. CRS units&quot;)</span>
+
+<span class="sd">        Get pixel-coordinate polygons from numpy array:</span>
+
+<span class="sd">        &gt;&gt;&gt; polygons_px = vectorize.get_polygons(</span>
+<span class="sd">        ...     mask_array,</span>
+<span class="sd">        ...     transform=None  # No transform = pixel coordinates</span>
+<span class="sd">        ... )</span>
+
+<span class="sd">    Note:</span>
+<span class="sd">        - Polygons are simplified AFTER buffering, so buffer then simplify</span>
+<span class="sd">        - For very large masks, consider processing in tiles</span>
+<span class="sd">        - MultiPolygon results are returned as separate Polygon objects</span>
+
+<span class="sd">    See Also:</span>
+<span class="sd">        transform_polygon: Transform polygon between coordinate systems.</span>
+<span class="sd">        georeader.rasterize: Inverse operation (vector → raster).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">binary_mask</span><span class="p">,</span> <span class="s2">&quot;transform&quot;</span><span class="p">):</span>
+        <span class="n">binary_mask_np</span> <span class="o">=</span> <span class="n">binary_mask</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">binary_mask_np</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">binary_mask</span><span class="p">)</span>
+
+        <span class="k">assert</span> <span class="n">transform</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;transform only must be used if input is np.ndarray&quot;</span>
+        <span class="n">transform</span> <span class="o">=</span> <span class="n">binary_mask</span><span class="o">.</span><span class="n">transform</span>
+
+    <span class="n">shape_</span> <span class="o">=</span> <span class="n">binary_mask_np</span><span class="o">.</span><span class="n">shape</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape_</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="n">binary_mask_np</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()</span>
+
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">binary_mask_np</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Expected mask with 2 dim found </span><span class="si">{</span><span class="n">binary_mask_np</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="n">geoms_polygons</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">polygon_generator</span> <span class="o">=</span> <span class="n">features</span><span class="o">.</span><span class="n">shapes</span><span class="p">(</span><span class="n">binary_mask_np</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int16</span><span class="p">),</span>
+                                        <span class="n">binary_mask_np</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">polygon</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">polygon_generator</span><span class="p">:</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">shape</span><span class="p">(</span><span class="n">polygon</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">polygon_buffer</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">buffer</span><span class="p">(</span><span class="n">polygon_buffer</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">area</span> <span class="o">&gt;=</span> <span class="n">min_area</span><span class="p">:</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">simplify</span><span class="p">(</span><span class="n">tolerance</span><span class="o">=</span><span class="n">tolerance</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">transform</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">p</span> <span class="o">=</span> <span class="n">transform_polygon</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">transform</span><span class="p">)</span> <span class="c1"># Convert polygon to raster coordinates</span>
+            <span class="n">geoms_polygons</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">geoms_polygons</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="georeader.vectorize.transform_polygon" class="doc doc-heading">
+            <code class="highlight language-python"><span class="n">transform_polygon</span><span class="p">(</span><span class="n">polygon</span><span class="p">,</span> <span class="n">transform</span><span class="p">,</span> <span class="n">relative</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">shape_raster</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+<a href="#georeader.vectorize.transform_polygon" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Transform polygon coordinates using an affine transformation.</p>
+<p>Applies a rasterio Affine transform to all vertices of a polygon,
+converting between pixel and geographic coordinate systems. Handles
+both simple Polygons and MultiPolygons, including holes.</p>
+<p>Common use cases:
+- Pixel coordinates → Geographic coordinates (using raster transform)
+- Geographic coordinates → Relative coordinates (0-1 range for ML)</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>polygon</code>
+            </td>
+            <td>
+                  <code><span title="typing.Union">Union</span>[<span title="shapely.geometry.Polygon">Polygon</span>, <span title="shapely.geometry.MultiPolygon">MultiPolygon</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Shapely geometry to transform.
+Coordinates can be any numeric type.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>transform</code>
+            </td>
+            <td>
+                  <code><span title="rasterio.Affine">Affine</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>2D affine transformation matrix.
+Common sources: raster.transform, rasterio.Affine.scale(), etc.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>relative</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If True, output normalized coordinates in [0, 1] range
+relative to the raster dimensions. Useful for ML model inputs.
+Requires shape_raster. Default False.</p>
+              </div>
+            </td>
+            <td>
+                  <code>False</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>shape_raster</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="typing.Tuple">Tuple</span>[<span title="int">int</span>, <span title="int">int</span>]]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Raster dimensions as
+(height, width). Required if relative=True. Ignored otherwise.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Union">Union</span>[<span title="shapely.geometry.Polygon">Polygon</span>, <span title="shapely.geometry.MultiPolygon">MultiPolygon</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Union[Polygon, MultiPolygon]: Transformed geometry with same type as
+input. All coordinates are transformed by the affine matrix.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="AssertionError">AssertionError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If relative=True but shape_raster not provided.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+<p><span class="doc-section-title">Examples:</span></p>
+    <p>Convert pixel polygon to geographic coordinates:</p>
+    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">shapely.geometry</span><span class="w"> </span><span class="kn">import</span> <span class="n">Polygon</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">rasterio</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">georeader.vectorize</span><span class="w"> </span><span class="kn">import</span> <span class="n">transform_polygon</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Polygon in pixel coordinates</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">poly_px</span> <span class="o">=</span> <span class="n">Polygon</span><span class="p">([(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">100</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">100</span><span class="p">)])</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Transform from a raster</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">transform</span> <span class="o">=</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">Affine</span><span class="p">(</span><span class="mf">10.0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">500000</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mf">10.0</span><span class="p">,</span> <span class="mi">4500000</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Convert to UTM coordinates</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">poly_geo</span> <span class="o">=</span> <span class="n">transform_polygon</span><span class="p">(</span><span class="n">poly_px</span><span class="p">,</span> <span class="n">transform</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">poly_geo</span><span class="o">.</span><span class="n">bounds</span><span class="p">)</span>
+<span class="go">(500000.0, 4499000.0, 501000.0, 4500000.0)</span>
+</code></pre></div>
+    <p>Get relative coordinates for ML input:</p>
+    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="n">poly_rel</span> <span class="o">=</span> <span class="n">transform_polygon</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="n">poly_px</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">transform</span><span class="o">=</span><span class="n">rasterio</span><span class="o">.</span><span class="n">Affine</span><span class="o">.</span><span class="n">identity</span><span class="p">(),</span>
+<span class="gp">... </span>    <span class="n">relative</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">shape_raster</span><span class="o">=</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span> <span class="mi">1000</span><span class="p">)</span>  <span class="c1"># 1000x1000 image</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">poly_rel</span><span class="o">.</span><span class="n">bounds</span><span class="p">)</span>  <span class="c1"># Values in [0, 1]</span>
+<span class="go">(0.0, 0.0, 0.1, 0.1)</span>
+</code></pre></div>
+    <p>Transform MultiPolygon:</p>
+    <div class="highlight"><pre><span></span><code><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">shapely.geometry</span><span class="w"> </span><span class="kn">import</span> <span class="n">MultiPolygon</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">multi</span> <span class="o">=</span> <span class="n">MultiPolygon</span><span class="p">([</span><span class="n">poly_px</span><span class="p">,</span> <span class="n">poly_px</span><span class="o">.</span><span class="n">buffer</span><span class="p">(</span><span class="mi">10</span><span class="p">)])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">multi_geo</span> <span class="o">=</span> <span class="n">transform_polygon</span><span class="p">(</span><span class="n">multi</span><span class="p">,</span> <span class="n">transform</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">multi_geo</span><span class="p">))</span>
+<span class="go">&lt;class &#39;shapely.geometry.multipolygon.MultiPolygon&#39;&gt;</span>
+</code></pre></div>
+
+
+<details class="note" open>
+  <summary>Note</summary>
+  <ul>
+<li>The transform is applied as: (x_out, y_out) = transform * (x_in, y_in)</li>
+<li>For pixel-to-geo conversion, use the raster's transform directly</li>
+<li>For geo-to-pixel conversion, use ~transform (inverse)</li>
+<li>Holes in polygons are preserved after transformation</li>
+</ul>
+</details>
+            <details class="quote">
+              <summary>Source code in <code>georeader/vectorize.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span>
+<span class="normal">274</span>
+<span class="normal">275</span>
+<span class="normal">276</span>
+<span class="normal">277</span>
+<span class="normal">278</span>
+<span class="normal">279</span>
+<span class="normal">280</span>
+<span class="normal">281</span>
+<span class="normal">282</span>
+<span class="normal">283</span>
+<span class="normal">284</span>
+<span class="normal">285</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span>
+<span class="normal">299</span>
+<span class="normal">300</span>
+<span class="normal">301</span>
+<span class="normal">302</span>
+<span class="normal">303</span>
+<span class="normal">304</span>
+<span class="normal">305</span>
+<span class="normal">306</span>
+<span class="normal">307</span>
+<span class="normal">308</span>
+<span class="normal">309</span>
+<span class="normal">310</span>
+<span class="normal">311</span>
+<span class="normal">312</span>
+<span class="normal">313</span>
+<span class="normal">314</span>
+<span class="normal">315</span>
+<span class="normal">316</span>
+<span class="normal">317</span>
+<span class="normal">318</span>
+<span class="normal">319</span>
+<span class="normal">320</span>
+<span class="normal">321</span>
+<span class="normal">322</span>
+<span class="normal">323</span>
+<span class="normal">324</span>
+<span class="normal">325</span>
+<span class="normal">326</span>
+<span class="normal">327</span>
+<span class="normal">328</span>
+<span class="normal">329</span>
+<span class="normal">330</span>
+<span class="normal">331</span>
+<span class="normal">332</span>
+<span class="normal">333</span>
+<span class="normal">334</span>
+<span class="normal">335</span>
+<span class="normal">336</span>
+<span class="normal">337</span>
+<span class="normal">338</span>
+<span class="normal">339</span>
+<span class="normal">340</span>
+<span class="normal">341</span>
+<span class="normal">342</span>
+<span class="normal">343</span>
+<span class="normal">344</span>
+<span class="normal">345</span>
+<span class="normal">346</span>
+<span class="normal">347</span>
+<span class="normal">348</span>
+<span class="normal">349</span>
+<span class="normal">350</span>
+<span class="normal">351</span>
+<span class="normal">352</span>
+<span class="normal">353</span>
+<span class="normal">354</span>
+<span class="normal">355</span>
+<span class="normal">356</span>
+<span class="normal">357</span>
+<span class="normal">358</span>
+<span class="normal">359</span>
+<span class="normal">360</span>
+<span class="normal">361</span>
+<span class="normal">362</span>
+<span class="normal">363</span>
+<span class="normal">364</span>
+<span class="normal">365</span>
+<span class="normal">366</span>
+<span class="normal">367</span>
+<span class="normal">368</span>
+<span class="normal">369</span>
+<span class="normal">370</span>
+<span class="normal">371</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">transform_polygon</span><span class="p">(</span><span class="n">polygon</span><span class="p">:</span><span class="n">Union</span><span class="p">[</span><span class="n">Polygon</span><span class="p">,</span> <span class="n">MultiPolygon</span><span class="p">],</span> 
+                      <span class="n">transform</span><span class="p">:</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">Affine</span><span class="p">,</span> <span class="n">relative</span><span class="p">:</span><span class="nb">bool</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                      <span class="n">shape_raster</span><span class="p">:</span><span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span><span class="n">Polygon</span><span class="p">,</span> <span class="n">MultiPolygon</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Transform polygon coordinates using an affine transformation.</span>
+
+<span class="sd">    Applies a rasterio Affine transform to all vertices of a polygon,</span>
+<span class="sd">    converting between pixel and geographic coordinate systems. Handles</span>
+<span class="sd">    both simple Polygons and MultiPolygons, including holes.</span>
+
+<span class="sd">    Common use cases:</span>
+<span class="sd">    - Pixel coordinates → Geographic coordinates (using raster transform)</span>
+<span class="sd">    - Geographic coordinates → Relative coordinates (0-1 range for ML)</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        polygon (Union[Polygon, MultiPolygon]): Shapely geometry to transform.</span>
+<span class="sd">            Coordinates can be any numeric type.</span>
+<span class="sd">        transform (rasterio.Affine): 2D affine transformation matrix.</span>
+<span class="sd">            Common sources: raster.transform, rasterio.Affine.scale(), etc.</span>
+<span class="sd">        relative (bool): If True, output normalized coordinates in [0, 1] range</span>
+<span class="sd">            relative to the raster dimensions. Useful for ML model inputs.</span>
+<span class="sd">            Requires shape_raster. Default False.</span>
+<span class="sd">        shape_raster (Optional[Tuple[int, int]]): Raster dimensions as</span>
+<span class="sd">            (height, width). Required if relative=True. Ignored otherwise.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Union[Polygon, MultiPolygon]: Transformed geometry with same type as</span>
+<span class="sd">            input. All coordinates are transformed by the affine matrix.</span>
+
+<span class="sd">    Raises:</span>
+<span class="sd">        AssertionError: If relative=True but shape_raster not provided.</span>
+
+<span class="sd">    Examples:</span>
+<span class="sd">        Convert pixel polygon to geographic coordinates:</span>
+
+<span class="sd">        &gt;&gt;&gt; from shapely.geometry import Polygon</span>
+<span class="sd">        &gt;&gt;&gt; import rasterio</span>
+<span class="sd">        &gt;&gt;&gt; from georeader.vectorize import transform_polygon</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; # Polygon in pixel coordinates</span>
+<span class="sd">        &gt;&gt;&gt; poly_px = Polygon([(0, 0), (100, 0), (100, 100), (0, 100)])</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; # Transform from a raster</span>
+<span class="sd">        &gt;&gt;&gt; transform = rasterio.Affine(10.0, 0, 500000, 0, -10.0, 4500000)</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt; # Convert to UTM coordinates</span>
+<span class="sd">        &gt;&gt;&gt; poly_geo = transform_polygon(poly_px, transform)</span>
+<span class="sd">        &gt;&gt;&gt; print(poly_geo.bounds)</span>
+<span class="sd">        (500000.0, 4499000.0, 501000.0, 4500000.0)</span>
+
+<span class="sd">        Get relative coordinates for ML input:</span>
+
+<span class="sd">        &gt;&gt;&gt; poly_rel = transform_polygon(</span>
+<span class="sd">        ...     poly_px,</span>
+<span class="sd">        ...     transform=rasterio.Affine.identity(),</span>
+<span class="sd">        ...     relative=True,</span>
+<span class="sd">        ...     shape_raster=(1000, 1000)  # 1000x1000 image</span>
+<span class="sd">        ... )</span>
+<span class="sd">        &gt;&gt;&gt; print(poly_rel.bounds)  # Values in [0, 1]</span>
+<span class="sd">        (0.0, 0.0, 0.1, 0.1)</span>
+
+<span class="sd">        Transform MultiPolygon:</span>
+
+<span class="sd">        &gt;&gt;&gt; from shapely.geometry import MultiPolygon</span>
+<span class="sd">        &gt;&gt;&gt; multi = MultiPolygon([poly_px, poly_px.buffer(10)])</span>
+<span class="sd">        &gt;&gt;&gt; multi_geo = transform_polygon(multi, transform)</span>
+<span class="sd">        &gt;&gt;&gt; print(type(multi_geo))</span>
+<span class="sd">        &lt;class &#39;shapely.geometry.multipolygon.MultiPolygon&#39;&gt;</span>
+
+<span class="sd">    Note:</span>
+<span class="sd">        - The transform is applied as: (x_out, y_out) = transform * (x_in, y_in)</span>
+<span class="sd">        - For pixel-to-geo conversion, use the raster&#39;s transform directly</span>
+<span class="sd">        - For geo-to-pixel conversion, use ~transform (inverse)</span>
+<span class="sd">        - Holes in polygons are preserved after transformation</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">relative</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">shape_raster</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;shape_raster must be provided if relative is True&quot;</span>
+        <span class="n">transform</span> <span class="o">=</span> <span class="n">rasterio</span><span class="o">.</span><span class="n">Affine</span><span class="o">.</span><span class="n">scale</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="n">shape_raster</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="mi">1</span><span class="o">/</span><span class="n">shape_raster</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">*</span> <span class="n">transform</span>
+
+    <span class="n">geojson_dict</span> <span class="o">=</span> <span class="n">mapping</span><span class="p">(</span><span class="n">polygon</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">geojson_dict</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;Polygon&quot;</span><span class="p">:</span>
+        <span class="n">geojson_dict</span><span class="p">[</span><span class="s2">&quot;coordinates&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">geojson_dict</span><span class="p">[</span><span class="s2">&quot;coordinates&quot;</span><span class="p">]]</span>
+
+    <span class="n">multipol_coords</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">pol</span> <span class="ow">in</span> <span class="n">geojson_dict</span><span class="p">[</span><span class="s2">&quot;coordinates&quot;</span><span class="p">]:</span>
+        <span class="n">pol_coords</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">shell_or_holes</span> <span class="ow">in</span> <span class="n">pol</span><span class="p">:</span>
+            <span class="n">pol_out</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">coords</span> <span class="ow">in</span> <span class="n">shell_or_holes</span><span class="p">:</span>
+                <span class="n">pol_out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">transform</span> <span class="o">*</span> <span class="n">coords</span><span class="p">)</span>
+
+            <span class="n">pol_coords</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pol_out</span><span class="p">)</span>
+
+        <span class="n">multipol_coords</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pol_coords</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">geojson_dict</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;Polygon&quot;</span><span class="p">:</span>
+        <span class="n">geojson_dict</span><span class="p">[</span><span class="s2">&quot;coordinates&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">multipol_coords</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">geojson_dict</span><span class="p">[</span><span class="s2">&quot;coordinates&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">multipol_coords</span>
+
+    <span class="k">return</span> <span class="n">shape</span><span class="p">(</span><span class="n">geojson_dict</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/spaceml-org/georeader" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://pypi.org/project/georeader-spaceml" target="_blank" rel="noopener" title="pypi.org" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.8 200.5c-7.7-30.9-22.3-54.2-53.4-54.2h-40.1v47.4c0 36.8-31.2 67.8-66.8 67.8H172.7c-29.2 0-53.4 25-53.4 54.3v101.8c0 29 25.2 46 53.4 54.3 33.8 9.9 66.3 11.7 106.8 0 26.9-7.8 53.4-23.5 53.4-54.3v-40.7H226.2v-13.6h160.2c31.1 0 42.6-21.7 53.4-54.2 11.2-33.5 10.7-65.7 0-108.6M286.2 444.7a20.4 20.4 0 1 1 0-40.7 20.4 20.4 0 1 1 0 40.7M167.8 248.1h106.8c29.7 0 53.4-24.5 53.4-54.3V91.9c0-29-24.4-50.7-53.4-55.6-35.8-5.9-74.7-5.6-106.8.1-45.2 8-53.4 24.7-53.4 55.6v40.7h106.9v13.6h-147c-31.1 0-58.3 18.7-66.8 54.2-9.8 40.7-10.2 66.1 0 108.6 7.6 31.6 25.7 54.2 56.8 54.2H101v-48.8c0-35.3 30.5-66.4 66.8-66.4m-6.6-183.4a20.4 20.4 0 1 1 0 40.8 20.4 20.4 0 1 1 0-40.8"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
+      
+    
+  </body>
+</html>
