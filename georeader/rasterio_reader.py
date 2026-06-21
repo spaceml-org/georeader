@@ -149,6 +149,7 @@ References
 - Cloud Optimized GeoTIFF: https://cogeo.org/
 - GDAL VSI: https://gdal.org/user/virtual_file_systems.html
 """
+import re
 import rasterio
 import rasterio.windows
 import numpy as np
@@ -175,6 +176,32 @@ from numpy.typing import NDArray
 
 
 RIO_ENV_OPTIONS_DEFAULT = geotensor.RIO_ENV_OPTIONS_DEFAULT
+
+
+# Azure Blob Storage URLs carry a Shared Access Signature (SAS) as a query
+# string, e.g.
+#   https://<account>.blob.core.windows.net/<container>/<path>.tif?sv=...&se=...&sig=<secret>
+# The `sig` parameter is the actual cryptographic signature of the token: anyone
+# holding it can access the resource for the lifetime of the SAS. The other
+# parameters (signed version `sv`, expiry `se`, permissions `sp`, ...) are not
+# secret, so we keep them to preserve useful context (e.g. the expiry time) and
+# only mask `sig`. The lookbehind keeps the match surgical so nothing else in the
+# URL is altered.
+_SAS_SIGNATURE_RE = re.compile(r"(?i)(?<=[?&]sig=)[^&]+")
+
+
+def mask_sas_token(path: Any) -> Any:
+    """Mask the signature of an Azure SAS token embedded in a file path.
+
+    Replaces the value of the ``sig`` query parameter with ``****`` so that the
+    secret signature of an Azure Shared Access Signature does not leak into
+    ``repr``/log output. Non-string inputs and paths without a SAS signature are
+    returned unchanged. The expiry (``se``) and other non-secret parameters are
+    preserved.
+    """
+    if not isinstance(path, str):
+        return path
+    return _SAS_SIGNATURE_RE.sub("****", path)
 
 class RasterioReader:
     """
@@ -1202,8 +1229,9 @@ class RasterioReader:
         return griddata.meshgrid(self.transform, self.width, self.height, source_crs=self.crs, dst_crs=dst_crs)
     
     def __repr__(self)->str:
-        return f""" 
-         Paths: {self.paths}
+        paths = [mask_sas_token(p) for p in self.paths]
+        return f"""
+         Paths: {paths}
          Transform: {self.transform}
          Shape: {self.shape}
          Resolution: {self.res}
