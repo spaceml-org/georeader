@@ -18,6 +18,13 @@
   `requests`. No Azure SDK dependency — token loading via Azure Key
   Vault is left to downstream consumers (e.g. UNEP IMEO MARS).
 
+## [2.4.0](https://github.com/spaceml-org/georeader/compare/v2.3.2...v2.4.0) (2026-06-24)
+
+
+### Features
+
+* **rasterio_reader:** mask Azure SAS token signature in __repr__ ([#66](https://github.com/spaceml-org/georeader/issues/66)) ([4f32d81](https://github.com/spaceml-org/georeader/commit/4f32d81ee51b986891354e2183fe168f778015a2))
+
 ## [2.3.2](https://github.com/spaceml-org/georeader/compare/v2.3.1...v2.4.0) (2026-06-12)
 
 
