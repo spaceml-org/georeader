@@ -18,7 +18,7 @@
   `requests`. No Azure SDK dependency — token loading via Azure Key
   Vault is left to downstream consumers (e.g. UNEP IMEO MARS).
 
-## [2.4.0](https://github.com/spaceml-org/georeader/compare/v2.3.2...v2.4.0) (2026-06-24)
+## [2.3.3](https://github.com/spaceml-org/georeader/compare/v2.3.2...v2.3.3) (2026-06-24)
 
 
 ### Features
