@@ -445,6 +445,48 @@ def images_by_query_grid(images_available_gee:gpd.GeoDataFrame, grid:gpd.GeoData
     aois_images = aois_images.loc[indexes_selected].copy()
     return aois_images.reset_index(drop=True)
 
+DEGENERATE_FOOTPRINT_MAX_LAT_SPAN = 5.0
+
+
+def _filter_degenerate_footprints(geodf: gpd.GeoDataFrame,
+                                  max_lat_span: float = DEGENERATE_FOOTPRINT_MAX_LAT_SPAN
+                                  ) -> gpd.GeoDataFrame:
+    """
+    Drop rows whose footprint spans an implausibly large latitude range.
+
+    Some Earth Engine assets (e.g. certain real-time Landsat products) return a corrupt
+    ``system:footprint`` that degrades to the whole globe (``[-180, -90, 180, 90]``). Such a
+    footprint intersects every AOI, yielding a bogus 100% ``overlappercentage`` and polluting
+    the query results. A genuine S1/S2/Landsat scene spans at most ~3 deg of latitude
+    (latitude span is pole-robust, unlike longitude), so a latitude span above
+    ``max_lat_span`` (default 5 deg) reliably flags these corrupt footprints while staying
+    well clear of valid high-latitude scenes.
+
+    Args:
+        geodf (gpd.GeoDataFrame): query results with a ``geometry`` column (EPSG:4326).
+        max_lat_span (float): maximum footprint latitude span in degrees. Defaults to 5.
+
+    Returns:
+        gpd.GeoDataFrame: ``geodf`` without the degenerate-footprint rows.
+    """
+    if geodf.shape[0] == 0:
+        return geodf
+    lat_span = geodf.geometry.apply(
+        lambda g: (g.bounds[3] - g.bounds[1]) if (g is not None and not g.is_empty) else 0.0
+    )
+    degenerate = lat_span > max_lat_span
+    if degenerate.any():
+        for idx in geodf.index[degenerate]:
+            warnings.warn(
+                f"Dropping image {idx!r} with degenerate footprint (latitude span "
+                f"{lat_span[idx]:.1f} deg > {max_lat_span} deg); likely corrupt "
+                "system:footprint metadata from Earth Engine.",
+                stacklevel=2,
+            )
+        geodf = geodf[~degenerate]
+    return geodf
+
+
 def _add_stuff(geodf, area, tz):
     geodf["utcdatetime"] = pd.to_datetime(geodf["system:time_start"], unit='ms', utc=True)
     geodf["overlappercentage"] = geodf.geometry.apply(lambda x: overlappercentage_safe(x, area))
@@ -456,6 +498,7 @@ def _add_stuff(geodf, area, tz):
                                             utc=True).dt.tz_convert(tz)
     geodf["satellite"] = [x.split("_")[0] for x in geodf["title"]]
     geodf = geodf.set_index("title", drop=True)
+    geodf = _filter_degenerate_footprints(geodf)
 
     return geodf
 
