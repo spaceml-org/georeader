@@ -1,7 +1,6 @@
 """Tests for the degenerate-footprint guard in georeader.readers.ee_query.
 
-Drop this file into ``georeader/tests/readers/`` and run with the earthengine-api extra
-installed (``ee_query`` imports ``ee`` at module load):
+Run with the earthengine-api extra installed (``ee_query`` imports ``ee`` at module load):
 
     poetry run pytest tests/readers/test_ee_query_degenerate.py -v
 """
