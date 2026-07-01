@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.3.4](https://github.com/spaceml-org/georeader/compare/v2.3.3...v2.3.4) (2026-07-01)
+
+
+### Bug Fixes
+
+* **ee_query:** drop degenerate whole-globe footprints ([#69](https://github.com/spaceml-org/georeader/issues/69)) ([e57e41f](https://github.com/spaceml-org/georeader/commit/e57e41ff58fb5e9354c9826417416ca95ae20845))
+
+
+### Documentation
+
+* clean up CHANGELOG ([#70](https://github.com/spaceml-org/georeader/issues/70)) ([be7e2ce](https://github.com/spaceml-org/georeader/commit/be7e2ce52fc810af637659acdf020eebc17e0780))
+
 ## [2.3.3](https://github.com/spaceml-org/georeader/compare/v2.3.2...v2.3.3) (2026-06-24)
 
 
