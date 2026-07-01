@@ -10,6 +10,8 @@ import geopandas as gpd
 import pytest
 from shapely.geometry import Polygon, box
 
+pytest.importorskip("ee", reason="earthengine-api required for ee_query tests")
+
 from georeader.readers.ee_query import (
     DEGENERATE_FOOTPRINT_MAX_LAT_SPAN,
     _filter_degenerate_footprints,
