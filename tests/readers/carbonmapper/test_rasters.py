@@ -440,8 +440,8 @@ class TestFromSceneIdProbe:
     design doc §4.7 — works for v3a (STAC-resident) AND v3c
     (REST-only, the 2026 L2B version)."""
 
-    def test_v3c_picked_first(self, monkeypatch):
-        """v3c is the default first candidate — single probe + success."""
+    def test_v3d_picked_first(self, monkeypatch):
+        """v3d is the default first candidate — single probe + success."""
         calls: list[str] = []
 
         def fake_get(url, **kw):
@@ -453,27 +453,27 @@ class TestFromSceneIdProbe:
         ir = CMImageRaster.from_scene_id(
             "tan20260331t181625c77s4001", token="dummy", with_rgb=False,
         )
-        # One probe — first candidate (v3c) wins.
+        # One probe — first candidate (v3d) wins.
         assert len(calls) == 1
-        assert "l2b-ch4-mfa-v3c" in calls[0]
+        assert "l2b-ch4-mfa-v3d" in calls[0]
         assert "_cmf.tif" in calls[0]
 
-        # All 6 CH4 asset keys built with the winning collection (v3c).
+        # All 6 CH4 asset keys built with the winning collection (v3d).
         assert set(ir.asset_paths) == {
             "cmf", "cmf-unortho",
             "uncertainty", "uncertainty-unortho",
             "artifact-mask", "uas",
         }
         for url in ir.asset_paths.values():
-            assert "l2b-ch4-mfa-v3c" in str(url)
+            assert "l2b-ch4-mfa-v3d" in str(url)
         assert ir.asset_paths["uas"].endswith(".txt")
 
     def test_falls_through_to_v3a(self, monkeypatch):
-        """v3c 404 → v3a 206. The 2025 case — STAC would've worked too,
-        but ``from_scene_id`` doesn't go through STAC."""
-        # CH4 probes: v3c=404, v3a=206 → wins.
+        """v3d/v3c 404 → v3a 206. The 2025 case — STAC would've worked
+        too, but ``from_scene_id`` doesn't go through STAC."""
+        # CH4 probes: v3d=404, v3c=404, v3a=206 → wins.
         # No rgb probe (with_rgb=False).
-        seq = iter([404, 206])
+        seq = iter([404, 404, 206])
 
         def fake_get(url, **kw):
             return _make_probe_response(next(seq))
@@ -502,7 +502,7 @@ class TestFromSceneIdProbe:
     def test_with_rgb_adds_sibling(self, monkeypatch):
         """`with_rgb=True` (default) probes RGB sibling candidates after
         CH4 succeeds."""
-        # CH4 v3c=206 → wins. RGB v3c=206 → wins. 2 probes total.
+        # CH4 v3d=206 → wins. RGB v3d=206 → wins. 2 probes total.
         seq = iter([206, 206])
         calls: list[str] = []
 
@@ -516,16 +516,16 @@ class TestFromSceneIdProbe:
             "tan20260331t181625c77s4001", token="dummy",
         )
         assert len(calls) == 2
-        assert "l2b-ch4-mfa-v3c" in calls[0]
-        assert "l2b-rgb-v3c" in calls[1]
+        assert "l2b-ch4-mfa-v3d" in calls[0]
+        assert "l2b-rgb-v3d" in calls[1]
         assert "rgb" in ir.asset_paths
-        assert "l2b-rgb-v3c" in ir.asset_paths["rgb"]
+        assert "l2b-rgb-v3d" in ir.asset_paths["rgb"]
 
     def test_with_rgb_tolerates_rgb_404(self, monkeypatch):
         """CH4 succeeds + every RGB candidate 404s → return CH4-only,
         no exception. Rare but documented behaviour."""
-        # CH4 v3c=206 → wins. RGB v3c=404, v3a=404 → no rgb URL.
-        seq = iter([206, 404, 404])
+        # CH4 v3d=206 → wins. RGB v3d/v3c/v3a=404 → no rgb URL.
+        seq = iter([206, 404, 404, 404])
 
         def fake_get(url, **kw):
             return _make_probe_response(next(seq))
@@ -555,10 +555,10 @@ class TestFromSceneIdProbe:
             l2b_collection_candidates=("l2b-ch4-mfa-v3", "l2b-ch4-mfm-v1"),
             with_rgb=False,
         )
-        # First custom candidate wins; the default v3c isn't probed.
+        # First custom candidate wins; the defaults aren't probed.
         assert len(calls) == 1
         assert "l2b-ch4-mfa-v3" in calls[0]
-        assert "l2b-ch4-mfa-v3c" not in calls[0]
+        assert "l2b-ch4-mfa-v3d" not in calls[0]
         assert "l2b-ch4-mfa-v3" in ir.asset_paths["cmf"]
 
     def test_transport_errors_propagate(self, monkeypatch):
@@ -608,8 +608,11 @@ class TestFromSceneIdProbe:
 
 
 def test_default_ch4_candidates_priority():
-    """v3c first — covers 2026 onward (the practical 'live' scenes)."""
+    """Newest first — v3d is the live era (2026-07 audit). These
+    defaults matter only for scene-name-only lookups; record-driven
+    callers use the spec path and never probe."""
     assert DEFAULT_L2B_CH4_COLLECTION_CANDIDATES == (
+        "l2b-ch4-mfa-v3d",
         "l2b-ch4-mfa-v3c",
         "l2b-ch4-mfa-v3a",
     )
@@ -617,6 +620,91 @@ def test_default_ch4_candidates_priority():
 
 def test_default_rgb_candidates_priority():
     assert DEFAULT_L2B_RGB_COLLECTION_CANDIDATES == (
+        "l2b-rgb-v3d",
         "l2b-rgb-v3c",
         "l2b-rgb-v3a",
     )
+
+
+# ─── Spec-driven (probe-free) from_scene_id ──────────────────────────
+
+
+class TestFromSceneIdSpec:
+    """When a `CMCollectionSpec` (or explicit collection id) is known,
+    `from_scene_id` must compose URLs directly — zero probe requests,
+    and same-version pairing for the RGB sibling (2026-07 audit)."""
+
+    def _forbid_http(self, monkeypatch):
+        def boom(url, **kw):
+            raise AssertionError(f"unexpected HTTP request: {url}")
+        monkeypatch.setattr(_rasters.requests, "get", boom)
+
+    def test_spec_builds_urls_without_probing(self, monkeypatch):
+        from georeader.readers.carbonmapper.products import CMCollectionSpec
+
+        self._forbid_http(monkeypatch)
+        ir = CMImageRaster.from_scene_id(
+            "tan20260623t124240c80s4001",
+            token="dummy",
+            spec=CMCollectionSpec(version="v3d"),
+        )
+        assert "l2b-ch4-mfa-v3d" in str(ir.asset_paths["cmf"])
+        # RGB sibling pinned at the same version — no probe either.
+        assert "l2b-rgb-v3d" in str(ir.asset_paths["rgb"])
+
+    def test_explicit_collection_ids_without_probing(self, monkeypatch):
+        self._forbid_http(monkeypatch)
+        ir = CMImageRaster.from_scene_id(
+            "ang20190615t184217",
+            token="dummy",
+            collection="l2b-ch4-mf-v1",
+            rgb_collection="l2b-rgb-v1",
+        )
+        assert "l2b-ch4-mf-v1" in str(ir.asset_paths["cmf"])
+        assert "l2b-rgb-v1" in str(ir.asset_paths["rgb"])
+
+    def test_explicit_collection_with_rgb_probes_only_rgb(self, monkeypatch):
+        """CH4 pinned + RGB unpinned → exactly the RGB candidates are
+        probed."""
+        calls: list[str] = []
+
+        def fake_get(url, **kw):
+            calls.append(url)
+            return _make_probe_response(404)
+
+        monkeypatch.setattr(_rasters.requests, "get", fake_get)
+        ir = CMImageRaster.from_scene_id(
+            "tan20260623t124240c80s4001",
+            token="dummy",
+            collection="l2b-ch4-mfa-v3d",
+        )
+        assert all("l2b-rgb-" in c for c in calls)
+        assert "rgb" not in ir.asset_paths
+
+    def test_products_subset(self, monkeypatch):
+        from georeader.readers.carbonmapper import products as P
+        from georeader.readers.carbonmapper.products import CMCollectionSpec
+
+        self._forbid_http(monkeypatch)
+        ir = CMImageRaster.from_scene_id(
+            "tan20260623t124240c80s4001",
+            token="dummy",
+            spec=CMCollectionSpec(version="v3d"),
+            products=(P.CMF, P.UNCERTAINTY),
+            with_rgb=False,
+        )
+        assert set(ir.asset_paths) == {"cmf", "uncertainty"}
+
+    def test_non_l2b_product_rejected(self, monkeypatch):
+        from georeader.readers.carbonmapper import products as P
+        from georeader.readers.carbonmapper.products import CMCollectionSpec
+
+        self._forbid_http(monkeypatch)
+        with pytest.raises(ValueError, match="not an L2B"):
+            CMImageRaster.from_scene_id(
+                "tan20260623t124240c80s4001",
+                token="dummy",
+                spec=CMCollectionSpec(version="v3d"),
+                products=(P.PLUME_TIF,),
+                with_rgb=False,
+            )

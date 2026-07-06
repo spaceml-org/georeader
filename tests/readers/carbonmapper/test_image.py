@@ -204,7 +204,7 @@ class TestDeriveAssetUrlsErrors:
             "plume_id": PID_V3A,
             "plume_tif": "https://catalog.carbonmapper.org/foo/bar.tif",
         }
-        with pytest.raises(ValueError, match="`<prefix>_plume.tif` pattern"):
+        with pytest.raises(ValueError, match="asset pattern"):
             _derive_asset_urls(seed)
 
 

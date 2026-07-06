@@ -854,6 +854,35 @@ class CMRawPlume(BaseModel):
         """
         return self.emission_version
 
+    @property
+    def collection_spec(self) -> "CMCollectionSpec | None":
+        """This plume's resolved collection spec, or ``None``.
+
+        Resolves the ``(gas, cmf_type, version)`` triple naming the
+        collections this plume's assets live in — from the
+        :attr:`plume_tif` URL when present, else from the
+        ``gas`` / ``emission_cmf_type`` / ``emission_version`` fields.
+        Composes every product-family collection id without version
+        guessing (see
+        :class:`~georeader.readers.carbonmapper.products.CMCollectionSpec`).
+
+        Returns ``None`` when neither source is available (e.g. sparse
+        CSV exports without asset URLs).
+        """
+        from georeader.readers.carbonmapper.products import CMCollectionSpec
+
+        record = {
+            "plume_id": self.plume_id,
+            "plume_tif": self.plume_tif,
+            "gas": self.gas,
+            "cmf_type": self.emission_cmf_type,
+            "emission_version": self.emission_version,
+        }
+        try:
+            return CMCollectionSpec.from_plume_record(record)
+        except ValueError:
+            return None
+
     # ------------------------------------------------------------------ #
     # Serialisation                                                        #
     # ------------------------------------------------------------------ #

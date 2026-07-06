@@ -67,6 +67,7 @@ georeader.readers.carbonmapper.source.CMSource : typed source model.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Iterable, Literal, Mapping
@@ -77,6 +78,7 @@ from shapely.geometry.base import BaseGeometry
 
 from georeader.readers.carbonmapper import download as _dl
 from georeader.readers.carbonmapper.plume import CMRawPlume, Gas
+from georeader.readers.carbonmapper.products import CMCollectionSpec
 from georeader.readers.carbonmapper.source import CMSource, _strip_query_suffix
 
 if TYPE_CHECKING:
@@ -87,6 +89,8 @@ if TYPE_CHECKING:
     from georeader.readers.carbonmapper.rasters import CMImageRaster
 
 BBox = tuple[float, float, float, float]   # (W, S, E, N) WGS-84
+
+_log = logging.getLogger(__name__)
 
 DEFAULT_L2B_COLLECTION = "l2b-ch4-mfa-v3a"
 
@@ -833,6 +837,30 @@ def get_image_raster_for_plume(
     True
     """
     scene_id = _scene_id_from_plume(plume_id)
+
+    # Preferred path: one catalog fetch resolves the CMCollectionSpec
+    # (gas / cmf_type / version) from the plume's own record, which
+    # names the L2B parent collection at the same version — verified
+    # pairing, no probing, and it never goes stale when Carbon Mapper
+    # bumps versions. Falls back to the STAC-first/probe-second dance
+    # only when the record is unavailable or unparseable.
+    try:
+        record = _dl.get_plume_by_id(plume_id, token=token)
+        spec = CMCollectionSpec.from_plume_record(record)
+    except (requests.HTTPError, requests.ConnectionError, ValueError) as exc:
+        _log.debug(
+            "Could not resolve CMCollectionSpec for plume %s (%s); "
+            "falling back to STAC + candidate probing", plume_id, exc,
+        )
+        spec = None
+
+    if spec is not None:
+        from georeader.readers.carbonmapper.rasters import CMImageRaster
+
+        return CMImageRaster.from_scene_id(
+            scene_id, token=token, spec=spec, with_rgb=with_rgb,
+        )
+
     return get_image_raster_for_scene(
         token, scene_id,
         collection=collection,

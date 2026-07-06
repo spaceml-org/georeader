@@ -47,6 +47,12 @@ from georeader.readers.carbonmapper.api_queries import (
     CMSceneNotPublished,
     CMTileItem,
 )
+from georeader.readers.carbonmapper.products import (
+    DEFAULT_SCENE_PRODUCTS,
+    CMCollectionSpec,
+    CMProduct,
+    CMProductFamily,
+)
 
 BBox = tuple[float, float, float, float]   # (W, S, E, N) in WGS-84
 PathLike = str | Path
@@ -86,12 +92,17 @@ DEFAULT_L2B_RGB_COLLECTION = "l2b-rgb-v3a"
 _API_ASSET_BASE = "https://api.carbonmapper.org/api/v1/catalog/asset"
 
 #: Default L2B CH4 collection candidates probed by
-#: :meth:`CMImageRaster.from_scene_id`. Order matters — ``v3c`` covers
-#: 2026-01 onward (including v3d L3A plumes whose L2B parent is still
-#: ``v3c``); ``v3a`` covers 2025-07 → 2025-12. Older variants
-#: (``mfa-v3``, ``mfa-v1``, ``mfm-v1``) can be passed explicitly for
-#: historical scenes.
+#: :meth:`CMImageRaster.from_scene_id` **only when no**
+#: :class:`~georeader.readers.carbonmapper.products.CMCollectionSpec`
+#: (or explicit ``collection``) is available — i.e. scene-name-only
+#: lookups with no plume record to resolve the version from. Order
+#: matters — newest first. The 2026-07 audit verified pairing is
+#: **same-version** (a v3d L3A plume's L2B parent serves at ``v3d``),
+#: so when a plume record is available prefer the spec path, which
+#: never goes stale. Older variants (``mfa-v3``, ``mfa-v1``,
+#: ``mfm-v1``) can be passed explicitly for historical scenes.
 DEFAULT_L2B_CH4_COLLECTION_CANDIDATES: tuple[str, ...] = (
+    "l2b-ch4-mfa-v3d",
     "l2b-ch4-mfa-v3c",
     "l2b-ch4-mfa-v3a",
 )
@@ -100,6 +111,7 @@ DEFAULT_L2B_CH4_COLLECTION_CANDIDATES: tuple[str, ...] = (
 #: :meth:`CMImageRaster.from_scene_id`. Same version-letter ordering
 #: as the CH4 candidates.
 DEFAULT_L2B_RGB_COLLECTION_CANDIDATES: tuple[str, ...] = (
+    "l2b-rgb-v3d",
     "l2b-rgb-v3c",
     "l2b-rgb-v3a",
 )
@@ -290,6 +302,10 @@ class CMImageRaster:
         scene_id: str,
         *,
         token: str,
+        spec: CMCollectionSpec | None = None,
+        collection: str | None = None,
+        rgb_collection: str | None = None,
+        products: Sequence[CMProduct] = DEFAULT_SCENE_PRODUCTS,
         l2b_collection_candidates: Sequence[str] = DEFAULT_L2B_CH4_COLLECTION_CANDIDATES,
         rgb_collection_candidates: Sequence[str] = DEFAULT_L2B_RGB_COLLECTION_CANDIDATES,
         with_rgb: bool = True,
@@ -300,32 +316,62 @@ class CMImageRaster:
 
         Bypasses STAC entirely — derives every asset URL by templating
         against the verified asset-proxy pattern (see
-        :func:`_l2b_asset_url`) and probing the candidate collections
-        in order. Required for 2026 plumes (v3c/v3d L3A) whose L2B
-        parent scenes are **not** in ``/stac/collections``.
+        :func:`_l2b_asset_url`). Required for 2026 scenes (v3c/v3d)
+        which are **not** in ``/stac/collections``.
+
+        Collection resolution, in order of preference:
+
+        1. ``spec`` — a :class:`CMCollectionSpec` resolved from the
+           plume record (``CMCollectionSpec.from_plume_record``). Names
+           both the CH4 and RGB collections at the plume's own version
+           (verified same-version pairing) with **zero probe requests**.
+        2. ``collection`` / ``rgb_collection`` — explicit ids, also
+           probe-free.
+        3. Candidate probing (legacy) — for scene-name-only lookups
+           with no record available. Probes
+           ``l2b_collection_candidates`` in order; first 200/206 wins.
+           Hardcoded candidate lists go stale every time Carbon Mapper
+           bumps a version, so prefer 1-2 whenever a record is at hand.
 
         Parameters
         ----------
         scene_id:
-            L2B scene id, equal to ``plume_id.rsplit("-", 1)[0]`` for
+            L2B scene name, equal to ``plume_id.rsplit("-", 1)[0]`` for
             any plume that came from this scene. Must follow the
             ``<inst><YYYYMMDD>t<HHMMSS>...`` convention so the date
-            can be parsed.
+            can be parsed. (The catalog record's ``scene_id`` field is
+            a **UUID** and will not work here.)
         token:
             Bearer token. Required — the asset-proxy URLs return 401
             without it.
+        spec:
+            Collection spec (gas / cmf_type / version) to compose both
+            collection ids from. Overrides the candidate lists.
+        collection:
+            Explicit L2B CH4-family collection id (e.g.
+            ``"l2b-ch4-mfa-v3d"``). Overrides the candidate list;
+            ignored when ``spec`` is given.
+        rgb_collection:
+            Explicit RGB sibling collection id (e.g. ``"l2b-rgb-v3d"``).
+            Ignored when ``spec`` is given.
+        products:
+            Which per-scene products to derive URLs for — descriptors
+            from :mod:`~georeader.readers.carbonmapper.products`
+            (:data:`DEFAULT_SCENE_PRODUCTS` = the 5 rasters + ``uas``).
+            The RGB sibling is controlled by ``with_rgb``, not this
+            list (it lives in a different collection).
         l2b_collection_candidates:
-            L2B CH4 collection IDs to probe, in order. First one to
-            serve a 200/206 on ``cmf.tif`` wins. Defaults to
-            :data:`DEFAULT_L2B_CH4_COLLECTION_CANDIDATES` —
-            ``("l2b-ch4-mfa-v3c", "l2b-ch4-mfa-v3a")``.
+            L2B CH4 collection IDs to probe, in order, when neither
+            ``spec`` nor ``collection`` is given. Defaults to
+            :data:`DEFAULT_L2B_CH4_COLLECTION_CANDIDATES`.
         rgb_collection_candidates:
             L2B RGB sibling collection IDs probed identically (on
             ``rgb.tif``). Defaults to
             :data:`DEFAULT_L2B_RGB_COLLECTION_CANDIDATES`.
         with_rgb:
-            When ``True`` (default), probe the RGB sibling collections
-            and attach the ``rgb`` URL on success. When ``False``,
+            When ``True`` (default), attach the ``rgb`` sibling URL
+            (probing the RGB candidates only when its collection isn't
+            pinned by ``spec`` / ``rgb_collection``). When ``False``,
             ``self.rgb`` will be ``None``.
         overview_level:
             Forwarded to :class:`RasterioReader`.
@@ -335,61 +381,75 @@ class CMImageRaster:
         Returns
         -------
         CMImageRaster
-            With ``asset_paths`` populated for the 6 L2B CH4 assets
-            (``cmf``, ``cmf-unortho``, ``uncertainty``,
-            ``uncertainty-unortho``, ``artifact-mask``, ``uas``) and,
-            when ``with_rgb=True``, the ``rgb`` sibling URL.
+            With ``asset_paths`` populated for the selected products
+            and, when ``with_rgb=True``, the ``rgb`` sibling URL.
 
         Raises
         ------
         CMSceneNotPublished
-            When every candidate L2B collection 404s for ``scene_id``
-            — the scene either hasn't been processed yet or only
-            exists in a collection variant not listed in
-            ``l2b_collection_candidates``. Catch in ETL paths that
-            want to defer rather than error.
+            When probing was needed and every candidate L2B collection
+            404'd for ``scene_id`` — the scene either hasn't been
+            processed yet or only exists in an unlisted collection
+            variant. Catch in ETL paths that want to defer rather
+            than error. (Not raised on the ``spec`` / ``collection``
+            paths, which build URLs without probing — missing scenes
+            surface as read errors on first access.)
         ValueError
             When ``scene_id`` doesn't carry an 8-digit date at
-            positions ``[3:11]``.
+            positions ``[3:11]``, or a non-L2B product was requested.
 
         Examples
         --------
         >>> tile = CMImageRaster.from_scene_id(  # doctest: +SKIP
-        ...     "tan20260331t181625c77s4001", token=tok,
+        ...     "tan20260623t124240c80s4001", token=tok,
+        ...     spec=CMCollectionSpec(version="v3d"),
         ... )
         >>> tile.cmf  # doctest: +SKIP
-        <RasterioReader …/l2b-ch4-mfa-v3c/2026/03/31/…>
+        <RasterioReader …/l2b-ch4-mfa-v3d/2026/06/23/…>
         """
-        l2b_coll = _probe_l2b_collection(
-            scene_id,
-            l2b_collection_candidates,
-            probe_asset="cmf.tif",
-            token=token,
-            http_timeout=http_timeout,
-        )
+        if spec is not None:
+            l2b_coll: str | None = spec.collection_id(CMProductFamily.L2B)
+            rgb_coll: str | None = spec.collection_id(CMProductFamily.L2B_RGB)
+        else:
+            l2b_coll = collection
+            rgb_coll = rgb_collection
+
         if l2b_coll is None:
-            raise CMSceneNotPublished(scene_id)
-
-        # Build the 6 CH4-collection asset URLs from the winning prefix.
-        # Extensions are baked in — `_open` strips nothing, so keys must
-        # match the lazy-property names exactly (without extensions).
-        asset_paths: dict[str, PathLike] = {
-            "cmf":                 _l2b_asset_url(l2b_coll, scene_id, "cmf.tif"),
-            "cmf-unortho":         _l2b_asset_url(l2b_coll, scene_id, "cmf-unortho.tif"),
-            "uncertainty":         _l2b_asset_url(l2b_coll, scene_id, "uncertainty.tif"),
-            "uncertainty-unortho": _l2b_asset_url(l2b_coll, scene_id, "uncertainty-unortho.tif"),
-            "artifact-mask":       _l2b_asset_url(l2b_coll, scene_id, "artifact-mask.tif"),
-            "uas":                 _l2b_asset_url(l2b_coll, scene_id, "uas.txt"),
-        }
-
-        if with_rgb:
-            rgb_coll = _probe_l2b_collection(
+            l2b_coll = _probe_l2b_collection(
                 scene_id,
-                rgb_collection_candidates,
-                probe_asset="rgb.tif",
+                l2b_collection_candidates,
+                probe_asset="cmf.tif",
                 token=token,
                 http_timeout=http_timeout,
             )
+            if l2b_coll is None:
+                raise CMSceneNotPublished(scene_id)
+
+        # Build one asset URL per selected product. Keys are the
+        # extension-less band names — they must match the lazy-property
+        # names exactly (`_open` strips nothing).
+        asset_paths: dict[str, PathLike] = {}
+        for product in products:
+            if product.family is not CMProductFamily.L2B:
+                raise ValueError(
+                    f"Product {product.key!r} ({product.family.value}) "
+                    "is not an L2B per-scene product. Use CMPlumeImage "
+                    "for L3A per-plume products; the RGB sibling is "
+                    "controlled by with_rgb=."
+                )
+            asset_paths[product.band] = _l2b_asset_url(
+                l2b_coll, scene_id, product.key,
+            )
+
+        if with_rgb:
+            if rgb_coll is None:
+                rgb_coll = _probe_l2b_collection(
+                    scene_id,
+                    rgb_collection_candidates,
+                    probe_asset="rgb.tif",
+                    token=token,
+                    http_timeout=http_timeout,
+                )
             if rgb_coll is not None:
                 asset_paths["rgb"] = _l2b_asset_url(rgb_coll, scene_id, "rgb.tif")
 

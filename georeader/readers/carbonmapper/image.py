@@ -6,24 +6,24 @@ context, and the canonical outline polygon. This is the per-plume
 counterpart to :class:`~georeader.readers.carbonmapper.rasters.CMImageRaster`
 (which wraps L2B scenes).
 
-**CH4-only for this PR.** CO2 lands in a follow-up — the URL pattern
-below hardcodes the CH4 collection segment swap.
+Which products the bundle carries is an explicit caller choice — the
+``products=`` parameter takes descriptors from
+:mod:`~georeader.readers.carbonmapper.products` (defaulting to the 7
+GeoTIFF/GeoJSON assets). Collection versioning is resolved per plume
+from the record's own ``plume_tif`` URL via
+:class:`~georeader.readers.carbonmapper.products.CMCollectionSpec` —
+nothing is guessed from hardcoded version lists, so the wrapper works
+for any gas / cmf_type / version CM publishes (v3a, v3c, v3d, …).
 
-Why this exists: Carbon Mapper exposes per-plume products under two
-parallel collection families:
-
-- **v3a** (``l3a-vis-ch4-mfa-v3a`` / ``l3a-ime-ch4-mfa-v3a``) —
-  STAC-registered. Plumes from 2023-10 to 2025-12.
-- **v3c** (``l3a-vis-ch4-mfa-v3c`` / ``l3a-ime-ch4-mfa-v3c``) —
-  newest data (post 2026-01) but **not** registered in
-  ``/stac/collections``. Reachable only via direct asset URLs from
-  ``/catalog/plume/{id}``.
-
-A STAC-only wrapper misses the last few months of data. This module
-handles both: :meth:`CMPlumeImage.from_plume_id` derives all asset
+Why URL derivation instead of STAC: ``/stac/collections`` stops at
+``-v3a`` (plumes 2023-10 → 2025-12); every newer collection exists
+only in the asset-proxy namespace and is reachable via direct asset
+URLs from ``/catalog/plume/{id}``. A STAC-only wrapper would miss all
+current data. :meth:`CMPlumeImage.from_plume_id` derives all asset
 URLs from the REST catalog response (which has signed CDN URLs for
-either version) and rewrites them to the Bearer-aware api gateway
-form so the URLs don't expire.
+any version) and rewrites them to the Bearer-aware api gateway form
+so the URLs don't expire. Ground truth in
+``docs/carbonmapper/api_audit_2026-07.md``.
 
 Outline GeoJSON is the canonical source for the plume polygon; if
 the fetch fails (network / 404 / malformed body), we fall back to
@@ -33,13 +33,10 @@ callers notice when they're not on the canonical path.
 
 from __future__ import annotations
 
-import json
 import logging
-import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import cached_property
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence
 from urllib.parse import urlparse
 
 import numpy as np
@@ -52,6 +49,22 @@ from georeader import read, window_utils
 from georeader.geotensor import GeoTensor
 from georeader.rasterio_reader import RasterioReader
 from georeader.readers.carbonmapper.plume import CMRawPlume, Collection
+from georeader.readers.carbonmapper.products import (
+    ALL_PLUME_PRODUCTS,
+    DEFAULT_PLUME_PRODUCTS,
+    IME_CONCENTRATIONS,
+    IME_MASK,
+    IME_OUTLINE,
+    PLUME_CONCENTRATIONS,
+    PLUME_OUTLINE,
+    PLUME_TIF,
+    RGB_TIF,
+    CMCollectionSpec,
+    CMProduct,
+    CMProductFamily,
+    CMProductNotSelected,
+    _parse_asset_url,
+)
 
 if TYPE_CHECKING:
     # The tile-bridge methods (:meth:`CMPlumeImage.tile` and the
@@ -61,7 +74,6 @@ if TYPE_CHECKING:
     # callers who only use the L3A products.
     from georeader.readers.carbonmapper.rasters import CMImageRaster
 
-PathLike = str | Path
 _log = logging.getLogger(__name__)
 
 
@@ -71,16 +83,12 @@ _log = logging.getLogger(__name__)
 _API_ASSET_BASE = "https://api.carbonmapper.org/api/v1/catalog/asset"
 
 
-# Asset keys this wrapper exposes — one per public property on
-# `CMPlumeImage`. Kept as a constant for tests + introspection.
-CM_PLUME_IMAGE_ASSETS: tuple[str, ...] = (
-    "plume.tif",
-    "plume-concentrations.tif",
-    "plume-outline.geojson",
-    "rgb.tif",
-    "ime-cmf-concentrations.tif",
-    "ime-cmf-mask.tif",
-    "ime-cmf-outline.geojson",
+# Default asset keys this wrapper exposes — one per public property on
+# `CMPlumeImage`. Kept for backwards compatibility + introspection; the
+# authoritative registry lives in
+# :mod:`georeader.readers.carbonmapper.products`.
+CM_PLUME_IMAGE_ASSETS: tuple[str, ...] = tuple(
+    p.key for p in DEFAULT_PLUME_PRODUCTS
 )
 
 
@@ -101,49 +109,39 @@ def _cdn_to_api(cdn_url: str) -> str:
     return f"{_API_ASSET_BASE}{parsed.path}"
 
 
-def _swap_collection_segment(api_url: str, *, src: str, dst: str) -> str:
-    """Replace one collection segment (``l3a-vis-...`` → ``l3a-ime-...``)
-    in both the path and the filename tail.
+def _derive_asset_urls(
+    catalog_plume: Mapping[str, Any],
+    products: Sequence[CMProduct] = DEFAULT_PLUME_PRODUCTS,
+) -> dict[str, str]:
+    """From ``/catalog/plume/{id}`` response, derive ``{asset_key: url}``
+    for the **selected** per-plume products.
 
-    The asset URL pattern is::
+    Resolves the :class:`~georeader.readers.carbonmapper.products.CMCollectionSpec`
+    from the record's own ``plume_tif`` URL (authoritative — it names
+    the run the assets were published under; verified same-version
+    across the vis/ime families in the 2026-07 audit), then composes
+    one asset-proxy URL per selected product. Translates the signed
+    CDN host to the api.carbonmapper.org gateway form so Bearer auth
+    applies and the URL doesn't expire.
 
-        <base>/<COLL>/<Y>/<M>/<D>/<plume_id>/<plume_id>_<COLL>_<asset>.<ext>
-
-    so the collection ID appears twice — once as a path segment and
-    once embedded in the filename. Swap both consistently.
-    """
-    return api_url.replace(src, dst)
-
-
-def _derive_asset_urls(catalog_plume: Mapping[str, Any]) -> dict[str, str]:
-    """From ``/catalog/plume/{id}`` response, derive ``{asset_name: url}``
-    for every per-plume product :class:`CMPlumeImage` exposes.
-
-    Translates signed CDN URLs to the api.carbonmapper.org gateway
-    form so Bearer auth applies and the URL doesn't expire.
-
-    Returns 7 keys (one per ``CMPlumeImage`` property):
-
-    - ``plume.tif``                  → :attr:`CMPlumeImage.mask`
-    - ``plume-concentrations.tif``   → :attr:`CMPlumeImage.concentrations`
-    - ``plume-outline.geojson``      → :attr:`CMPlumeImage.outline` (canonical)
-    - ``rgb.tif``                    → :attr:`CMPlumeImage.rgb`
-
-    The remaining three live in the IME sibling collection and are
-    derived by swapping ``l3a-vis-ch4-mfa-`` → ``l3a-ime-ch4-mfa-``:
-
-    - ``ime-cmf-concentrations.tif`` → :attr:`CMPlumeImage.ime_concentrations`
-    - ``ime-cmf-mask.tif``           → :attr:`CMPlumeImage.ime_mask`
-    - ``ime-cmf-outline.geojson``    → :attr:`CMPlumeImage.ime_outline`
+    Args:
+        catalog_plume: The ``/catalog/plume/{id}`` (or annotated-list
+            item) mapping. Only ``plume_tif`` and ``plume_id`` are
+            consulted; other URL fields (``con_tif``, ``rgb_png``, …)
+            are ignored — deriving every asset from one spec avoids
+            version-mismatch bugs.
+        products: Which products to derive URLs for. Defaults to
+            :data:`~georeader.readers.carbonmapper.products.DEFAULT_PLUME_PRODUCTS`
+            (the 7 GeoTIFF/GeoJSON assets). Pass
+            :data:`~georeader.readers.carbonmapper.products.ALL_PLUME_PRODUCTS`
+            to include the PNG quicklooks, or any explicit subset.
 
     Raises
     ------
     ValueError
-        If ``catalog_plume`` is missing the ``plume_tif`` field that
-        seeds the URL pattern. Other URL fields (``con_tif``,
-        ``rgb_png``, etc.) on the response are ignored — we derive
-        every asset from the same prefix to avoid version-mismatch
-        bugs (e.g. ``plume_tif`` at v3c but ``con_tif`` at v3b).
+        If ``catalog_plume`` is missing the ``plume_tif`` field, its
+        URL doesn't match the asset pattern, or a non-L3A product was
+        requested.
     """
     seed = catalog_plume.get("plume_tif")
     if not seed:
@@ -154,46 +152,61 @@ def _derive_asset_urls(catalog_plume: Mapping[str, Any]) -> dict[str, str]:
             "catalog response is malformed."
         )
 
-    # Rewrite host + strip query, then peel off the `_plume.tif` tail
-    # to get the prefix shared by every vis asset.
-    api_url = _cdn_to_api(seed)
-    m = re.match(r"^(.+)_plume\.tif$", api_url)
-    if m is None:
+    parsed = _parse_asset_url(str(seed))
+    if parsed is None:
         raise ValueError(
-            f"plume_tif URL {api_url!r} doesn't match the expected "
-            f"`<prefix>_plume.tif` pattern."
+            f"plume_tif URL {seed!r} doesn't match the expected "
+            "`.../{collection}/{Y}/{M}/{D}/{plume_id}/"
+            "{plume_id}_{collection}_plume.tif` asset pattern."
         )
-    vis_prefix = m.group(1)
 
-    out: dict[str, str] = {
-        "plume.tif":                f"{vis_prefix}_plume.tif",
-        "plume-concentrations.tif": f"{vis_prefix}_plume-concentrations.tif",
-        "plume-outline.geojson":    f"{vis_prefix}_plume-outline.geojson",
-        "rgb.tif":                  f"{vis_prefix}_rgb.tif",
-    }
+    # The vis products reuse the record's own collection id verbatim
+    # (no recomposition drift). The IME sibling collection is composed
+    # via the spec — but only when the record's collection is a real
+    # `l3a-vis-*` id. Legacy families (`l3a-ch4-mf-v1`, pre vis/ime
+    # split) have no IME sibling: those keys are omitted and the ime_*
+    # properties return None.
+    ime_collection: Optional[str] = None
+    try:
+        spec = CMCollectionSpec.from_collection_id(parsed.collection_id)
+        if parsed.collection_id == spec.collection_id(CMProductFamily.L3A_VIS):
+            ime_collection = spec.collection_id(CMProductFamily.L3A_IME)
+    except ValueError:
+        pass
 
-    # IME sibling — same pattern but with the collection segment
-    # swapped from `l3a-vis-ch4-mfa-<version>` to
-    # `l3a-ime-ch4-mfa-<version>`. The collection ID appears twice
-    # in the URL (once as a path segment, once embedded in the
-    # filename tail), so swap both. Version-agnostic — works for
-    # v3a, v3b, v3c and any future bump.
-    if "l3a-vis-ch4-mfa-" in vis_prefix:
-        ime_prefix = vis_prefix.replace(
-            "l3a-vis-ch4-mfa-", "l3a-ime-ch4-mfa-",
+    out: dict[str, str] = {}
+    for product in products:
+        if product.family is CMProductFamily.L3A_VIS:
+            collection = parsed.collection_id
+        elif product.family is CMProductFamily.L3A_IME:
+            if ime_collection is None:
+                continue
+            collection = ime_collection
+        else:
+            raise ValueError(
+                f"Product {product.key!r} is a per-scene "
+                f"({product.family.value}) product — only L3A per-plume "
+                "products can be derived from a plume record. Use "
+                "CMImageRaster for L2B scene products."
+            )
+        out[product.key] = product.asset_url(
+            None,
+            parsed.item_id,
+            date=(parsed.yyyy, parsed.mm, parsed.dd),
+            collection_id=collection,
         )
-        out["ime-cmf-concentrations.tif"] = (
-            f"{ime_prefix}_ime-cmf-concentrations.tif"
-        )
-        out["ime-cmf-mask.tif"] = f"{ime_prefix}_ime-cmf-mask.tif"
-        out["ime-cmf-outline.geojson"] = (
-            f"{ime_prefix}_ime-cmf-outline.geojson"
-        )
-    # If we didn't find the vis collection segment (legacy mf-v1 etc.
-    # use a different prefix), skip the IME keys rather than guessing
-    # — the IME properties return None in that case.
-
     return out
+
+
+def _spec_or_none(record: Mapping[str, Any]) -> Optional[CMCollectionSpec]:
+    """Resolve the record's collection spec; ``None`` when impossible
+    (legacy families / sparse records) rather than failing the bundle —
+    the spec is an optimisation for :attr:`CMPlumeImage.tile`, not a
+    requirement."""
+    try:
+        return CMCollectionSpec.from_plume_record(record)
+    except ValueError:
+        return None
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -256,6 +269,19 @@ class CMPlumeImage:
             ``None`` for full resolution, integer for COG overviews.
         http_timeout: Per-request timeout (seconds) for the outline
             GeoJSON fetch. Defaults to 30s.
+        products: The explicit product selection this bundle exposes
+            (descriptors from
+            :mod:`~georeader.readers.carbonmapper.products`). Accessing
+            a product outside the selection raises
+            :class:`~georeader.readers.carbonmapper.products.CMProductNotSelected`.
+            Defaults to
+            :data:`~georeader.readers.carbonmapper.products.DEFAULT_PLUME_PRODUCTS`.
+        spec: The plume's resolved
+            :class:`~georeader.readers.carbonmapper.products.CMCollectionSpec`.
+            Set by the ``from_*`` constructors; enables :attr:`tile` to
+            resolve the L2B parent at the **same version** with zero
+            probing. ``None`` for hand-built bundles (``tile`` then
+            falls back to the probing resolver).
     """
 
     plume_id: str
@@ -263,6 +289,43 @@ class CMPlumeImage:
     token: Optional[str] = None
     overview_level: Optional[int] = None
     http_timeout: float = 30.0
+    products: tuple[CMProduct, ...] = DEFAULT_PLUME_PRODUCTS
+    spec: Optional[CMCollectionSpec] = None
+
+    def __post_init__(self) -> None:
+        self._product_cache: dict[str, Any] = {}
+
+    # ---- Generic product access ----------------------------------------
+
+    def product(self, product: CMProduct) -> Any:
+        """Open one selected product (cached per product key).
+
+        Returns the product-kind-specific object — a
+        :class:`RasterioReader` for raster products, a shapely geometry
+        for vector products, ``bytes`` for PNG quicklooks. Returns
+        ``None`` when the product was selected but its URL was not
+        available from the source (e.g. :meth:`from_stac_item` with a
+        missing sibling item).
+
+        Raises:
+            CMProductNotSelected: If ``product`` is not in
+                :attr:`products` — select it at construction to use it.
+        """
+        if product not in self.products:
+            raise CMProductNotSelected(product, tuple(self.products))
+        if product.key in self._product_cache:
+            return self._product_cache[product.key]
+        url = self.urls.get(product.key)
+        value = None
+        if url is not None:
+            value = product.open(
+                str(url),
+                token=self.token,
+                overview_level=self.overview_level,
+                http_timeout=self.http_timeout,
+            )
+        self._product_cache[product.key] = value
+        return value
 
     # ---- Constructors --------------------------------------------------
 
@@ -272,13 +335,22 @@ class CMPlumeImage:
         plume_id: str,
         *,
         token: str,
+        products: Sequence[CMProduct] = DEFAULT_PLUME_PRODUCTS,
         overview_level: Optional[int] = None,
         http_timeout: float = 30.0,
     ) -> CMPlumeImage:
         """Build by fetching ``/catalog/plume/{id}`` then deriving asset URLs.
 
-        One round-trip. Handles v3a (STAC-resident) and v3c (CDN-only)
-        plumes uniformly via :func:`_derive_asset_urls`.
+        One round-trip. Works for any collection version (v3a … v3d and
+        future bumps) — the version is resolved from the record itself
+        via :class:`CMCollectionSpec`, never guessed.
+
+        Args:
+            plume_id: Colloquial plume id.
+            token: Bearer token.
+            products: Explicit product selection (see
+                :mod:`~georeader.readers.carbonmapper.products`).
+            overview_level, http_timeout: See class attributes.
 
         Raises:
             requests.HTTPError: On REST failure (404 etc.).
@@ -291,10 +363,14 @@ class CMPlumeImage:
             timeout=http_timeout,
         )
         r.raise_for_status()
-        urls = _derive_asset_urls(r.json())
+        record = r.json()
         return cls(
-            plume_id=plume_id, urls=urls, token=token,
+            plume_id=plume_id,
+            urls=_derive_asset_urls(record, products),
+            token=token,
             overview_level=overview_level, http_timeout=http_timeout,
+            products=tuple(products),
+            spec=_spec_or_none(record),
         )
 
     @classmethod
@@ -303,6 +379,7 @@ class CMPlumeImage:
         raw: CMRawPlume,
         *,
         token: str,
+        products: Sequence[CMProduct] = DEFAULT_PLUME_PRODUCTS,
         overview_level: Optional[int] = None,
         http_timeout: float = 30.0,
     ) -> CMPlumeImage:
@@ -318,11 +395,20 @@ class CMPlumeImage:
                 f"CMRawPlume {raw.plume_id!r} has no plume_tif URL — "
                 f"can't derive asset URLs."
             )
-        seed = {"plume_tif": raw.plume_tif, "plume_id": raw.plume_id}
-        urls = _derive_asset_urls(seed)
+        seed = {
+            "plume_tif": raw.plume_tif,
+            "plume_id": raw.plume_id,
+            "gas": raw.gas,
+            "cmf_type": raw.emission_cmf_type,
+            "emission_version": raw.emission_version,
+        }
         return cls(
-            plume_id=raw.plume_id, urls=urls, token=token,
+            plume_id=raw.plume_id,
+            urls=_derive_asset_urls(seed, products),
+            token=token,
             overview_level=overview_level, http_timeout=http_timeout,
+            products=tuple(products),
+            spec=_spec_or_none(seed),
         )
 
     @classmethod
@@ -331,41 +417,48 @@ class CMPlumeImage:
         item: Mapping[str, Any],
         *,
         ime_item: Optional[Mapping[str, Any]] = None,
+        products: Sequence[CMProduct] = DEFAULT_PLUME_PRODUCTS,
         token: Optional[str] = None,
         overview_level: Optional[int] = None,
         http_timeout: float = 30.0,
     ) -> CMPlumeImage:
         """Build from STAC items (vis + optional ime sibling).
 
-        Use when the caller is driving STAC search directly. v3a-only
-        — v3c plumes have no STAC items, so use :meth:`from_plume_id`
-        for those. Pass both the vis and ime items if you have them
-        (recommended); the ime sibling is required for the
-        :attr:`ime_concentrations` property.
+        Use when the caller is driving STAC search directly. History
+        only — ``/stac/collections`` stops at v3a (plumes ≤ 2025-12);
+        use :meth:`from_plume_id` for anything newer. Pass both the vis
+        and ime items if you have them (recommended); the ime sibling
+        provides the ``ime-*`` product URLs.
         """
         plume_id = str(item.get("id", ""))
         urls: dict[str, str] = {}
-        for asset_key in (
-            "plume.tif", "plume-concentrations.tif",
-            "plume-outline.geojson", "rgb.tif",
-        ):
-            href = (item.get("assets") or {}).get(asset_key, {}).get("href")
+        for product in products:
+            source = (
+                item if product.family == CMProductFamily.L3A_VIS
+                else ime_item
+            )
+            if source is None:
+                continue
+            href = (source.get("assets") or {}).get(product.key, {}).get("href")
             if href:
-                urls[asset_key] = href
-        if ime_item is not None:
-            href = (ime_item.get("assets") or {}).get(
-                "ime-cmf-concentrations.tif", {},
-            ).get("href")
-            if href:
-                urls["ime-cmf-concentrations.tif"] = href
+                urls[product.key] = href
+        spec: Optional[CMCollectionSpec] = None
+        collection = item.get("collection")
+        if collection:
+            try:
+                spec = CMCollectionSpec.from_collection_id(str(collection))
+            except ValueError:
+                spec = None
         return cls(
             plume_id=plume_id, urls=urls, token=token,
             overview_level=overview_level, http_timeout=http_timeout,
+            products=tuple(products),
+            spec=spec,
         )
 
-    # ---- Lazy raster properties ---------------------------------------
+    # ---- Lazy raster properties (delegate to the product registry) ----
 
-    @cached_property
+    @property
     def mask(self) -> Optional[RasterioReader]:
         """L3A pre-cropped RGBA GeoTIFF — band 4 alpha is the binary mask.
 
@@ -375,11 +468,12 @@ class CMPlumeImage:
         :attr:`outline`.
 
         Backed by :class:`RasterioReader`. Returns ``None`` if
-        ``plume.tif`` URL is absent.
+        ``plume.tif`` URL is absent; raises
+        :class:`CMProductNotSelected` if ``PLUME_TIF`` wasn't selected.
         """
-        return self._open_optional("plume.tif")
+        return self.product(PLUME_TIF)
 
-    @cached_property
+    @property
     def concentrations(self) -> Optional[RasterioReader]:
         """L3A pre-cropped CH4 column density thumbnail (ppm·m).
 
@@ -391,9 +485,9 @@ class CMPlumeImage:
         crops the L2B parent at native pixel grid (~150 × 150 px
         with default padding).
         """
-        return self._open_optional("plume-concentrations.tif")
+        return self.product(PLUME_CONCENTRATIONS)
 
-    @cached_property
+    @property
     def ime_concentrations(self) -> Optional[RasterioReader]:
         """L3A IME-clipped CH4 column density (ppm·m).
 
@@ -409,11 +503,11 @@ class CMPlumeImage:
         use :meth:`tile_cmf` cropped by :attr:`outline` instead.
 
         Returns ``None`` if the IME sibling URL wasn't provided
-        (older constructors / pre-v3 schemas).
+        (e.g. :meth:`from_stac_item` without ``ime_item``).
         """
-        return self._open_optional("ime-cmf-concentrations.tif")
+        return self.product(IME_CONCENTRATIONS)
 
-    @cached_property
+    @property
     def rgb(self) -> Optional[RasterioReader]:
         """L3A pre-cropped 3-band uint8 true-colour GeoTIFF.
 
@@ -421,9 +515,9 @@ class CMPlumeImage:
         colour at L2B native pixel size (analysis-grade context for
         overlays), use :meth:`tile_rgb`.
         """
-        return self._open_optional("rgb.tif")
+        return self.product(RGB_TIF)
 
-    @cached_property
+    @property
     def ime_mask(self) -> Optional[RasterioReader]:
         """L3A binary mask of pixels that contributed to ``emission_auto``.
 
@@ -434,7 +528,7 @@ class CMPlumeImage:
         re-quantification with a different wind product) rather than
         the broader plume polygon.
         """
-        return self._open_optional("ime-cmf-mask.tif")
+        return self.product(IME_MASK)
 
     @cached_property
     def outline(self) -> Optional[BaseGeometry]:
@@ -451,11 +545,11 @@ class CMPlumeImage:
         ``emission_auto`` integral, use :attr:`ime_outline`.
         """
         try:
-            geom = self._fetch_outline_geojson(
-                "plume-outline.geojson", fallback_to_alpha=True,
-            )
+            geom = self.product(PLUME_OUTLINE)
             if geom is not None:
                 return geom
+        except CMProductNotSelected:
+            raise
         except Exception as exc:
             _log.warning(
                 "outline GeoJSON fetch failed for plume %s (%s); "
@@ -479,9 +573,9 @@ class CMPlumeImage:
         readily available substitutes.
         """
         try:
-            return self._fetch_outline_geojson(
-                "ime-cmf-outline.geojson", fallback_to_alpha=False,
-            )
+            return self.product(IME_OUTLINE)
+        except CMProductNotSelected:
+            raise
         except Exception as exc:
             _log.warning(
                 "ime-cmf-outline.geojson fetch failed for plume %s (%s)",
@@ -509,12 +603,14 @@ class CMPlumeImage:
     def tile(self) -> CMImageRaster:
         """Parent L2B :class:`CMImageRaster` for this plume (lazy).
 
-        First access calls
+        When :attr:`spec` is known (any ``from_*`` constructor), the
+        L2B parent is resolved directly at the **same collection
+        version** as this plume's L3A assets — verified pairing, zero
+        probing, zero extra catalog calls. Without a spec (hand-built
+        bundles), falls back to
         :func:`~georeader.readers.carbonmapper.api_queries.get_image_raster_for_plume`
-        — STAC item lookup first (v3a path), URL-pattern fallback for
-        v3c/v3d plumes whose L2B parent is not in
-        ``/stac/collections``. Result is cached, so subsequent crops
-        reuse the same raster handle.
+        (STAC first, then candidate probing). Result is cached, so
+        subsequent crops reuse the same raster handle.
 
         Requires :attr:`token` (set at construction). The L3A asset
         URLs on :attr:`urls` are usable without a token only when
@@ -523,11 +619,9 @@ class CMPlumeImage:
 
         Raises:
             ValueError: If :attr:`token` is ``None``.
-            RuntimeError: If the L2B parent is not reachable through
-                either STAC or the URL-pattern fallback. Indicates
-                the scene either hasn't been published yet OR uses a
-                collection variant not in the default candidate list
-                (``("l2b-ch4-mfa-v3c", "l2b-ch4-mfa-v3a")``).
+            RuntimeError: If the spec-less fallback could not resolve
+                the L2B parent through either STAC or candidate
+                probing.
 
         >>> img = CMPlumeImage.from_plume_id(  # doctest: +SKIP
         ...     "tan20260331t181625c77s4001-A", token=tok,
@@ -543,8 +637,19 @@ class CMPlumeImage:
             )
             raise ValueError(msg)
 
-        # Lazy import to avoid pulling api_queries (and its sibling
-        # download module) into the L3A-only import path.
+        # Lazy import to avoid pulling the L2B raster machinery (and
+        # api_queries) into the L3A-only import path.
+        from georeader.readers.carbonmapper.rasters import CMImageRaster
+
+        if self.spec is not None:
+            return CMImageRaster.from_scene_id(
+                self.scene_id,
+                token=self.token,
+                spec=self.spec,
+                overview_level=self.overview_level,
+                http_timeout=self.http_timeout,
+            )
+
         from georeader.readers.carbonmapper.api_queries import (
             get_image_raster_for_plume,
         )
@@ -554,9 +659,8 @@ class CMPlumeImage:
             msg = (
                 f"L2B parent tile for plume {self.plume_id!r} is not "
                 "reachable. Neither STAC nor the URL-pattern fallback "
-                "(default candidates: l2b-ch4-mfa-v3c, l2b-ch4-mfa-v3a) "
                 "resolved it. Either the scene hasn't been published or "
-                "it uses an unlisted collection variant."
+                "it uses a collection variant not in the candidate list."
             )
             raise RuntimeError(msg)
         return ir
@@ -684,49 +788,6 @@ class CMPlumeImage:
 
     # ---- Internals -----------------------------------------------------
 
-    def _open_optional(self, asset_key: str) -> Optional[RasterioReader]:
-        url = self.urls.get(asset_key)
-        if url is None:
-            return None
-        return RasterioReader(str(url), overview_level=self.overview_level)
-
-    def _fetch_outline_geojson(
-        self, asset_key: str = "plume-outline.geojson",
-        *, fallback_to_alpha: bool = True,
-    ) -> Optional[BaseGeometry]:
-        """Fetch and parse a GeoJSON outline asset.
-
-        Args:
-            asset_key: Which outline to fetch — ``plume-outline.geojson``
-                (broader plume polygon) or ``ime-cmf-outline.geojson``
-                (tighter IME-significant polygon).
-            fallback_to_alpha: Unused at this layer — caller decides
-                whether to fall back; documented here so callers can
-                see the symmetry with the broader-vs-tight pair.
-
-        Returns ``None`` if the URL isn't on this image; raises on
-        fetch / parse failure so the calling property can log + branch.
-        """
-        del fallback_to_alpha  # caller-side concern
-        url = self.urls.get(asset_key)
-        if url is None:
-            return None
-
-        path = str(url)
-        if path.startswith(("http://", "https://")):
-            headers = (
-                {"Authorization": f"Bearer {self.token}"}
-                if self.token else {}
-            )
-            r = requests.get(path, headers=headers, timeout=self.http_timeout)
-            r.raise_for_status()
-            data = r.json()
-        else:
-            with open(path, "r") as fh:
-                data = json.load(fh)
-
-        return _parse_geojson_to_geometry(data)
-
     def _polygon_from_alpha(self) -> Optional[BaseGeometry]:
         """Vectorise band-4 alpha of :attr:`mask` to an EPSG:4326 polygon.
 
@@ -766,8 +827,9 @@ class CMPlumeImage:
     # ---- Repr ---------------------------------------------------------
 
     def __repr__(self) -> str:
-        present = [k for k in CM_PLUME_IMAGE_ASSETS if k in self.urls]
-        missing = [k for k in CM_PLUME_IMAGE_ASSETS if k not in self.urls]
+        selected = [p.key for p in self.products]
+        present = [k for k in selected if k in self.urls]
+        missing = [k for k in selected if k not in self.urls]
         ov = self.overview_level if self.overview_level is not None else "full"
         lines = [
             "CMPlumeImage",
@@ -776,6 +838,8 @@ class CMPlumeImage:
         ]
         if missing:
             lines.append(f"  assets missing: {missing}")
+        if self.spec is not None:
+            lines.append(f"  spec:           {self.spec}")
         lines.append(f"  overview_level: {ov}")
         return "\n".join(lines)
 

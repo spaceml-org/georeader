@@ -324,7 +324,47 @@ class TestGetImageRasterForScene:
 
 
 class TestGetImageRasterForPlume:
+    @staticmethod
+    def _record_unavailable(monkeypatch):
+        """Force the record-driven spec path to fail so the resolver
+        falls back to the STAC/probe path (the legacy behaviour)."""
+        def boom(plume_id, token=None):
+            raise requests.HTTPError("404 record unavailable")
+        monkeypatch.setattr(aq._dl, "get_plume_by_id", boom)
+
+    def test_record_spec_path_skips_stac_and_probing(self, monkeypatch):
+        """Preferred path: one catalog fetch resolves the spec; the
+        L2B parent is composed at the plume's own version with no
+        STAC lookup and no candidate probing (2026-07 audit:
+        same-version pairing)."""
+        plume_id = "tan20260623t124240c80s4001-A"
+        record = {
+            "plume_id": plume_id,
+            "plume_tif": (
+                "https://catalog.carbonmapper.org/l3a-vis-ch4-mfa-v3d/"
+                f"2026/06/23/{plume_id}/{plume_id}_l3a-vis-ch4-mfa-v3d_plume.tif"
+            ),
+        }
+        monkeypatch.setattr(
+            aq._dl, "get_plume_by_id", lambda pid, token=None: record,
+        )
+
+        def no_stac(*a, **kw):
+            raise AssertionError("STAC path must not be used")
+        monkeypatch.setattr(aq, "get_image_raster_for_scene", no_stac)
+
+        from georeader.readers.carbonmapper import rasters as _rasters
+
+        def no_probe(url, **kw):
+            raise AssertionError(f"unexpected probe request: {url}")
+        monkeypatch.setattr(_rasters.requests, "get", no_probe)
+
+        ir = aq.get_image_raster_for_plume("tok", plume_id)
+        assert "l2b-ch4-mfa-v3d" in str(ir.asset_paths["cmf"])
+        assert "l2b-rgb-v3d" in str(ir.asset_paths["rgb"])
+
     def test_derives_scene_id_from_plume_id(self, monkeypatch):
+        self._record_unavailable(monkeypatch)
         captured = {}
 
         def fake_for_scene(token, scene_id, **kw):
@@ -336,6 +376,7 @@ class TestGetImageRasterForPlume:
         assert captured["scene_id"] == "tan20260331t181625c77s4001"
 
     def test_forwards_kwargs(self, monkeypatch):
+        self._record_unavailable(monkeypatch)
         captured = {}
 
         def fake_for_scene(token, scene_id, **kw):
