@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.3.5](https://github.com/spaceml-org/georeader/compare/v2.3.4...v2.3.5) (2026-07-06)
+
+
+### Bug Fixes
+
+* **readers:** bundle S2 SRF document as package data so read_srf works offline ([a4a0473](https://github.com/spaceml-org/georeader/commit/a4a0473417fa5a307749d59bc6bf9bf5c48ad432))
+* **readers:** bundle S2 SRF document as package data so read_srf works offline ([6067514](https://github.com/spaceml-org/georeader/commit/60675148c62f677fad0f3123c1a9b22eef89f339)), closes [#72](https://github.com/spaceml-org/georeader/issues/72)
+
 ## [2.3.4](https://github.com/spaceml-org/georeader/compare/v2.3.3...v2.3.4) (2026-07-01)
 
 
