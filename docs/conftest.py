@@ -29,7 +29,7 @@ Providing the inputs (see ``examples/README.md`` for details)
 * ``examples/`` data files.
 * PRISMA / EnMAP (Azure):  ``SAS_TOKEN``, ``AZURE_STORAGE_ACCOUNT``, ``CONTAINER_NAME``
 * EMIT (NASA Earthdata):        ``EARTHDATA_TOKEN`` or ``~/.georeader/auth_emit.json``
-* Carbon Mapper:                ``CARBONMAPPER_TOKEN`` or ``~/.georeader/auth_carbonmapper.json``
+* Carbon Mapper:                ``CARBONMAPPER_TOKEN``, ``CARBONMAPPER_EMAIL``+``CARBONMAPPER_PASSWORD``, or ``~/.georeader/auth_carbonmapper.json``
 * Google Earth Engine:          ``EARTHENGINE_SERVICE_ACCOUNT_KEY`` (service-account JSON key: a file path or the raw JSON)
 
 In GitHub Actions these can be wired as repository secrets and exported as the
@@ -156,16 +156,18 @@ NOTEBOOK_REQUIREMENTS: dict[str, list[Requirement]] = {
         Requirement(files=["S2L1C.tif"]),
         Requirement(files=["PROBAV_S1_TOA_X07Y05_20190209_100M_V101.HDF5"]),
     ],
-    # --- Carbon Mapper API token --------------------------------------------
+    # --- Carbon Mapper API credentials ---------------------------------------
+    # A one-shot token, refreshable email+password (CI-friendly — tokens
+    # expire), or the config file all satisfy the gate.
     "api_explore.ipynb": [
         Requirement(
-            env=["CARBONMAPPER_TOKEN"],
+            env=["CARBONMAPPER_TOKEN", "CARBONMAPPER_EMAIL"],
             paths=["~/.georeader/auth_carbonmapper.json"],
         ),
     ],
     "products_explore.ipynb": [
         Requirement(
-            env=["CARBONMAPPER_TOKEN"],
+            env=["CARBONMAPPER_TOKEN", "CARBONMAPPER_EMAIL"],
             paths=["~/.georeader/auth_carbonmapper.json"],
         ),
     ],

@@ -471,3 +471,81 @@ def test_list_tiles_for_source_empty_when_no_plumes(monkeypatch):
         lambda **kw: pytest.fail("stac_search should not be called"),
     )
     assert aq.list_tiles_for_source("tok", "any") == []
+
+
+# ─── 2026-07 source-detail API drift ─────────────────────────────────
+
+
+class TestSourceDetailDrift:
+    """`/catalog/source/{name}` now returns a nested detail shape:
+    stats under `source`, full annotated plume records under `plumes`,
+    centroid under `point`. The old flat shape (and the
+    source-plumes-csv route, which now 400s upstream) must keep
+    working as fallbacks."""
+
+    NESTED = {
+        "source_name": "CH4_1B2_250m_-104.11776_32.02621",
+        "point": {"type": "Point", "coordinates": [-104.11776, 32.02621]},
+        "source": {
+            "gas": "CH4", "sector": "1B2", "persistence": 0.75,
+            "emission_auto": 244.56, "emission_uncertainty_auto": 96.55,
+        },
+        "plumes": [
+            {"plume_id": "ang20191006t180341-1", "gas": "CH4",
+             "emission_auto": 338.9},
+            {"plume_id": "tan20260311t190317c10s4001-D", "gas": "CH4",
+             "emission_auto": 970.0},
+        ],
+        "scenes": [{"scene_name": "ang20191006t180341"}],
+        "detection_dates": ["2019-10-06", "2026-03-11"],
+        "observation_dates": ["2019-10-06", "2020-01-01", "2026-03-11"],
+    }
+
+    def test_get_source_flattens_nested_shape(self, monkeypatch):
+        monkeypatch.setattr(
+            aq._dl, "get_source_by_name", lambda name, token=None: dict(self.NESTED),
+        )
+        src = aq.get_source("tok", self.NESTED["source_name"])
+        assert src.source_name == "CH4_1B2_250m_-104.11776_32.02621"
+        assert src.sector == "1B2"
+        assert src.plume_count == 2
+        assert src.persistence == 0.75
+        assert src.emission_auto == 244.56
+        assert (round(src.point.x, 5), round(src.point.y, 5)) == (-104.11776, 32.02621)
+
+    def test_list_plumes_for_source_uses_embedded_records(self, monkeypatch):
+        monkeypatch.setattr(
+            aq._dl, "get_source_by_name", lambda name, token=None: dict(self.NESTED),
+        )
+
+        def no_csv(*a, **kw):
+            raise AssertionError("CSV route must not be used when plumes are embedded")
+        monkeypatch.setattr(aq._dl, "get_source_plumes_csv", no_csv)
+
+        plumes = aq.list_plumes_for_source("tok", self.NESTED["source_name"])
+        assert [p.plume_id for p in plumes] == [
+            "ang20191006t180341-1", "tan20260311t190317c10s4001-D",
+        ]
+
+    def test_list_plumes_for_source_csv_fallback(self, monkeypatch):
+        """Pre-drift shape (no embedded `plumes`) falls back to CSV."""
+        monkeypatch.setattr(
+            aq._dl, "get_source_by_name",
+            lambda name, token=None: {"source_name": name, "plume_count": 1},
+        )
+        monkeypatch.setattr(
+            aq._dl, "get_source_plumes_csv",
+            lambda name, token=None: "plume_id,gas\ntan20260101t000000c00s4001-A,CH4\n",
+        )
+        plumes = aq.list_plumes_for_source("tok", "CH4_1B2_100m_0_0")
+        assert len(plumes) == 1
+        assert plumes[0].plume_id == "tan20260101t000000c00s4001-A"
+
+    def test_list_plumes_for_source_404(self, monkeypatch):
+        def boom(name, token=None):
+            resp = MagicMock()
+            resp.status_code = 404
+            raise requests.HTTPError("404", response=resp)
+        monkeypatch.setattr(aq._dl, "get_source_by_name", boom)
+        with pytest.raises(aq.CMSourceNotFound):
+            aq.list_plumes_for_source("tok", "CH4_1B2_500m_-103.93835_32.06406")

@@ -444,6 +444,23 @@ def get_source(token: str, source_name: str) -> CMSource:
         if _is_404(exc):
             raise CMSourceNotFound(cleaned) from exc
         raise
+    # 2026-07 API drift: /catalog/source/{name} now returns a nested
+    # detail shape — aggregate stats under `source`, the full plume
+    # records under `plumes`, centroid under `point`, plus
+    # detection/observation date lists. Flatten to the geojson-feature
+    # shape CMSource.from_geojson_feature expects.
+    if "source" in raw and "plumes" in raw:
+        stats = dict(raw.get("source") or {})
+        plumes = raw.get("plumes") or []
+        props = {
+            "source_name": raw.get("source_name", cleaned),
+            **stats,
+            "plume_count": len(plumes),
+            "plume_ids": [p.get("plume_id") for p in plumes],
+            "detection_date_count": len(raw.get("detection_dates") or []),
+            "observation_date_count": len(raw.get("observation_dates") or []),
+        }
+        raw = {"properties": props, "geometry": raw.get("point")}
     # The single-source endpoint can return either a Feature or properties
     # directly; coerce to a Feature shape so CMSource.from_geojson_feature
     # handles both.
@@ -1054,9 +1071,12 @@ def list_plumes_for_source(
 ) -> list[CMRawPlume]:
     """All plumes attributed to a Carbon Mapper source.
 
-    Wraps ``/catalog/source-plumes-csv/{source_name}``. The CSV
-    endpoint is single-shot (no pagination) — the result is fully
-    materialised.
+    Wraps ``/catalog/source/{source_name}`` and reads the **embedded**
+    ``plumes`` records (full annotated-shape dicts; verified complete
+    against the source's ``plume_count`` in the 2026-07 audit). The
+    old ``/catalog/source-plumes-csv/{source_name}`` route now 400s
+    for name keys upstream and is kept only as a fallback for
+    pre-drift API deployments that don't embed ``plumes``.
 
     Strips the ``?...`` query suffix from ``source_name`` automatically
     (``data_model §2.2``).
@@ -1075,6 +1095,14 @@ def list_plumes_for_source(
     -------
     list[CMRawPlume]
 
+    Raises
+    ------
+    CMSourceNotFound
+        When the API returns 404 for ``source_name``. (Source names
+        are re-clustered over time — resolve fresh names via
+        :func:`list_sources` / :func:`get_source_for_plume` rather
+        than persisting them.)
+
     Examples
     --------
     >>> plumes = list_plumes_for_source(  # doctest: +SKIP
@@ -1083,26 +1111,36 @@ def list_plumes_for_source(
     >>> len(plumes), plumes[0].plume_id[:3]  # doctest: +SKIP
     (47, 'tan')
     """
-    import io
-    import pandas as pd
-
     cleaned = _strip_query_suffix(source_name)
-    csv_text = _dl.get_source_plumes_csv(cleaned, token=token)
-    if not csv_text:
-        return []
-    df = pd.read_csv(io.StringIO(csv_text))
-    if limit and len(df) > limit:
-        df = df.head(limit)
-    # CSV -> dict gives `float('nan')` for empty cells. Pydantic
-    # str-typed fields like `sensitivity_mode` reject NaN; coerce
-    # NaNs to None so optional fields fall back to their defaults.
-    rows = df.to_dict(orient="records")
-    cleaned: list[CMRawPlume] = []
-    for row in rows:
-        sane = {k: (None if isinstance(v, float) and v != v else v)
-                for k, v in row.items()}
-        cleaned.append(CMRawPlume(**sane))
-    return cleaned
+    try:
+        raw = _dl.get_source_by_name(cleaned, token=token)
+    except requests.HTTPError as exc:
+        if _is_404(exc):
+            raise CMSourceNotFound(cleaned) from exc
+        raise
+
+    records = raw.get("plumes")
+    if records is None:
+        # Pre-drift API shape — fall back to the CSV endpoint.
+        import io
+        import pandas as pd
+
+        csv_text = _dl.get_source_plumes_csv(cleaned, token=token)
+        if not csv_text:
+            return []
+        df = pd.read_csv(io.StringIO(csv_text))
+        # CSV -> dict gives `float('nan')` for empty cells. Pydantic
+        # str-typed fields like `sensitivity_mode` reject NaN; coerce
+        # NaNs to None so optional fields fall back to their defaults.
+        records = [
+            {k: (None if isinstance(v, float) and v != v else v)
+             for k, v in row.items()}
+            for row in df.to_dict(orient="records")
+        ]
+
+    if limit and len(records) > limit:
+        records = records[:limit]
+    return [CMRawPlume(**rec) for rec in records]
 
 
 def list_tiles_for_source(

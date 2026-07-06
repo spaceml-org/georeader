@@ -112,6 +112,20 @@ derived URLs for a v3d plume agree:
   `POST /token/pair`).
 - ❌ `/catalog/scenes` (`download.get_scenes`) returns **401 with a
   standard authenticated account** — not usable as documented.
+- ❌ `/catalog/source-plumes-csv/{source_name}` now **400s for name
+  keys** (`"…" is not a valid UUID`) — the CSV-by-source route the
+  reader's `list_plumes_for_source` relied on is broken upstream.
+- ⚠️ `/catalog/source/{name}` was **restructured**: aggregate stats
+  now nest under `source`, the **full annotated plume records embed
+  under `plumes`** (verified complete — 43/43 for a 43-plume source),
+  centroid under `point`, plus `detection_dates` /
+  `observation_dates` / `scenes` lists. Code reading the old flat
+  shape silently got `plume_count=0` / `emission_auto=None`. The
+  embedded records replace the dead CSV route.
+- ⚠️ **Source names are re-clustered over time** — a source name
+  captured in May (`CH4_1B2_500m_-103.93835_32.06406`) now 404s.
+  Never persist/hardcode source names; resolve them fresh via
+  `list_sources` or plume→source lookups.
 
 ## Consequences for the refactor
 
