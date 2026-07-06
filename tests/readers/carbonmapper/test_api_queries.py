@@ -332,11 +332,10 @@ class TestGetImageRasterForPlume:
             raise requests.HTTPError("404 record unavailable")
         monkeypatch.setattr(aq._dl, "get_plume_by_id", boom)
 
-    def test_record_spec_path_skips_stac_and_probing(self, monkeypatch):
+    def test_record_spec_path_skips_stac(self, monkeypatch):
         """Preferred path: one catalog fetch resolves the spec; the
-        L2B parent is composed at the plume's own version with no
-        STAC lookup and no candidate probing (2026-07 audit:
-        same-version pairing)."""
+        L2B parent is probed at the plume's own version first (no
+        STAC lookup, defaults as backup — 2026-07 audit)."""
         plume_id = "tan20260623t124240c80s4001-A"
         record = {
             "plume_id": plume_id,
@@ -355,11 +354,18 @@ class TestGetImageRasterForPlume:
 
         from georeader.readers.carbonmapper import rasters as _rasters
 
-        def no_probe(url, **kw):
-            raise AssertionError(f"unexpected probe request: {url}")
-        monkeypatch.setattr(_rasters.requests, "get", no_probe)
+        probes: list[str] = []
+
+        def fake_probe(url, **kw):
+            probes.append(url)
+            resp = MagicMock()
+            resp.status_code = 206
+            return resp
+        monkeypatch.setattr(_rasters.requests, "get", fake_probe)
 
         ir = aq.get_image_raster_for_plume("tok", plume_id)
+        # Spec version probed first for CH4 + RGB (one probe each).
+        assert len(probes) == 2
         assert "l2b-ch4-mfa-v3d" in str(ir.asset_paths["cmf"])
         assert "l2b-rgb-v3d" in str(ir.asset_paths["rgb"])
 

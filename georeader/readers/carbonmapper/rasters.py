@@ -321,17 +321,21 @@ class CMImageRaster:
 
         Collection resolution, in order of preference:
 
-        1. ``spec`` — a :class:`CMCollectionSpec` resolved from the
-           plume record (``CMCollectionSpec.from_plume_record``). Names
-           both the CH4 and RGB collections at the plume's own version
-           (verified same-version pairing) with **zero probe requests**.
-        2. ``collection`` / ``rgb_collection`` — explicit ids, also
-           probe-free.
+        1. ``collection`` / ``rgb_collection`` — explicit ids,
+           probe-free (you pinned them, they're used verbatim).
+        2. ``spec`` — a :class:`CMCollectionSpec` resolved from the
+           plume record (``CMCollectionSpec.from_plume_record``). The
+           spec's composed collection id is probed **first**, ahead of
+           the default candidates. Usually one probe suffices
+           (same-version pairing), but the L3A side can be
+           re-versioned ahead of the L2B parent (observed: a v3d L3A
+           plume whose L2B still serves at v3c — audit §4), so the
+           remaining candidates back it up. Because the spec always
+           contributes the record's own version, this path never goes
+           stale when Carbon Mapper bumps versions.
         3. Candidate probing (legacy) — for scene-name-only lookups
            with no record available. Probes
            ``l2b_collection_candidates`` in order; first 200/206 wins.
-           Hardcoded candidate lists go stale every time Carbon Mapper
-           bumps a version, so prefer 1-2 whenever a record is at hand.
 
         Parameters
         ----------
@@ -391,8 +395,8 @@ class CMImageRaster:
             404'd for ``scene_id`` — the scene either hasn't been
             processed yet or only exists in an unlisted collection
             variant. Catch in ETL paths that want to defer rather
-            than error. (Not raised on the ``spec`` / ``collection``
-            paths, which build URLs without probing — missing scenes
+            than error. (Not raised on the explicit ``collection``
+            path, which builds URLs without probing — missing scenes
             surface as read errors on first access.)
         ValueError
             When ``scene_id`` doesn't carry an 8-digit date at
@@ -407,12 +411,20 @@ class CMImageRaster:
         >>> tile.cmf  # doctest: +SKIP
         <RasterioReader …/l2b-ch4-mfa-v3d/2026/06/23/…>
         """
+        # The spec's composed ids probe FIRST (the record's own version
+        # — usually the right one) with the defaults as backup; an
+        # explicit `collection` / `rgb_collection` is used verbatim.
         if spec is not None:
-            l2b_coll: str | None = spec.collection_id(CMProductFamily.L2B)
-            rgb_coll: str | None = spec.collection_id(CMProductFamily.L2B_RGB)
-        else:
-            l2b_coll = collection
-            rgb_coll = rgb_collection
+            spec_l2b = spec.collection_id(CMProductFamily.L2B)
+            l2b_collection_candidates = (spec_l2b,) + tuple(
+                c for c in l2b_collection_candidates if c != spec_l2b
+            )
+            spec_rgb = spec.collection_id(CMProductFamily.L2B_RGB)
+            rgb_collection_candidates = (spec_rgb,) + tuple(
+                c for c in rgb_collection_candidates if c != spec_rgb
+            )
+        l2b_coll = collection
+        rgb_coll = rgb_collection
 
         if l2b_coll is None:
             l2b_coll = _probe_l2b_collection(

@@ -87,16 +87,21 @@ derived URLs for a v3d plume agree:
 - ✅ URL pattern
   `{base}/{coll}/{Y}/{M}/{D}/{scene}/{scene}_{coll}_{asset}` verified for
   v3c and v3d.
-- ❌ **Version pairing is same-version, not cross-version**: a v3d L3A
-  plume's L2B parent serves at `l2b-ch4-mfa-v3d` (v3c 404s), a v3c-era
-  plume's at `v3c`. The `rasters.py` comment claiming "v3d L3A plumes
-  whose L2B parent is still v3c" is wrong.
+- ⚠️ **Version pairing is same-version for natively-processed scenes,
+  but NOT universal**: the June-2026 scene (native v3d) serves L2B at
+  `l2b-ch4-mfa-v3d` (v3c 404s) and a v3c-era plume's L2B at `v3c` —
+  yet a 2026-03-31 plume whose L3A was **re-versioned to v3d** still
+  serves its L2B at `v3c` only (`v3d` 404s). CM can bump
+  `emission_version` (reprocess L3A) without republishing the L2B
+  parent. Consequence: the record's version is the *best first guess*
+  for the L2B collection, not a guarantee — probe it first, keep
+  fallback candidates.
 - ❌ `DEFAULT_L2B_CH4_COLLECTION_CANDIDATES = ("l2b-ch4-mfa-v3c",
   "l2b-ch4-mfa-v3a")` is **stale**: June-2026 scenes are v3d, so the
   default probe misses L2B data that exists. This is the structural flaw
   of hardcoded candidate lists — they silently rot every time CM bumps a
   version. The record itself (`emission_version` / the collection segment
-  in `plume_tif`) names the right version with no probing.
+  in `plume_tif`) names the newest candidate dynamically.
 - ✅ `l2b-rgb-v3d` also serves (same-version RGB sibling).
 
 ## 5. Endpoints
@@ -114,9 +119,11 @@ derived URLs for a v3d plume agree:
    audit's asset tables are the ground truth), selected by the caller —
    not hardcoded tuples with silent `None` fallbacks.
 2. Collection/version must be **resolved from the plume record**
-   (`plume_tif` URL segment, or `gas`+`cmf_type`+`emission_version`),
-   same-version for the L2B parent; keep candidate probing only as an
-   explicit opt-in for recordless (scene-name-only) lookups.
+   (`plume_tif` URL segment, or `gas`+`cmf_type`+`emission_version`).
+   For the L2B parent, probe the record's version first with the
+   default candidates as backup (the re-versioned L3A case); pure
+   candidate probing remains only for recordless (scene-name-only)
+   lookups.
 3. STAC can only serve ≤ v3a history; anything current must go through
    the asset proxy. The STAC-first/probe-second dance should be explicit
    in the API, not a silent fallback.

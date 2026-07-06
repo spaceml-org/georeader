@@ -604,10 +604,12 @@ class CMPlumeImage:
         """Parent L2B :class:`CMImageRaster` for this plume (lazy).
 
         When :attr:`spec` is known (any ``from_*`` constructor), the
-        L2B parent is resolved directly at the **same collection
-        version** as this plume's L3A assets — verified pairing, zero
-        probing, zero extra catalog calls. Without a spec (hand-built
-        bundles), falls back to
+        L2B parent is resolved by probing the plume's **own collection
+        version first** (usually one probe — same-version pairing),
+        with the default candidates as backup for the re-versioned
+        case (a v3d L3A plume whose L2B parent still serves at v3c).
+        No STAC lookup, no extra catalog calls, and never stale.
+        Without a spec (hand-built bundles), falls back to
         :func:`~georeader.readers.carbonmapper.api_queries.get_image_raster_for_plume`
         (STAC first, then candidate probing). Result is cached, so
         subsequent crops reuse the same raster handle.

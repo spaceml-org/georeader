@@ -839,11 +839,13 @@ def get_image_raster_for_plume(
     scene_id = _scene_id_from_plume(plume_id)
 
     # Preferred path: one catalog fetch resolves the CMCollectionSpec
-    # (gas / cmf_type / version) from the plume's own record, which
-    # names the L2B parent collection at the same version — verified
-    # pairing, no probing, and it never goes stale when Carbon Mapper
-    # bumps versions. Falls back to the STAC-first/probe-second dance
-    # only when the record is unavailable or unparseable.
+    # (gas / cmf_type / version) from the plume's own record. The
+    # spec-version L2B collection is probed first (usually one probe —
+    # same-version pairing), with the default candidates as backup for
+    # re-versioned plumes; because the spec contributes the record's
+    # own version, this never goes stale when Carbon Mapper bumps
+    # versions. Falls back to the STAC-first/probe-second dance only
+    # when the record is unavailable or unparseable.
     try:
         record = _dl.get_plume_by_id(plume_id, token=token)
         spec = CMCollectionSpec.from_plume_record(record)

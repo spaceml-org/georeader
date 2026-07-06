@@ -630,26 +630,61 @@ def test_default_rgb_candidates_priority():
 
 
 class TestFromSceneIdSpec:
-    """When a `CMCollectionSpec` (or explicit collection id) is known,
-    `from_scene_id` must compose URLs directly — zero probe requests,
-    and same-version pairing for the RGB sibling (2026-07 audit)."""
+    """When a `CMCollectionSpec` is known, its composed collection id
+    is probed FIRST (the record's own version), with the default
+    candidates as backup — self-healing for the re-versioned case
+    (2026-07 audit: a v3d L3A plume whose L2B still serves at v3c).
+    Explicit collection ids are used verbatim with no probing."""
 
     def _forbid_http(self, monkeypatch):
         def boom(url, **kw):
             raise AssertionError(f"unexpected HTTP request: {url}")
         monkeypatch.setattr(_rasters.requests, "get", boom)
 
-    def test_spec_builds_urls_without_probing(self, monkeypatch):
+    def test_spec_version_probed_first(self, monkeypatch):
         from georeader.readers.carbonmapper.products import CMCollectionSpec
 
-        self._forbid_http(monkeypatch)
+        calls: list[str] = []
+
+        def fake_get(url, **kw):
+            calls.append(url)
+            return _make_probe_response(206)
+
+        monkeypatch.setattr(_rasters.requests, "get", fake_get)
         ir = CMImageRaster.from_scene_id(
             "tan20260623t124240c80s4001",
             token="dummy",
             spec=CMCollectionSpec(version="v3d"),
         )
+        # One CH4 probe (spec version wins first) + one RGB probe.
+        assert len(calls) == 2
+        assert "l2b-ch4-mfa-v3d" in calls[0]
+        assert "l2b-rgb-v3d" in calls[1]
         assert "l2b-ch4-mfa-v3d" in str(ir.asset_paths["cmf"])
-        # RGB sibling pinned at the same version — no probe either.
+        assert "l2b-rgb-v3d" in str(ir.asset_paths["rgb"])
+
+    def test_spec_falls_back_to_default_candidates(self, monkeypatch):
+        """The re-versioned case: L3A says v3e (new, unknown), the L2B
+        parent still serves at v3d — the spec candidate 404s and the
+        defaults catch it."""
+        from georeader.readers.carbonmapper.products import CMCollectionSpec
+
+        calls: list[str] = []
+        # CH4: v3e=404 → v3d=206. RGB: v3e=404 → v3d=206.
+        seq = iter([404, 206, 404, 206])
+
+        def fake_get(url, **kw):
+            calls.append(url)
+            return _make_probe_response(next(seq))
+
+        monkeypatch.setattr(_rasters.requests, "get", fake_get)
+        ir = CMImageRaster.from_scene_id(
+            "tan20260623t124240c80s4001",
+            token="dummy",
+            spec=CMCollectionSpec(version="v3e"),
+        )
+        assert "l2b-ch4-mfa-v3e" in calls[0]
+        assert "l2b-ch4-mfa-v3d" in str(ir.asset_paths["cmf"])
         assert "l2b-rgb-v3d" in str(ir.asset_paths["rgb"])
 
     def test_explicit_collection_ids_without_probing(self, monkeypatch):
@@ -683,13 +718,12 @@ class TestFromSceneIdSpec:
 
     def test_products_subset(self, monkeypatch):
         from georeader.readers.carbonmapper import products as P
-        from georeader.readers.carbonmapper.products import CMCollectionSpec
 
         self._forbid_http(monkeypatch)
         ir = CMImageRaster.from_scene_id(
             "tan20260623t124240c80s4001",
             token="dummy",
-            spec=CMCollectionSpec(version="v3d"),
+            collection="l2b-ch4-mfa-v3d",
             products=(P.CMF, P.UNCERTAINTY),
             with_rgb=False,
         )
@@ -697,14 +731,13 @@ class TestFromSceneIdSpec:
 
     def test_non_l2b_product_rejected(self, monkeypatch):
         from georeader.readers.carbonmapper import products as P
-        from georeader.readers.carbonmapper.products import CMCollectionSpec
 
         self._forbid_http(monkeypatch)
         with pytest.raises(ValueError, match="not an L2B"):
             CMImageRaster.from_scene_id(
                 "tan20260623t124240c80s4001",
                 token="dummy",
-                spec=CMCollectionSpec(version="v3d"),
+                collection="l2b-ch4-mfa-v3d",
                 products=(P.PLUME_TIF,),
                 with_rgb=False,
             )
