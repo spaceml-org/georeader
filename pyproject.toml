@@ -10,7 +10,12 @@ license = "	LGPL-3.0"
 packages = [
   {include = "georeader"}
 ]
-include = ["georeader/SolarIrradiance_Thuillier.csv"]
+include = [
+  { path = "georeader/SolarIrradiance_Thuillier.csv", format = ["sdist", "wheel"] },
+  # Sentinel-2 spectral response functions (issue #72): bundled so read_srf
+  # works offline instead of downloading from a moving SentiWiki URL.
+  { path = "georeader/readers/COPE-GSEG-EOPG-TN-15-0007_-_Sentinel-2_Spectral_Response_Functions_2024_-_4.0.xlsx", format = ["sdist", "wheel"] },
+]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<4.0"
