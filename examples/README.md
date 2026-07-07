@@ -11,7 +11,7 @@ Most notebooks need a raster, a vector file, a cloud credential or network
 access that is not always available. To make the suite portable, every notebook
 reads its local inputs from **this `examples/` folder** (resolved at run time,
 so it works no matter which directory the notebook is launched from), and the
-test harness ([`docs/conftest.py`](../docs/conftest.py)) **skips** any notebook
+test harness ([`conftest.py`](../conftest.py)) **skips** any notebook
 whose inputs are missing. Drop the files below into `examples/` (or provide the
 relevant credentials) and the corresponding notebooks start running.
 
@@ -64,7 +64,7 @@ network access.
 
 Set these as environment variables. The easiest way locally is to copy
 [`../.env.sample`](../.env.sample) to a repo-root `.env` (git-ignored) and fill in
-what you have — `docs/conftest.py` loads it automatically before running the
+what you have — `conftest.py` loads it automatically before running the
 notebooks. They can also be exported in your shell, or wired as **GitHub Actions
 repository secrets** (see `.github/workflows/test.yml`). When a credential is
 present the notebook downloads its own data and the test runs; otherwise it is
