@@ -45,6 +45,7 @@ nav:
       - API + typed models: carbonmapper/api_explore.ipynb
       - Products (reference): carbonmapper/products_reference.ipynb
       - Products (quickstart): carbonmapper/products_quickstart.ipynb
+      - Products (partner drop): carbonmapper/products_partner_drop.ipynb
     - Advanced:
       - VSIL cache problem: advanced/error_read_write_in_remote_path.md
 plugins:

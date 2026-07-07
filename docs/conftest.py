@@ -177,6 +177,15 @@ NOTEBOOK_REQUIREMENTS: dict[str, list[Requirement]] = {
             paths=["~/.georeader/auth_carbonmapper.json"],
         ),
     ],
+    # Partner-drop walkthrough: needs a local partner CSV (CM_PARTNER_CSV)
+    # on top of the Carbon Mapper credentials.
+    "products_partner_drop.ipynb": [
+        Requirement(env=["CM_PARTNER_CSV"]),
+        Requirement(
+            env=["CARBONMAPPER_TOKEN", "CARBONMAPPER_EMAIL"],
+            paths=["~/.georeader/auth_carbonmapper.json"],
+        ),
+    ],
     # --- Google Earth Engine: a service-account key (a path to the JSON key
     # file or the raw JSON string). The notebooks initialize EE via
     # georeader.readers.ee_image.initialize(); a Cloud project is not required
