@@ -909,10 +909,12 @@ class S2Image:
     def load_mask(self) -> GeoTensor:
         reader_ref = self._get_reader()
         geotensor_ref = reader_ref.load(boundless=True)
-        geotensor_ref.values = (geotensor_ref.values == 0) | (
-            geotensor_ref.values == (2**16) - 1
-        )
-        return geotensor_ref
+        # Boolean mask from an integer band: build a new GeoTensor rather than
+        # assigning into .values (which forbids dtype changes in place).
+        mask = (geotensor_ref.values == 0) | (geotensor_ref.values == (2**16) - 1)
+        return GeoTensor(mask, transform=geotensor_ref.transform,
+                         crs=geotensor_ref.crs,
+                         fill_value_default=geotensor_ref.fill_value_default)
 
 
 class S2ImageL2A(S2Image):
@@ -1405,35 +1407,44 @@ class S2ImageL1C(S2Image):
 
 # Cache for the spectral response function of S2A, S2B and S2C
 SRF_S2 = {}
-SRF_FILE_DEFAULT = "https://sentiwiki.copernicus.eu/__attachments/1692737/COPE-GSEG-EOPG-TN-15-0007%20-%20Sentinel-2%20Spectral%20Response%20Functions%202024%20-%204.0.xlsx"
+# SRF document COPE-GSEG-EOPG-TN-15-0007 v4.0, bundled as package data so that
+# read_srf works offline and does not break when SentiWiki reorganizes its
+# attachment URLs (https://github.com/spaceml-org/georeader/issues/72).
+# sha256: 1a9edc27d692a570911a460d589f188da0fc3e27f0b0bd1ad322059c380519b0
+SRF_FILE_DEFAULT = os.path.join(
+    os.path.dirname(__file__),
+    "COPE-GSEG-EOPG-TN-15-0007_-_Sentinel-2_Spectral_Response_Functions_2024_-_4.0.xlsx",
+)
 
 
 def read_srf(
     satellite: str, srf_file: str = SRF_FILE_DEFAULT, cache: bool = True
 ) -> pd.DataFrame:
     """
-    Process the spectral response function file. If the file is not provided
-    it downloads it from https://sentinel.esa.int/web/sentinel/user-guides/sentinel-2-msi/document-library/-/asset_publisher/Wk0TKajiISaR/content/sentinel-2a-spectral-responses
+    Process the spectral response function file. By default it reads the SRF
+    document (COPE-GSEG-EOPG-TN-15-0007 v4.0) bundled with the package, so no
+    network access is needed. Pass an ``http(s)://`` URL as `srf_file` to use a
+    different revision; it is downloaded once and cached in ``~/.georeader``.
 
-    This function requires the fsspec package and pandas and openpyxl for reading excel files.
+    This function requires pandas and openpyxl for reading excel files, and
+    fsspec if `srf_file` is a URL.
 
     Args:
         satellite (str): satellite name (S2A, S2B or S2C)
-        srf_file (str): path to the srf file
+        srf_file (str): path or URL of the srf file
         cache (bool): if True, the srf is cached for future calls. Default True
 
     Returns:
         pd.DataFrame: spectral response function for each of the bands of S2
     """
-    assert satellite in ["S2A", "S2B", "S2C"], "satellite must be S2A or S2B"
+    assert satellite in ["S2A", "S2B", "S2C"], "satellite must be S2A, S2B or S2C"
 
     if cache:
         global SRF_S2
         if satellite in SRF_S2:
             return SRF_S2[satellite]
 
-    if srf_file == SRF_FILE_DEFAULT:
-        # home_dir = os.path.join(os.path.expanduser('~'),".georeader")
+    if srf_file.startswith(("http://", "https://")):
         home_dir = os.path.join(os.path.expanduser("~"), ".georeader")
         os.makedirs(home_dir, exist_ok=True)
         srf_filename = os.path.basename(srf_file)

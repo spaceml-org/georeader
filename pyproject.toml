@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "georeader-spaceml"
-version = "2.1.0"
+version = "2.3.5"
 description = "🛰️ Process raster data in python"
 authors = ["Gonzalo Mateo-García", "Kike Portales", "Manuel Montesino San Martin", "Juan Emmanuel Johnson"]
 repository = "https://github.com/spaceml-org/georeader"
@@ -10,7 +10,12 @@ license = "	LGPL-3.0"
 packages = [
   {include = "georeader"}
 ]
-include = ["georeader/SolarIrradiance_Thuillier.csv"]
+include = [
+  { path = "georeader/SolarIrradiance_Thuillier.csv", format = ["sdist", "wheel"] },
+  # Sentinel-2 spectral response functions (issue #72): bundled so read_srf
+  # works offline instead of downloading from a moving SentiWiki URL.
+  { path = "georeader/readers/COPE-GSEG-EOPG-TN-15-0007_-_Sentinel-2_Spectral_Response_Functions_2024_-_4.0.xlsx", format = ["sdist", "wheel"] },
+]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<4.0"
@@ -53,6 +58,10 @@ mypy = "^1.5.1"
 pre-commit = "^3.4.0"
 tox = "^4.11.1"
 scikit-image = "^0.24.0"
+# Runs the docs/ notebooks as integration tests (`make test-notebooks`).
+# ipykernel provides the kernel nbmake executes the notebooks in.
+nbmake = "^1"
+ipykernel = "^6.29.5"
 # CI installs the dev group; pull in the carbonmapper extras here
 # explicitly so the carbonmapper reader's tests run in CI even though
 # the dependencies are gated as optional for end users.
@@ -63,6 +72,8 @@ requests = ">=2"
 # environments without these installed are skipped cleanly.
 async-geotiff = ">=0.5,<0.6"
 obstore = ">=0.7"
+# Loads the repo-root .env (credentials/config) in docs/conftest.py for the notebook tests.
+python-dotenv = "^1.0.0"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = "^1.4.2"
@@ -86,6 +97,9 @@ ipykernel = "^6.29.5"
 pyarrow = "^18.0.0"
 fastparquet = "^2024.5.0"
 matplotlib = "^3.9.2"
+# Engine pandas uses to read the Sentinel-2 SRF .xlsx in S2_SAFE_reader.read_srf
+# (needed by docs/Sentinel-2/explore_metadata_s2.ipynb).
+openpyxl = "^3.1.5"
 folium = "^0.18.0"
 earthengine-api = "^1.2.0"
 pysolar = "^0.11"

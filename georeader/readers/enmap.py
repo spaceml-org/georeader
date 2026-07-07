@@ -109,7 +109,7 @@ from georeader.geotensor import GeoTensor
 from georeader import reflectance
 from georeader import read
 from rasterio.windows import Window
-from typing import Optional, Union, Any, List, Tuple
+from typing import Optional, Union, Any, List, Tuple, Dict
 from numbers import Number
 from numpy.typing import NDArray
 from datetime import datetime, timezone
@@ -441,7 +441,11 @@ class EnMAP:
         UTC datetime of acquisition end.
     units : str
         Radiance units: 'mW/m2/sr/nm'.
-    
+    cache_radiance : bool
+        Opt-in flag (default False). When True, the raw SWIR/VNIR spectral cubes
+        read by ``load_product`` are cached in memory so repeated calls skip the
+        disk read. Call ``clear_radiance_cache()`` to release them.
+
     Properties (from underlying readers)
     ------------------------------------
     shape : Tuple[int, int, int]
@@ -526,6 +530,7 @@ class EnMAP:
         by_folder: bool = False,
         window_focus: Optional[Window] = None,
         fs: Optional[fsspec.AbstractFileSystem] = None,
+        cache_radiance: bool = False,
     ) -> None:
         self.xml_file = xml_file
         self.by_folder = by_folder
@@ -619,6 +624,11 @@ class EnMAP:
         self.time_coverage_end = endTime
         self._observation_date_correction_factor: Optional[float] = None
 
+        # Opt-in cache for the raw (DN) spectral cubes, keyed by sensor
+        # ("swir" / "vnir"). Default off. See load_product / clear_radiance_cache.
+        self.cache_radiance: bool = cache_radiance
+        self._cache: Dict[str, GeoTensor] = {}
+
     @property
     def observation_date_correction_factor(self) -> float:
         if self._observation_date_correction_factor is None:
@@ -671,32 +681,71 @@ class EnMAP:
     def footprint(self, crs: Optional[Any] = None) -> Any:
         return self.swir.footprint(crs=crs)
 
+    def _load_spectral_image(self, name_coef: str) -> GeoTensor:
+        """Load the raw (DN) spectral cube for ``"swir"`` or ``"vnir"``.
+
+        Reuses the already-open ``self.swir`` / ``self.vnir`` readers (which point
+        at the same files ``load_product`` would otherwise re-open). When
+        ``cache_radiance`` is enabled the ``RasterioReader.load()`` result is
+        cached so repeated ``load_product`` calls skip the disk read +
+        decompression. The cached cube is the pre-conversion DN data; it is never
+        returned to callers directly (``load_product`` always wraps it in a fresh
+        converted GeoTensor), so caller-side mutations cannot corrupt the cache.
+
+        Args:
+            name_coef (str): ``"swir"`` or ``"vnir"``.
+
+        Returns:
+            GeoTensor: raw DN spectral cube.
+        """
+        if self.cache_radiance and name_coef in self._cache:
+            return self._cache[name_coef]
+
+        reader = self.swir if name_coef == "swir" else self.vnir
+        raster = reader.load()
+
+        if self.cache_radiance:
+            self._cache[name_coef] = raster
+
+        return raster
+
+    def clear_radiance_cache(self) -> None:
+        """Drop any cached raw spectral cubes.
+
+        After this call the next ``load_product("SPECTRAL_IMAGE_SWIR"/"VNIR")``
+        re-reads from disk. Intended to be called once all per-scene products are
+        computed, to release the (hundreds of MB) spectral cube before the next
+        scene is processed.
+        """
+        self._cache.clear()
+
     def load_product(self, product_name: str) -> GeoTensor:
         if product_name not in PRODUCT_FOLDERS:
             raise ValueError(f"Invalid product name: {product_name}")
 
-        if self.by_folder:
-            folder = PRODUCT_FOLDERS[product_name]
-            product_path = self.swir_file.replace(
-                PRODUCT_FOLDERS["SPECTRAL_IMAGE_SWIR"], folder
-            )
-
-            raster_product = RasterioReader(
-                product_path, window_focus=self.window_focus
-            ).load()
-        else:
-            product_path = self.swir_file.replace("SPECTRAL_IMAGE_SWIR", product_name)
-            raster_product = RasterioReader(
-                product_path, window_focus=self.window_focus
-            ).load()
-
-        # Convert to radiance if SPECTRAL_IMAGE_SWIR or SPECRTAL_IMAGE_VNIR
+        # Convert to radiance if SPECTRAL_IMAGE_SWIR or SPECTRAL_IMAGE_VNIR.
+        # Spectral cubes reuse (and optionally cache) the persistent self.swir /
+        # self.vnir readers; other products (quality masks) are read fresh.
         if product_name == "SPECTRAL_IMAGE_SWIR":
             name_coef = "swir"
+            raster_product = self._load_spectral_image(name_coef)
         elif product_name == "SPECTRAL_IMAGE_VNIR":
             name_coef = "vnir"
+            raster_product = self._load_spectral_image(name_coef)
         else:
             name_coef = None
+            if self.by_folder:
+                folder = PRODUCT_FOLDERS[product_name]
+                product_path = self.swir_file.replace(
+                    PRODUCT_FOLDERS["SPECTRAL_IMAGE_SWIR"], folder
+                )
+            else:
+                product_path = self.swir_file.replace(
+                    "SPECTRAL_IMAGE_SWIR", product_name
+                )
+            raster_product = RasterioReader(
+                product_path, window_focus=self.window_focus
+            ).load()
 
         # https://github.com/GFZ/enpt/blob/main/enpt/model/images/images_sensorgeo.py#L327
         # Lλ = QCAL * GAIN + OFFSET
@@ -707,8 +756,11 @@ class EnMAP:
             gain = self.gain_arr[name_coef]
             offset = self.offs_arr[name_coef]
             invalids = raster_product.values == raster_product.fill_value_default
-            raster_product.values = (
-                gain[:, np.newaxis, np.newaxis] * raster_product.values
+            # Arithmetic on a GeoTensor returns a new (float) GeoTensor preserving
+            # georeferencing; we cannot mutate .values in place here because the
+            # dtype changes from integer QCAL to float radiance.
+            raster_product = (
+                gain[:, np.newaxis, np.newaxis] * raster_product
                 + offset[:, np.newaxis, np.newaxis]
             ) * SC_COEFF
             raster_product.values[invalids] = self.fill_value_default

@@ -739,3 +739,59 @@ class TestBytesPathKnobs:
         assert sub._opener is _opener
         # And the sub-reader can actually read.
         assert sub.load().values.shape[-2:] == (50, 50)
+
+
+# Example expiry/start times and signature kept separate so the secret value is
+# only ever assembled inside the tests.
+_SAS_QUERY = (
+    "sv=2021-08-06&st=2024-01-01T00%3A00%3A00Z&se=2024-12-31T23%3A59%3A59Z"
+    "&sr=b&sp=r&sig=abc123SECRETsignatureValue%2Fwith%2Bchars%3D"
+)
+_AZURE_SAS_URL = (
+    "https://myaccount.blob.core.windows.net/mycontainer/path/to/file.tif?"
+    + _SAS_QUERY
+)
+
+
+class TestMaskSasToken:
+    """Tests for masking Azure SAS token signatures in paths."""
+
+    def test_masks_signature(self):
+        masked = rasterio_reader.mask_sas_token(_AZURE_SAS_URL)
+        assert "abc123SECRETsignatureValue" not in masked
+        assert "sig=****" in masked
+
+    def test_keeps_expiry_and_host(self):
+        masked = rasterio_reader.mask_sas_token(_AZURE_SAS_URL)
+        # Non-secret context is preserved so logs stay useful.
+        assert "se=2024-12-31T23%3A59%3A59Z" in masked
+        assert "myaccount.blob.core.windows.net/mycontainer/path/to/file.tif" in masked
+        assert "sv=2021-08-06" in masked
+
+    def test_signature_in_middle_of_query(self):
+        url = (
+            "https://acct.blob.core.windows.net/c/f.tif?"
+            "sig=SECRETvalue&se=2024-12-31T23%3A59%3A59Z"
+        )
+        masked = rasterio_reader.mask_sas_token(url)
+        assert "SECRETvalue" not in masked
+        assert "sig=****" in masked
+        assert "se=2024-12-31T23%3A59%3A59Z" in masked
+
+    def test_path_without_token_unchanged(self):
+        path = "https://acct.blob.core.windows.net/c/f.tif"
+        assert rasterio_reader.mask_sas_token(path) == path
+
+    def test_local_path_unchanged(self):
+        path = "/data/images/file.tif"
+        assert rasterio_reader.mask_sas_token(path) == path
+
+    def test_non_string_unchanged(self):
+        assert rasterio_reader.mask_sas_token(None) is None
+
+    def test_repr_masks_signature(self, test_raster_path):
+        reader = rasterio_reader.RasterioReader(test_raster_path)
+        reader.paths = [_AZURE_SAS_URL]
+        text = repr(reader)
+        assert "abc123SECRETsignatureValue" not in text
+        assert "sig=****" in text

@@ -205,6 +205,11 @@ class ProbaV:
         # Proba-V images have four bands
         self.level_name = level_name
 
+        # Default nodata/fill value (overridden by subclasses as appropriate).
+        # Read functions such as georeader.read.read_reproject expect this
+        # attribute on reader objects.
+        self.fill_value_default = 0
+
     def _get_window_pad(
         self, boundless: bool = True
     ) -> Tuple[rasterio.windows.Window, Optional[List]]:
@@ -364,9 +369,11 @@ class ProbaV:
         Returns:
             geotensor.GeoTensor: mask with the same shape as the image
         """
-        valids = self.load_sm(boundless=boundless)
-        valids.values = ~mask_only_sm(valids.values)
-        valids.fill_value_default = False
+        sm = self.load_sm(boundless=boundless)
+        # ~mask_only_sm(...) is boolean while sm is integer; build a new GeoTensor
+        # rather than assigning into .values (which forbids dtype changes in place).
+        valids = geotensor.GeoTensor(~mask_only_sm(sm.values), transform=sm.transform,
+                                     crs=sm.crs, fill_value_default=False)
         return valids
 
     def load_sm_cloud_mask(
@@ -553,6 +560,10 @@ class ProbaVRadiometry(ProbaV):
             self.indexes = indexes
 
         self.dtype = self.dtype_radiometry
+
+        # Radiometry is returned as reflectance scaled by 1/2000 with -1 as the
+        # invalid marker, matching load_radiometry()'s fill_value_default.
+        self.fill_value_default = -1 / 2000.0
 
     @property
     def count(self):

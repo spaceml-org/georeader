@@ -1,0 +1,11 @@
+# Data files for the docs/ notebook integration tests live here. Most are NOT
+# committed (large rasters / non-redistributable licences) and are fetched from
+# Azure / NASA Earthdata at run time. A few small/medium example rasters ARE
+# committed via Git LFS (see ../.gitattributes) and are un-ignored below.
+# Ignore everything except this file, the README and the LFS-tracked examples.
+*
+!.gitignore
+!README.md
+!S2L1C.tif
+!ang20190928t185111-4_r6871_c424_rgb.tif
+!PROBAV_S1_TOA_X07Y05_20190209_100M_V101.HDF5
