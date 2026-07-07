@@ -59,7 +59,6 @@ network access.
 | `docs/carbonmapper/api_explore.ipynb` | Carbon Mapper API token | *Skipped* unless a Carbon Mapper token is present. |
 | `docs/carbonmapper/products_reference.ipynb` | Carbon Mapper API token | *Skipped* unless a Carbon Mapper token is present. |
 | `docs/carbonmapper/products_quickstart.ipynb` | Carbon Mapper API token | *Skipped* unless a Carbon Mapper token is present. |
-| `docs/carbonmapper/products_partner_drop.ipynb` | Carbon Mapper credentials + `CM_PARTNER_CSV` | *Skipped* unless a partner CSV drop is available. |
 | `docs/Sentinel-2/query_mosaic_s2_images.ipynb` | none (AoI inlined) | **Always skipped** — queries the decommissioned Copernicus Open Access Hub (`scihub.copernicus.eu`); needs migrating to the Copernicus Data Space Ecosystem. |
 
 ## Credentials
