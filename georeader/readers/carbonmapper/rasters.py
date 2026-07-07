@@ -353,11 +353,14 @@ class CMImageRaster:
             collection ids from. Overrides the candidate lists.
         collection:
             Explicit L2B CH4-family collection id (e.g.
-            ``"l2b-ch4-mfa-v3d"``). Overrides the candidate list;
-            ignored when ``spec`` is given.
+            ``"l2b-ch4-mfa-v3d"``). Used verbatim with no probing and
+            takes precedence over ``spec`` for the CH4 side (``spec``
+            then still orders the RGB candidates if ``rgb_collection``
+            is not pinned).
         rgb_collection:
             Explicit RGB sibling collection id (e.g. ``"l2b-rgb-v3d"``).
-            Ignored when ``spec`` is given.
+            Used verbatim with no probing; takes precedence over
+            ``spec`` for the RGB side.
         products:
             Which per-scene products to derive URLs for — descriptors
             from :mod:`~georeader.readers.carbonmapper.products`
@@ -446,8 +449,10 @@ class CMImageRaster:
                 raise ValueError(
                     f"Product {product.key!r} ({product.family.value}) "
                     "is not an L2B per-scene product. Use CMPlumeImage "
-                    "for L3A per-plume products; the RGB sibling is "
-                    "controlled by with_rgb=."
+                    "for L3A per-plume products. The whole-scene RGB "
+                    "sibling lives in a separate collection and is not "
+                    "selected via products= — pass with_rgb=True (the "
+                    "default) to attach it."
                 )
             asset_paths[product.band] = _l2b_asset_url(
                 l2b_coll, scene_id, product.key,

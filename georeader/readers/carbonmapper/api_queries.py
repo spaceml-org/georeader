@@ -866,7 +866,7 @@ def get_image_raster_for_plume(
     try:
         record = _dl.get_plume_by_id(plume_id, token=token)
         spec = CMCollectionSpec.from_plume_record(record)
-    except (requests.HTTPError, requests.ConnectionError, ValueError) as exc:
+    except (requests.RequestException, ValueError) as exc:
         _log.debug(
             "Could not resolve CMCollectionSpec for plume %s (%s); "
             "falling back to STAC + candidate probing", plume_id, exc,

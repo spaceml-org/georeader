@@ -83,16 +83,24 @@ _ENMAP_TILE = "ENMAP01-____L1B-DT0000074101_20240511T080843Z_001_V010402_2024051
 
 @dataclass
 class Requirement:
-    """A single requirement group (satisfied if *any* member is available)."""
+    """A single requirement group (satisfied if *any* member is available).
+
+    ``env`` members satisfy the group individually; ``env_all`` is a set
+    of env vars that must *all* be present to count (for credential
+    pairs like email+password, where one without the other is useless).
+    """
 
     files: list[str] = field(default_factory=list)
     env: list[str] = field(default_factory=list)
+    env_all: list[str] = field(default_factory=list)
     paths: list[str] = field(default_factory=list)
 
     def satisfied(self) -> bool:
         if any(_file_available(_EXAMPLES_DIR / f) for f in self.files):
             return True
         if any(os.environ.get(e) for e in self.env):
+            return True
+        if self.env_all and all(os.environ.get(e) for e in self.env_all):
             return True
         if any(Path(p).expanduser().exists() for p in self.paths):
             return True
@@ -104,6 +112,8 @@ class Requirement:
             bits.append(f"a data file in {_EXAMPLES_DIR} ({', '.join(self.files)})")
         if self.env:
             bits.append(f"one of env vars [{', '.join(self.env)}]")
+        if self.env_all:
+            bits.append(f"all of env vars [{', '.join(self.env_all)}]")
         if self.paths:
             bits.append(f"one of credential files [{', '.join(self.paths)}]")
         return " OR ".join(bits)
@@ -161,19 +171,22 @@ NOTEBOOK_REQUIREMENTS: dict[str, list[Requirement]] = {
     # expire), or the config file all satisfy the gate.
     "api_explore.ipynb": [
         Requirement(
-            env=["CARBONMAPPER_TOKEN", "CARBONMAPPER_EMAIL"],
+            env=["CARBONMAPPER_TOKEN"],
+            env_all=["CARBONMAPPER_EMAIL", "CARBONMAPPER_PASSWORD"],
             paths=["~/.georeader/auth_carbonmapper.json"],
         ),
     ],
     "products_reference.ipynb": [
         Requirement(
-            env=["CARBONMAPPER_TOKEN", "CARBONMAPPER_EMAIL"],
+            env=["CARBONMAPPER_TOKEN"],
+            env_all=["CARBONMAPPER_EMAIL", "CARBONMAPPER_PASSWORD"],
             paths=["~/.georeader/auth_carbonmapper.json"],
         ),
     ],
     "products_quickstart.ipynb": [
         Requirement(
-            env=["CARBONMAPPER_TOKEN", "CARBONMAPPER_EMAIL"],
+            env=["CARBONMAPPER_TOKEN"],
+            env_all=["CARBONMAPPER_EMAIL", "CARBONMAPPER_PASSWORD"],
             paths=["~/.georeader/auth_carbonmapper.json"],
         ),
     ],
