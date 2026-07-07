@@ -19,8 +19,7 @@ Collection identity is factored into :class:`CMCollectionSpec` — the
 (``l3a-vis-ch4-mfa-v3d`` etc.). The spec is **resolved from the plume
 record itself** (the collection segment of its ``plume_tif`` URL, or the
 ``gas`` / ``cmf_type`` / ``emission_version`` fields), never guessed
-from a hardcoded version list. The 2026-07 audit
-(``docs/carbonmapper/api_audit_2026-07.md``) verified:
+from a hardcoded version list. A live-API audit (2026-07) verified:
 
 - the asset-proxy URL pattern
   ``{base}/{coll}/{Y}/{M}/{D}/{item}/{item}_{coll}_{key}`` for both L3A

@@ -22,8 +22,7 @@ URLs from ``/catalog/plume/{id}``. A STAC-only wrapper would miss all
 current data. :meth:`CMPlumeImage.from_plume_id` derives all asset
 URLs from the REST catalog response (which has signed CDN URLs for
 any version) and rewrites them to the Bearer-aware api gateway form
-so the URLs don't expire. Ground truth in
-``docs/carbonmapper/api_audit_2026-07.md``.
+so the URLs don't expire (verified against the live API, 2026-07).
 
 Outline GeoJSON is the canonical source for the plume polygon; if
 the fetch fails (network / 404 / malformed body), we fall back to
