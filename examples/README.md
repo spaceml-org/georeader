@@ -57,7 +57,8 @@ network access.
 | `docs/Sentinel-2/s2_mosaic_from_gee.ipynb` | Earth Engine | *Skipped* unless EE credentials are present. |
 | `docs/Sentinel-2/convert_to_radiance.ipynb` | Earth Engine + public bucket | *Skipped* unless EE credentials are present. |
 | `docs/carbonmapper/api_explore.ipynb` | Carbon Mapper API token | *Skipped* unless a Carbon Mapper token is present. |
-| `docs/carbonmapper/products_explore.ipynb` | Carbon Mapper API token | *Skipped* unless a Carbon Mapper token is present. |
+| `docs/carbonmapper/products_reference.ipynb` | Carbon Mapper API token | *Skipped* unless a Carbon Mapper token is present. |
+| `docs/carbonmapper/products_quickstart.ipynb` | Carbon Mapper API token | *Skipped* unless a Carbon Mapper token is present. |
 | `docs/Sentinel-2/query_mosaic_s2_images.ipynb` | none (AoI inlined) | **Always skipped** — queries the decommissioned Copernicus Open Access Hub (`scihub.copernicus.eu`); needs migrating to the Copernicus Data Space Ecosystem. |
 
 ## Credentials
@@ -74,7 +75,7 @@ skipped.
 |---|---|---|
 | **Azure** (PRISMA / EnMAP) | `prisma_with_cloudsen12`, `enmap_with_cloudsen12`, `simultaneous_prisma_emit` | `SAS_TOKEN`, `AZURE_STORAGE_ACCOUNT`, `CONTAINER_NAME` |
 | **NASA Earthdata** (EMIT) | `emit_explore`, `simultaneous_prisma_emit` | `EARTHDATA_TOKEN` (bearer token from <https://urs.earthdata.nasa.gov/profile>) **or** `~/.georeader/auth_emit.json` `{"user": "...", "password": "..."}` |
-| **Carbon Mapper** | `carbonmapper/api_explore`, `carbonmapper/products_explore` | `CARBONMAPPER_TOKEN` (or `CARBONMAPPER_EMAIL` + `CARBONMAPPER_PASSWORD`) **or** `~/.georeader/auth_carbonmapper.json` |
+| **Carbon Mapper** | `carbonmapper/api_explore`, `carbonmapper/products_reference`, `carbonmapper/products_quickstart` | `CARBONMAPPER_TOKEN` (or `CARBONMAPPER_EMAIL` + `CARBONMAPPER_PASSWORD`) **or** `~/.georeader/auth_carbonmapper.json` |
 | **Google Earth Engine** | `run_in_gee_image`, `s2_mosaic_from_gee`, `convert_to_radiance` | `EARTHENGINE_SERVICE_ACCOUNT_KEY` — a service-account JSON key, as a file path or raw JSON (no Cloud project required). Auth is wired by `georeader.readers.ee_image.initialize()`. |
 
 ## `cloudsen12_models`

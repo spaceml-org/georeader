@@ -165,7 +165,13 @@ NOTEBOOK_REQUIREMENTS: dict[str, list[Requirement]] = {
             paths=["~/.georeader/auth_carbonmapper.json"],
         ),
     ],
-    "products_explore.ipynb": [
+    "products_reference.ipynb": [
+        Requirement(
+            env=["CARBONMAPPER_TOKEN", "CARBONMAPPER_EMAIL"],
+            paths=["~/.georeader/auth_carbonmapper.json"],
+        ),
+    ],
+    "products_quickstart.ipynb": [
         Requirement(
             env=["CARBONMAPPER_TOKEN", "CARBONMAPPER_EMAIL"],
             paths=["~/.georeader/auth_carbonmapper.json"],
