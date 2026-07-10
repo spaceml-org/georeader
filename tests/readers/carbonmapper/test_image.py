@@ -204,7 +204,7 @@ class TestDeriveAssetUrlsErrors:
             "plume_id": PID_V3A,
             "plume_tif": "https://catalog.carbonmapper.org/foo/bar.tif",
         }
-        with pytest.raises(ValueError, match="`<prefix>_plume.tif` pattern"):
+        with pytest.raises(ValueError, match="asset pattern"):
             _derive_asset_urls(seed)
 
 
@@ -280,6 +280,34 @@ class TestFromCmRawPlume:
         raw = CMRawPlume(plume_id=PID_V3A)
         with pytest.raises(ValueError, match="no plume_tif URL"):
             CMPlumeImage.from_cmrawplume(raw, token="tok")
+
+    @pytest.mark.parametrize(
+        "seed",
+        [
+            # gateway form — the trigger for spaceml-org/georeader#65:
+            # the pre-registry code re-applied the gateway prefix to a
+            # plume_tif that was already gateway-form, producing
+            # `/catalog/asset/api/v1/catalog/asset/...` 404s.
+            _api_url("l3a-vis-ch4-mfa-v3b", PID_V3A, "plume.tif"),
+            # already-doubled input parses (tail-anchored) and is repaired
+            _api_url("l3a-vis-ch4-mfa-v3b", PID_V3A, "plume.tif").replace(
+                "/api/v1/catalog/asset/",
+                "/api/v1/catalog/asset/api/v1/catalog/asset/",
+                1,
+            ),
+        ],
+        ids=["gateway-seed", "doubled-seed"],
+    )
+    def test_no_double_gateway_prefix(self, seed):
+        """Regression: spaceml-org/georeader#65."""
+        raw = CMRawPlume(plume_id=PID_V3A, plume_tif=seed)
+        img = CMPlumeImage.from_cmrawplume(raw, token="tok")
+        assert all(
+            u.count("/catalog/asset/") == 1 for u in img.urls.values()
+        )
+        assert img.urls["plume-outline.geojson"] == _api_url(
+            "l3a-vis-ch4-mfa-v3b", PID_V3A, "plume-outline.geojson",
+        )
 
 
 class TestFromPlumeId:

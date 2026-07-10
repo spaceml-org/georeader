@@ -324,7 +324,53 @@ class TestGetImageRasterForScene:
 
 
 class TestGetImageRasterForPlume:
+    @staticmethod
+    def _record_unavailable(monkeypatch):
+        """Force the record-driven spec path to fail so the resolver
+        falls back to the STAC/probe path (the legacy behaviour)."""
+        def boom(plume_id, token=None):
+            raise requests.HTTPError("404 record unavailable")
+        monkeypatch.setattr(aq._dl, "get_plume_by_id", boom)
+
+    def test_record_spec_path_skips_stac(self, monkeypatch):
+        """Preferred path: one catalog fetch resolves the spec; the
+        L2B parent is probed at the plume's own version first (no
+        STAC lookup, defaults as backup — 2026-07 audit)."""
+        plume_id = "tan20260623t124240c80s4001-A"
+        record = {
+            "plume_id": plume_id,
+            "plume_tif": (
+                "https://catalog.carbonmapper.org/l3a-vis-ch4-mfa-v3d/"
+                f"2026/06/23/{plume_id}/{plume_id}_l3a-vis-ch4-mfa-v3d_plume.tif"
+            ),
+        }
+        monkeypatch.setattr(
+            aq._dl, "get_plume_by_id", lambda pid, token=None: record,
+        )
+
+        def no_stac(*a, **kw):
+            raise AssertionError("STAC path must not be used")
+        monkeypatch.setattr(aq, "get_image_raster_for_scene", no_stac)
+
+        from georeader.readers.carbonmapper import rasters as _rasters
+
+        probes: list[str] = []
+
+        def fake_probe(url, **kw):
+            probes.append(url)
+            resp = MagicMock()
+            resp.status_code = 206
+            return resp
+        monkeypatch.setattr(_rasters.requests, "get", fake_probe)
+
+        ir = aq.get_image_raster_for_plume("tok", plume_id)
+        # Spec version probed first for CH4 + RGB (one probe each).
+        assert len(probes) == 2
+        assert "l2b-ch4-mfa-v3d" in str(ir.asset_paths["cmf"])
+        assert "l2b-rgb-v3d" in str(ir.asset_paths["rgb"])
+
     def test_derives_scene_id_from_plume_id(self, monkeypatch):
+        self._record_unavailable(monkeypatch)
         captured = {}
 
         def fake_for_scene(token, scene_id, **kw):
@@ -336,6 +382,7 @@ class TestGetImageRasterForPlume:
         assert captured["scene_id"] == "tan20260331t181625c77s4001"
 
     def test_forwards_kwargs(self, monkeypatch):
+        self._record_unavailable(monkeypatch)
         captured = {}
 
         def fake_for_scene(token, scene_id, **kw):
@@ -424,3 +471,128 @@ def test_list_tiles_for_source_empty_when_no_plumes(monkeypatch):
         lambda **kw: pytest.fail("stac_search should not be called"),
     )
     assert aq.list_tiles_for_source("tok", "any") == []
+
+
+# ─── 2026-07 source-detail API drift ─────────────────────────────────
+
+
+class TestSourceDetailDrift:
+    """`/catalog/source/{name}` now returns a nested detail shape:
+    stats under `source`, full annotated plume records under `plumes`,
+    centroid under `point`. The old flat shape (and the
+    source-plumes-csv route, which now 400s upstream) must keep
+    working as fallbacks."""
+
+    NESTED = {
+        "source_name": "CH4_1B2_250m_-104.11776_32.02621",
+        "point": {"type": "Point", "coordinates": [-104.11776, 32.02621]},
+        "source": {
+            "gas": "CH4", "sector": "1B2", "persistence": 0.75,
+            "emission_auto": 244.56, "emission_uncertainty_auto": 96.55,
+        },
+        "plumes": [
+            {"plume_id": "ang20191006t180341-1", "gas": "CH4",
+             "emission_auto": 338.9},
+            {"plume_id": "tan20260311t190317c10s4001-D", "gas": "CH4",
+             "emission_auto": 970.0},
+        ],
+        "scenes": [{"scene_name": "ang20191006t180341"}],
+        "detection_dates": ["2019-10-06", "2026-03-11"],
+        "observation_dates": ["2019-10-06", "2020-01-01", "2026-03-11"],
+    }
+
+    def test_get_source_flattens_nested_shape(self, monkeypatch):
+        monkeypatch.setattr(
+            aq._dl, "get_source_by_name", lambda name, token=None: dict(self.NESTED),
+        )
+        src = aq.get_source("tok", self.NESTED["source_name"])
+        assert src.source_name == "CH4_1B2_250m_-104.11776_32.02621"
+        assert src.sector == "1B2"
+        assert src.plume_count == 2
+        assert src.persistence == 0.75
+        assert src.emission_auto == 244.56
+        assert (round(src.point.x, 5), round(src.point.y, 5)) == (-104.11776, 32.02621)
+
+    def test_list_plumes_for_source_uses_embedded_records(self, monkeypatch):
+        monkeypatch.setattr(
+            aq._dl, "get_source_by_name", lambda name, token=None: dict(self.NESTED),
+        )
+
+        def no_csv(*a, **kw):
+            raise AssertionError("CSV route must not be used when plumes are embedded")
+        monkeypatch.setattr(aq._dl, "get_source_plumes_csv", no_csv)
+
+        plumes = aq.list_plumes_for_source("tok", self.NESTED["source_name"])
+        assert [p.plume_id for p in plumes] == [
+            "ang20191006t180341-1", "tan20260311t190317c10s4001-D",
+        ]
+
+    def test_list_plumes_for_source_csv_fallback(self, monkeypatch):
+        """Pre-drift shape (no embedded `plumes`) falls back to CSV."""
+        monkeypatch.setattr(
+            aq._dl, "get_source_by_name",
+            lambda name, token=None: {"source_name": name, "plume_count": 1},
+        )
+        monkeypatch.setattr(
+            aq._dl, "get_source_plumes_csv",
+            lambda name, token=None: "plume_id,gas\ntan20260101t000000c00s4001-A,CH4\n",
+        )
+        plumes = aq.list_plumes_for_source("tok", "CH4_1B2_100m_0_0")
+        assert len(plumes) == 1
+        assert plumes[0].plume_id == "tan20260101t000000c00s4001-A"
+
+    def test_list_plumes_for_source_404(self, monkeypatch):
+        def boom(name, token=None):
+            resp = MagicMock()
+            resp.status_code = 404
+            raise requests.HTTPError("404", response=resp)
+        monkeypatch.setattr(aq._dl, "get_source_by_name", boom)
+        with pytest.raises(aq.CMSourceNotFound):
+            aq.list_plumes_for_source("tok", "CH4_1B2_500m_-103.93835_32.06406")
+
+class TestListPlumesDateAxes:
+    """spaceml-org/georeader#64 — publication-date filtering."""
+
+    def _capture(self, monkeypatch):
+        captured: dict = {}
+
+        def fake(**kwargs):
+            captured.update(kwargs)
+            return {"items": []}
+
+        monkeypatch.setattr(aq._dl, "get_plumes_annotated", fake)
+        return captured
+
+    def test_published_at_bounds_become_interval(self, monkeypatch):
+        cap = self._capture(monkeypatch)
+        aq.list_plumes(
+            "tok",
+            published_at_min=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            published_at_max=datetime(2026, 4, 1, tzinfo=timezone.utc),
+        )
+        assert cap["published_at_range"] == (
+            "2026-03-01T00:00:00Z/2026-04-01T00:00:00Z"
+        )
+        assert cap["datetime_range"] is None
+
+    def test_published_at_min_only_is_open_ended(self, monkeypatch):
+        cap = self._capture(monkeypatch)
+        aq.list_plumes(
+            "tok", published_at_min=datetime(2026, 3, 1, tzinfo=timezone.utc),
+        )
+        assert cap["published_at_range"] == "2026-03-01T00:00:00Z/.."
+
+    def test_axes_are_independent(self, monkeypatch):
+        cap = self._capture(monkeypatch)
+        aq.list_plumes(
+            "tok",
+            datetime_min=datetime(2025, 11, 1, tzinfo=timezone.utc),
+            published_at_max=datetime(2026, 4, 1, tzinfo=timezone.utc),
+        )
+        assert cap["datetime_range"] == "2025-11-01T00:00:00Z/.."
+        assert cap["published_at_range"] == "../2026-04-01T00:00:00Z"
+
+    def test_unset_by_default(self, monkeypatch):
+        cap = self._capture(monkeypatch)
+        aq.list_plumes("tok")
+        assert cap["published_at_range"] is None
