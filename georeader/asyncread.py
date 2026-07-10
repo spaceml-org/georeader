@@ -620,13 +620,13 @@ async def resize(
 
     .. warning::
 
-       When ``anti_aliasing=True`` and the input is a lazy async reader,
-       :func:`georeader.read.apply_anti_aliasing` runs sync and reads the
-       full extent eagerly via the reader's sync ``.values``-like access.
-       To stream only a windowed region first, pre-load that region with
-       :func:`read_from_bounds` (or similar) and pass the resulting
-       :class:`GeoTensor` here. Or pass ``anti_aliasing=False`` to skip
-       the filter entirely.
+       When ``anti_aliasing=True`` and the input is a lazy async reader
+       being *downsampled*, the reader's **full extent is loaded eagerly**
+       (awaited) before the Gaussian filter runs — the filter needs the
+       pixels in memory. To stream only a windowed region, pre-load that
+       region with :func:`read_from_bounds` (or similar) and pass the
+       resulting :class:`GeoTensor` here. Or pass ``anti_aliasing=False``
+       to skip the filter entirely.
 
     Example:
         >>> # Sentinel-2 native 10m → 30m (Landsat-like resolution)
@@ -658,8 +658,17 @@ async def resize(
 
     src: Any = data_in
     if anti_aliasing:
+        # `apply_anti_aliasing` is sync: for lazy inputs that need the
+        # Gaussian filter (i.e. an actual downsample) it materialises them
+        # via `data_in.load()`, which on an AsyncGeoData returns an
+        # un-awaited coroutine. Await the full-extent load here first so
+        # the shared helper only ever sees in-memory data. Upsampling is
+        # a no-op for the filter, so the reader stays lazy in that case.
+        downsampling = any(r_or < r_dst for r_or, r_dst in zip(resolution_or, resolution_dst))
+        if downsampling and not isinstance(data_in, GeoTensor):
+            src = await data_in.load()
         src = apply_anti_aliasing(
-            data_in, anti_aliasing_sigma=anti_aliasing_sigma, resolution_dst=resolution_dst
+            src, anti_aliasing_sigma=anti_aliasing_sigma, resolution_dst=resolution_dst
         )
 
     return await read_reproject(
@@ -809,7 +818,20 @@ async def read_from_tile(
         if resolution_dst_crs is not None:
             if isinstance(resolution_dst_crs, numbers.Number):
                 resolution_dst_crs = (abs(resolution_dst_crs), abs(resolution_dst_crs))
-        dst_transform, window_data = calculate_transform_window(data, dst_crs, resolution_dst_crs)
+
+        # Destination grid over the TILE's extent (mirrors the sync
+        # `read.read_from_tile`) — not the whole raster's, which is what
+        # `calculate_transform_window` would compute.
+        polygon_crs_data = window_utils.polygon_to_crs(
+            polygon_crs_webmercator, WEB_MERCATOR_CRS, data.crs
+        )
+        bounds_crs_data = polygon_crs_data.bounds
+
+        in_height, in_width = data.shape[-2:]
+        dst_transform, width, height = rasterio.warp.calculate_default_transform(
+            data.crs, dst_crs, in_width, in_height, *bounds_crs_data, resolution=resolution_dst_crs
+        )
+        window_data = rasterio.windows.Window(0, 0, width=width, height=height)
 
     gt = await read_reproject(
         data, dst_crs=dst_crs, dst_transform=dst_transform, window_out=window_data

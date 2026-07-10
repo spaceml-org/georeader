@@ -186,9 +186,9 @@ References
 import itertools
 import numbers
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from itertools import product
-from math import ceil, copysign
+from math import ceil
 from typing import Any, Dict, Optional, Tuple, Union
 
 import mercantile
@@ -1363,7 +1363,7 @@ def read_to_crs(
 
 def calculate_transform_window(
     data_in: GeoData, dst_crs: Any, resolution_dst_crs: Optional[Union[float, Tuple[float, float]]] = None
-) -> Tuple[rasterio.Affine, rasterio.windows.Window]:
+) -> Tuple[rasterio.windows.Window, rasterio.Affine]:
     """
     Calculate the default transform to reproject data to dst_crs with resolution_dst_crs
 
@@ -1371,6 +1371,11 @@ def calculate_transform_window(
         data_in (GeoData): GeoData to reproyect
         dst_crs (Any): dst crs
         resolution_dst_crs (Optional[Union[float, Tuple[float, float]]], optional): Defaults to None.
+
+    Returns:
+        ``(window, transform)`` — the destination pixel window and affine
+        transform, in that order (mind the order: it is the reverse of the
+        function name).
     """
 
     if resolution_dst_crs is not None:
@@ -1396,7 +1401,15 @@ class _ReprojectPlan:
     1. **Fast path** (``fast_path_window is not None``): source and
        destination grids are the same CRS *and* exactly aligned, so the
        caller can do a plain windowed read against ``fast_path_window``
-       and skip the warp entirely.
+       and skip the warp entirely. Fast-path plans are returned early,
+       before the dtype/allocation/intersection steps run, so only the
+       grid fields (``dst_transform``, ``dst_crs``, ``window_out``,
+       ``crs_data_in``, ``named_shape``) and ``fast_path_window`` are
+       populated — ``polygon_dst_crs`` and ``destination`` are ``None``.
+       This mirrors the pre-refactor behaviour: the destination buffer
+       (potentially GBs for a full scene) is never allocated, and
+       ``fill_value_default``/``dtype_dst`` are never resolved, on the
+       path that doesn't use them.
     2. **Non-intersecting** (``nonintersecting is True``): source does not
        overlap the destination extent; caller returns the pre-allocated
        ``destination`` (already filled with ``dst_nodata``) without any I/O.
@@ -1436,16 +1449,61 @@ class _ReprojectPlan:
     dst_crs: Any
     window_out: rasterio.windows.Window
     crs_data_in: Any
-    polygon_dst_crs: Polygon
-    destination: np.ndarray
-    dst_nodata: Any
-    dtype_dst: Any
-    cast: bool
-    isbool_dtypein: bool
-    isbool_dtypedst: bool
     named_shape: "OrderedDict[str, int]"
+    # The fields below are None/False on fast-path plans (see class docstring).
+    polygon_dst_crs: Optional[Polygon] = None
+    destination: Optional[np.ndarray] = None
+    dst_nodata: Any = None
+    dtype_dst: Any = None
+    cast: bool = False
+    isbool_dtypein: bool = False
+    isbool_dtypedst: bool = False
     fast_path_window: Optional[rasterio.windows.Window] = None
     nonintersecting: bool = False
+
+
+def _aligned_fast_path_window(
+    data_in: GeoData,
+    dst_crs: Any,
+    crs_data_in: Any,
+    dst_transform: rasterio.Affine,
+    window_out: rasterio.windows.Window,
+) -> Optional[rasterio.windows.Window]:
+    """Detect the same-CRS/aligned-grid fast path for :func:`read_reproject`.
+
+    When source and destination share CRS, pixel size (a, e), and rotation
+    (b, d), the warp degenerates to a window read against the source. The
+    ~10-100x speedup matters in practice: this is the path used by
+    `read_reproject_like` when callers stack already-aligned chips.
+
+    The grid-alignment test maps the destination origin into source pixel
+    space (~transform_data * dst_origin). If the resulting offsets are
+    exact integers the grids are aligned and we can read directly.
+    Non-integer offsets mean the destination grid is shifted by sub-pixel
+    amounts -- interpolation IS required, so the caller falls through to
+    the warp.
+
+    Returns:
+        The source-aligned read window, or ``None`` when the warp is needed.
+    """
+    if not window_utils.compare_crs(dst_crs, crs_data_in):
+        return None
+    transform_data = data_in.transform
+    if (
+        (dst_transform.a != transform_data.a)
+        or (dst_transform.b != transform_data.b)
+        or (dst_transform.d != transform_data.d)
+        or (dst_transform.e != transform_data.e)
+    ):
+        return None
+    x_dst, y_dst = dst_transform.c, dst_transform.f
+    col_off, row_off = ~transform_data * (x_dst, y_dst)
+    window_in_data = rasterio.windows.Window(col_off, row_off, window_out.width, window_out.height)
+    if not (_is_exact_round(window_in_data.row_off) and _is_exact_round(window_in_data.col_off)):
+        return None
+    # `round_offsets("floor")` cleans up tiny FP residues that survive the
+    # integer-check (e.g. 3.0000001 → 3).
+    return window_in_data.round_offsets(op="floor", pixel_precision=PIXEL_PRECISION)
 
 
 def _reproject_setup(
@@ -1496,35 +1554,24 @@ def _reproject_setup(
         dst_crs = crs_data_in
 
     # STEP 3 — Same-CRS/aligned-grid fast path detection.
-    #
-    # When source and destination share CRS, pixel size (a, e), and rotation
-    # (b, d), the warp degenerates to a window read against the source. The
-    # ~10–100× speedup matters in practice: this is the path used by
-    # `read_reproject_like` when callers stack already-aligned chips.
-    #
-    # The grid-alignment test maps the destination origin into source pixel
-    # space (~transform_data * dst_origin). If the resulting offsets are
-    # exact integers the grids are aligned and we can read directly.
-    # Non-integer offsets mean the destination grid is shifted by sub-pixel
-    # amounts — interpolation IS required, so we fall through to the warp.
-    fast_path_window: Optional[rasterio.windows.Window] = None
-    if window_utils.compare_crs(dst_crs, crs_data_in):
-        transform_data = data_in.transform
-        if (
-            (dst_transform.a == transform_data.a)
-            and (dst_transform.b == transform_data.b)
-            and (dst_transform.d == transform_data.d)
-            and (dst_transform.e == transform_data.e)
-        ):
-            x_dst, y_dst = dst_transform.c, dst_transform.f
-            col_off, row_off = ~transform_data * (x_dst, y_dst)
-            window_in_data = rasterio.windows.Window(col_off, row_off, window_out.width, window_out.height)
-            if _is_exact_round(window_in_data.row_off) and _is_exact_round(window_in_data.col_off):
-                # `round_offsets("floor")` cleans up tiny FP residues
-                # that survive the integer-check (e.g. 3.0000001 → 3).
-                fast_path_window = window_in_data.round_offsets(
-                    op="floor", pixel_precision=PIXEL_PRECISION
-                )
+    fast_path_window = _aligned_fast_path_window(data_in, dst_crs, crs_data_in, dst_transform, window_out)
+
+    # Fast path found → return early, BEFORE the dtype/allocation/intersection
+    # steps. The fast-path branch does a plain windowed read and never touches
+    # `destination` (which for a full multi-band scene can be GBs of dead
+    # allocation) nor the resolved dtype/nodata. Early-returning also keeps
+    # the pre-refactor behaviour for inputs whose `fill_value_default` is
+    # None (legal on GeoTensor / custom GeoData): `np.full` would raise on
+    # a None fill value that the fast path never needs.
+    if fast_path_window is not None:
+        return _ReprojectPlan(
+            dst_transform=dst_transform,
+            dst_crs=dst_crs,
+            window_out=window_out,
+            crs_data_in=crs_data_in,
+            named_shape=named_shape,
+            fast_path_window=fast_path_window,
+        )
 
     # STEP 4 — Dtype handling.
     #
@@ -2066,7 +2113,6 @@ def read_from_tile(
             data.crs, dst_crs, in_width, in_height, *bounds_crs_data, resolution=resolution_dst_crs
         )
         window_data = rasterio.windows.Window(0, 0, width=width, height=height)
-        dst_transform, window_data = calculate_transform_window(data, dst_crs, resolution_dst_crs)
 
     return read_reproject(data, dst_crs=dst_crs, dst_transform=dst_transform, window_out=window_data)
 

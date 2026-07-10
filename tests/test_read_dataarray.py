@@ -16,6 +16,7 @@ import itertools
 import math
 import os
 
+import mercantile
 import numpy as np
 import pytest
 import rasterio
@@ -483,6 +484,84 @@ def test_read_from_tile(reader_and_materialize, test_raster_path):
     named_shape = dict(zip(chip_out.dims, chip_out.shape))
     assert named_shape["y"] > 0
     assert named_shape["x"] > 0
+
+
+def _tile_covering_raster_center(test_raster_path, z=12):
+    """(x, y, z) of the XYZ tile covering the raster's geographic centre."""
+    with rasterio.open(test_raster_path) as src:
+        center_x = (src.bounds.left + src.bounds.right) / 2.0
+        center_y = (src.bounds.bottom + src.bounds.top) / 2.0
+        src_crs = src.crs
+    lon, lat = rasterio.warp.transform(src_crs, "EPSG:4326", [center_x], [center_y])
+    t = mercantile.tile(lon[0], lat[0], z)
+    return t.x, t.y, t.z
+
+
+def test_read_from_tile_native_resolution(reader_and_materialize, test_raster_path):
+    """``out_shape=None`` — destination grid computed over the TILE's extent.
+
+    Regression test: this branch used to crash with ``AttributeError``
+    ('Affine' object has no attribute 'width') because a redundant call to
+    ``calculate_transform_window`` clobbered the correct tile-extent grid
+    with its outputs unpacked in the wrong order (window <-> transform).
+    """
+    reader, materialize = reader_and_materialize
+    reader = _as_geotensor_for_reproject(reader, materialize)
+
+    xtile, ytile, z = _tile_covering_raster_center(test_raster_path)
+    chip_out = read.read_from_tile(reader, x=xtile, y=ytile, z=z, out_shape=None)
+
+    assert chip_out is not None
+    assert "3857" in str(chip_out.crs)
+    # The grid must cover the TILE's Web Mercator extent, not the whole
+    # raster's: bounds within one pixel of the mercantile tile bounds.
+    tb = mercantile.xy_bounds(xtile, ytile, z)
+    res_x, res_y = abs(chip_out.transform.a), abs(chip_out.transform.e)
+    assert abs(chip_out.bounds[0] - tb.left) <= res_x
+    assert abs(chip_out.bounds[3] - tb.top) <= res_y
+    assert chip_out.bounds[2] >= tb.right - res_x
+    assert chip_out.bounds[1] <= tb.bottom + res_y
+
+
+def test_read_from_tile_native_resolution_explicit_res(reader_and_materialize, test_raster_path):
+    """``out_shape=None`` + ``resolution_dst_crs`` pins the output pixel size."""
+    reader, materialize = reader_and_materialize
+    reader = _as_geotensor_for_reproject(reader, materialize)
+
+    xtile, ytile, z = _tile_covering_raster_center(test_raster_path)
+    chip_out = read.read_from_tile(
+        reader, x=xtile, y=ytile, z=z, out_shape=None, resolution_dst_crs=40.0
+    )
+
+    assert chip_out is not None
+    assert chip_out.res == (40.0, 40.0)
+
+
+def test_read_reproject_fast_path_fill_value_none(test_raster_path):
+    """Aligned same-CRS reproject (fast path) with ``fill_value_default=None``.
+
+    The fast path is a plain windowed read: it must not allocate the
+    destination buffer nor resolve the fill value. A GeoTensor carrying
+    ``fill_value_default=None`` (legal) used to raise ``TypeError`` from
+    ``np.full(..., fill_value=None)`` in ``_reproject_setup``.
+    """
+    with rasterio.open(test_raster_path) as src:
+        data = src.read()
+        transform = src.transform
+        crs = src.crs
+        height, width = src.height, src.width
+
+    gt = GeoTensor(data, transform=transform, crs=crs, fill_value_default=None)
+    out = read.read_reproject(
+        gt,
+        dst_crs=crs,
+        dst_transform=transform,
+        window_out=rasterio.windows.Window(0, 0, width=width, height=height),
+    )
+
+    assert isinstance(out, GeoTensor)
+    assert out.transform == transform
+    assert np.array_equal(np.asarray(out.values), data)
 
 
 @pytest.mark.parametrize("window", TEST_WINDOWS)

@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import tempfile
 
+import mercantile
 import numpy as np
 import pytest
 import pytest_asyncio
@@ -371,6 +372,30 @@ class TestAsyncResize:
         sync_gt = read.resize(sync_reader, resolution_dst=5.0, anti_aliasing=False)
         assert async_gt.shape == sync_gt.shape == (3, 512, 512)
 
+    @pytest.mark.asyncio
+    async def test_resize_to_half_with_anti_aliasing(self, async_reader, sync_reader):
+        """Downsample with ``anti_aliasing=True`` (the default).
+
+        Regression test: the sync ``apply_anti_aliasing`` helper calls
+        ``data_in.load()`` on lazy inputs, which for an async reader
+        returned an un-awaited coroutine and crashed with AttributeError.
+        The async ``resize`` now awaits the load before filtering.
+        """
+        pytest.importorskip("scipy")
+        async_gt = await asyncread.resize(async_reader, resolution_dst=20.0)
+        sync_gt = read.resize(sync_reader, resolution_dst=20.0)
+        assert async_gt.shape == sync_gt.shape == (3, 128, 128)
+        assert np.allclose(
+            np.asarray(async_gt.values), np.asarray(sync_gt.values), atol=1.0
+        )
+
+    @pytest.mark.asyncio
+    async def test_resize_upsample_with_anti_aliasing_noop(self, async_reader, sync_reader):
+        """Upsampling with AA on: the filter is a no-op and the reader stays lazy."""
+        async_gt = await asyncread.resize(async_reader, resolution_dst=5.0)
+        sync_gt = read.resize(sync_reader, resolution_dst=5.0)
+        assert async_gt.shape == sync_gt.shape == (3, 512, 512)
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # read_from_tile
@@ -404,3 +429,40 @@ class TestAsyncReadFromTile:
         )
         sync_gt = read.read_from_tile(sync_reader, x=0, y=0, z=0, out_shape=(128, 128))
         assert async_gt.shape == sync_gt.shape == (3, 128, 128)
+
+    @pytest.mark.asyncio
+    async def test_tile_native_resolution_out_shape_none(
+        self, async_reader, sync_reader, cog_fixture
+    ):
+        """``out_shape=None`` — grid over the TILE's extent, parity with sync.
+
+        Regression test: this branch used to crash with AttributeError
+        ('Affine' object has no attribute 'width') from unpacking
+        ``calculate_transform_window`` in the wrong order, and — even
+        unpacked correctly — computed the grid from the whole raster's
+        bounds instead of the tile's.
+        """
+        # A z=13 tile covering the fixture's geographic centre (UTM 31N).
+        xmin, ymin, xmax, ymax = cog_fixture["bounds"]
+        lon, lat = rasterio.warp.transform(
+            "EPSG:32631", "EPSG:4326", [(xmin + xmax) / 2], [(ymin + ymax) / 2]
+        )
+        t = mercantile.tile(lon[0], lat[0], 13)
+
+        async_gt = await asyncread.read_from_tile(
+            async_reader, x=t.x, y=t.y, z=t.z, out_shape=None
+        )
+        sync_gt = read.read_from_tile(sync_reader, x=t.x, y=t.y, z=t.z, out_shape=None)
+
+        assert async_gt is not None and sync_gt is not None
+        assert async_gt.shape == sync_gt.shape
+        assert async_gt.transform == sync_gt.transform
+        assert np.allclose(
+            np.asarray(async_gt.values), np.asarray(sync_gt.values), atol=1.0
+        )
+        # The grid covers the TILE's Web Mercator extent (within a pixel),
+        # not the whole raster's.
+        tb = mercantile.xy_bounds(t.x, t.y, t.z)
+        res_x = abs(async_gt.transform.a)
+        assert abs(async_gt.bounds[0] - tb.left) <= res_x
+        assert async_gt.bounds[2] >= tb.right - res_x
