@@ -204,7 +204,7 @@ from numpy.typing import NDArray
 from shapely.geometry import MultiPolygon, Polygon, box
 
 from georeader import window_utils
-from georeader.abstract_reader import GeoData, GeoDataBase
+from georeader.abstract_reader import AsyncGeoData, GeoData, GeoDataBase
 from georeader.geotensor import GeoTensor
 from georeader.window_utils import PIXEL_PRECISION, _is_exact_round, pad_window, round_outer_window
 
@@ -612,6 +612,18 @@ def read_from_window(
         The output transform is adjusted to correspond to the window's geographic location.
         For windows partially outside bounds, boundless=True pads with fill_value_default.
     """
+    # The eager flags are sync-only: `trigger_load=True` would call an async
+    # reader's `load()` without awaiting it (silently returning a bare
+    # coroutine to the caller) and `return_only_data=True` needs `.values`,
+    # which AsyncGeoData deliberately lacks. Fail loudly instead — the async
+    # mirrors in `georeader.asyncread` handle these flags with `await`.
+    if (trigger_load or return_only_data) and isinstance(data_in, AsyncGeoData):
+        raise TypeError(
+            "read_from_window(trigger_load=True / return_only_data=True) is sync-only. "
+            "For async readers use georeader.asyncread.read_from_window, or call the "
+            "default lazy form and `await view.load()` on the returned view."
+        )
+
     # Handle case where window doesn't intersect data at all (pure CPU; no I/O).
     # Shared with asyncread.read_from_window via the private helpers.
     if not _window_intersects_data(data_in, window):

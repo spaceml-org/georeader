@@ -146,6 +146,28 @@ class TestAsyncReadFromWindow:
         assert out is None
 
 
+class TestSyncReadRejectsEagerFlags:
+    """The sync ``read.read_from_window`` rejects eager flags for async readers.
+
+    ``trigger_load=True`` would return a bare un-awaited coroutine and
+    ``return_only_data=True`` needs the sync-only ``.values`` — both now
+    raise ``TypeError`` pointing at the asyncread mirrors. The default
+    lazy path stays polymorphic.
+    """
+
+    @pytest.mark.asyncio
+    async def test_eager_flags_raise_lazy_path_works(self, async_reader):
+        window = rasterio.windows.Window(col_off=0, row_off=0, width=32, height=32)
+        with pytest.raises(TypeError, match="sync-only"):
+            read.read_from_window(async_reader, window, trigger_load=True)
+        with pytest.raises(TypeError, match="sync-only"):
+            read.read_from_window(async_reader, window, return_only_data=True)
+        # The lazy default remains polymorphic across sync/async readers.
+        view = read.read_from_window(async_reader, window)
+        gt = await view.load()
+        assert gt.shape == (3, 32, 32)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # read_from_bounds
 # ──────────────────────────────────────────────────────────────────────────────

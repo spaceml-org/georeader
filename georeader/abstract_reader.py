@@ -275,10 +275,16 @@ class AsyncGeoData(GeoDataBase):
     ``read_from_window`` is **sync** by design: like
     :meth:`RasterioReader.read_from_window`, it only constructs a windowed
     view of the reader and performs no I/O. This means
-    :func:`georeader.read.read_from_window` (and other ``read.*``
-    functions) work polymorphically with both sync and async readers —
-    the only difference is that the returned async view must be
-    materialised via ``await view.load()``.
+    :func:`georeader.read.read_from_window` works polymorphically with
+    async readers **on its default (lazy) path only**: it returns the
+    async view, which the caller materialises via ``await view.load()``.
+    The eager flags are sync-only — ``trigger_load=True`` would call the
+    async ``load()`` without awaiting it (returning a bare coroutine) and
+    ``return_only_data=True`` needs the sync-only ``.values`` property —
+    so :func:`georeader.read.read_from_window` rejects async readers when
+    either flag is set. For eager/reprojecting reads over async readers
+    use the :mod:`georeader.asyncread` mirrors, which ``await``
+    throughout.
     """
 
     async def load(self, boundless: bool = True) -> GeoTensor:
