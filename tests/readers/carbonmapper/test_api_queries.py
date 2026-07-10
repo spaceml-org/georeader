@@ -549,3 +549,50 @@ class TestSourceDetailDrift:
         monkeypatch.setattr(aq._dl, "get_source_by_name", boom)
         with pytest.raises(aq.CMSourceNotFound):
             aq.list_plumes_for_source("tok", "CH4_1B2_500m_-103.93835_32.06406")
+
+class TestListPlumesDateAxes:
+    """spaceml-org/georeader#64 — publication-date filtering."""
+
+    def _capture(self, monkeypatch):
+        captured: dict = {}
+
+        def fake(**kwargs):
+            captured.update(kwargs)
+            return {"items": []}
+
+        monkeypatch.setattr(aq._dl, "get_plumes_annotated", fake)
+        return captured
+
+    def test_published_at_bounds_become_interval(self, monkeypatch):
+        cap = self._capture(monkeypatch)
+        aq.list_plumes(
+            "tok",
+            published_at_min=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            published_at_max=datetime(2026, 4, 1, tzinfo=timezone.utc),
+        )
+        assert cap["published_at_range"] == (
+            "2026-03-01T00:00:00Z/2026-04-01T00:00:00Z"
+        )
+        assert cap["datetime_range"] is None
+
+    def test_published_at_min_only_is_open_ended(self, monkeypatch):
+        cap = self._capture(monkeypatch)
+        aq.list_plumes(
+            "tok", published_at_min=datetime(2026, 3, 1, tzinfo=timezone.utc),
+        )
+        assert cap["published_at_range"] == "2026-03-01T00:00:00Z/.."
+
+    def test_axes_are_independent(self, monkeypatch):
+        cap = self._capture(monkeypatch)
+        aq.list_plumes(
+            "tok",
+            datetime_min=datetime(2025, 11, 1, tzinfo=timezone.utc),
+            published_at_max=datetime(2026, 4, 1, tzinfo=timezone.utc),
+        )
+        assert cap["datetime_range"] == "2025-11-01T00:00:00Z/.."
+        assert cap["published_at_range"] == "../2026-04-01T00:00:00Z"
+
+    def test_unset_by_default(self, monkeypatch):
+        cap = self._capture(monkeypatch)
+        aq.list_plumes("tok")
+        assert cap["published_at_range"] is None

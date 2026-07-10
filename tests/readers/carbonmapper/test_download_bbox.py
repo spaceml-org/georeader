@@ -87,3 +87,44 @@ def test_stac_get_items_uses_comma_joined_bbox(monkeypatch):
     dl.stac_get_items("l2b-ch4-mfa-v3a", bbox=(-104.5, 31.0, -101.5, 33.5))
     qs = parse_qs(urlsplit(cap["url"]).query)
     assert qs["bbox"] == ["-104.5,31.0,-101.5,33.5"]
+
+
+# ─── Date-axis params (spaceml-org/georeader#64) ────────────────────
+# `datetime` filters observation time (scene_timestamp); publication /
+# ingest polling needs the separate documented params.
+
+
+def test_get_plumes_annotated_date_axis_params(monkeypatch):
+    cap = _capture_get_url(monkeypatch)
+    dl.get_plumes_annotated(
+        datetime_range="2026-03-01T00:00:00Z/2026-03-31T23:59:59Z",
+        published_at_range="2026-04-01T00:00:00Z/..",
+        created_at_range="../2026-05-01T00:00:00Z",
+        modified_at_range="2026-05-01T00:00:00Z/2026-06-01T00:00:00Z",
+    )
+    qs = parse_qs(urlsplit(cap["url"]).query)
+    assert qs["datetime"] == ["2026-03-01T00:00:00Z/2026-03-31T23:59:59Z"]
+    assert qs["published_at_datetime"] == ["2026-04-01T00:00:00Z/.."]
+    assert qs["created_at"] == ["../2026-05-01T00:00:00Z"]
+    assert qs["modified_at"] == ["2026-05-01T00:00:00Z/2026-06-01T00:00:00Z"]
+
+
+def test_get_plumes_annotated_date_axes_omitted_when_unset(monkeypatch):
+    cap = _capture_get_url(monkeypatch)
+    dl.get_plumes_annotated(plume_gas="CH4")
+    qs = parse_qs(urlsplit(cap["url"]).query)
+    for key in ("datetime", "published_at_datetime", "created_at", "modified_at"):
+        assert key not in qs
+
+
+def test_get_plumes_csv_date_axis_params(monkeypatch):
+    cap = _capture_get_url(monkeypatch)
+    dl.get_plumes_csv(
+        published_at_range="2026-04-01T00:00:00Z/..",
+        created_at_range="../2026-05-01T00:00:00Z",
+        modified_at_range="2026-05-01T00:00:00Z/2026-06-01T00:00:00Z",
+    )
+    qs = parse_qs(urlsplit(cap["url"]).query)
+    assert qs["published_at_datetime"] == ["2026-04-01T00:00:00Z/.."]
+    assert qs["created_at"] == ["../2026-05-01T00:00:00Z"]
+    assert qs["modified_at"] == ["2026-05-01T00:00:00Z/2026-06-01T00:00:00Z"]

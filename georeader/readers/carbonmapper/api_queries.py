@@ -501,6 +501,8 @@ def list_plumes(
     instruments: list[str] | None = None,
     datetime_min: datetime | None = None,
     datetime_max: datetime | None = None,
+    published_at_min: datetime | None = None,
+    published_at_max: datetime | None = None,
     gas: Gas | Literal["CH4"] = Gas.CH4,
     limit: int = 1_000,
 ) -> list[CMRawPlume]:
@@ -523,6 +525,12 @@ def list_plumes(
         :class:`Instrument` members like ``[Instrument.EMIT, Instrument.TANAGER]``.
     datetime_min, datetime_max:
         Optional UTC bounds — combined into an RFC 3339 interval.
+        Filters on **observation time** (``scene_timestamp``).
+    published_at_min, published_at_max:
+        Optional UTC bounds on **publication date** (``published_at``).
+        Carbon Mapper frequently publishes plumes weeks-to-months
+        after acquisition, so this is the axis to poll for newly
+        published data — e.g. ``published_at_min=last_poll_time``.
     gas:
         :data:`Gas.CH4` (default). **CH4-only for this PR**;
         ``Gas.CO2`` lands in a follow-up. Typed as
@@ -552,10 +560,12 @@ def list_plumes(
     412350.0
     """
     dt_range = _build_datetime_range(datetime_min, datetime_max)
+    pub_range = _build_datetime_range(published_at_min, published_at_max)
     result = _dl.get_plumes_annotated(
         plume_gas=str(gas),
         bbox=bbox,
         datetime_range=dt_range,
+        published_at_range=pub_range,
         sectors=sectors,
         instruments=instruments,
         limit=limit,

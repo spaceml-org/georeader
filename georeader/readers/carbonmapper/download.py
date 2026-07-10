@@ -231,6 +231,9 @@ def get_plumes_annotated(
     plume_gas: str | None = None,
     bbox: tuple[float, float, float, float] | None = None,
     datetime_range: str | None = None,
+    published_at_range: str | None = None,
+    created_at_range: str | None = None,
+    modified_at_range: str | None = None,
     sectors: list[str] | None = None,
     instruments: list[str] | None = None,
     emission_min: int | None = None,
@@ -262,7 +265,22 @@ def get_plumes_annotated(
     datetime_range:
         RFC 3339 time interval string, e.g.
         ``"2024-01-01T00:00:00Z/2024-06-01T00:00:00Z"``.  Either bound
-        may be replaced with ``".."`` to indicate open-ended.
+        may be replaced with ``".."`` to indicate open-ended.  Filters
+        on **observation time** (``scene_timestamp``) — for "what was
+        *published* this period?" use *published_at_range* instead:
+        Carbon Mapper frequently publishes plumes weeks-to-months
+        after acquisition.
+    published_at_range:
+        RFC 3339 interval (same format as *datetime_range*) filtering
+        on **publication date** (``published_at``) — the axis ingest
+        pipelines polling for newly published plumes need.  Sent as
+        the API's ``published_at_datetime`` param.
+    created_at_range:
+        RFC 3339 interval filtering on catalog-record **creation
+        date** (``created_at``).
+    modified_at_range:
+        RFC 3339 interval filtering on catalog-record **modification
+        date** (``modified_at``).
     sectors:
         One or more IPCC sector codes to filter by.  Common values:
         ``"1B2"`` (Oil & Gas), ``"6A"`` (Solid Waste), ``"1B1a"``
@@ -364,6 +382,12 @@ def get_plumes_annotated(
     params.update(_rest_bbox_params(bbox))
     if datetime_range:
         params["datetime"] = datetime_range
+    if published_at_range:
+        params["published_at_datetime"] = published_at_range
+    if created_at_range:
+        params["created_at"] = created_at_range
+    if modified_at_range:
+        params["modified_at"] = modified_at_range
     if sectors:
         params["sectors"] = sectors
     if instruments:
@@ -413,6 +437,9 @@ def get_plumes_csv(
     plume_gas: str | None = None,
     bbox: tuple[float, float, float, float] | None = None,
     datetime_range: str | None = None,
+    published_at_range: str | None = None,
+    created_at_range: str | None = None,
+    modified_at_range: str | None = None,
     sectors: list[str] | None = None,
     instruments: list[str] | None = None,
     limit: int = 50_000,
@@ -435,7 +462,17 @@ def get_plumes_csv(
         ``(west_lon, south_lat, east_lon, north_lat)`` in WGS 84.
     datetime_range:
         RFC 3339 time interval, e.g.
-        ``"2024-01-01T00:00:00Z/2024-06-01T00:00:00Z"``.
+        ``"2024-01-01T00:00:00Z/2024-06-01T00:00:00Z"``.  Filters on
+        **observation time** (``scene_timestamp``).
+    published_at_range:
+        RFC 3339 interval filtering on **publication date** — sent as
+        the API's ``published_at_datetime`` param.  See
+        :func:`get_plumes_annotated`.
+    created_at_range:
+        RFC 3339 interval on record **creation date** (``created_at``).
+    modified_at_range:
+        RFC 3339 interval on record **modification date**
+        (``modified_at``).
     sectors:
         IPCC sector codes to include, e.g. ``["1B2", "6A"]``.
     instruments:
@@ -488,6 +525,12 @@ def get_plumes_csv(
     params.update(_rest_bbox_params(bbox))
     if datetime_range:
         params["datetime"] = datetime_range
+    if published_at_range:
+        params["published_at_datetime"] = published_at_range
+    if created_at_range:
+        params["created_at"] = created_at_range
+    if modified_at_range:
+        params["modified_at"] = modified_at_range
     if sectors:
         params["sectors"] = sectors
     if instruments:
