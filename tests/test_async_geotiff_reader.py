@@ -224,11 +224,15 @@ class TestAsyncGeoTIFFReader:
         assert np.array_equal(clipped_gt.values, boundless_gt.values[:, :4, :4])
 
     @pytest.mark.asyncio
-    async def test_read_from_window_no_intersection_raises(self, cog_fixture):
-        """``read_from_window(boundless=False)`` with a disjoint window raises ``WindowError`` synchronously.
+    async def test_read_from_window_no_intersection(self, cog_fixture):
+        """Disjoint-window behavior matches RasterioReader in both modes.
 
-        ``boundless=True`` does NOT raise at view-construction time
-        (matches RasterioReader.set_window), but raises on load.
+        ``boundless=False`` raises ``WindowError`` synchronously at
+        view construction (matches RasterioReader.set_window).
+        ``boundless=True`` returns an all-fill tensor of the requested
+        shape, no error and no I/O (matches RasterioReader.read, whose
+        pre-allocated fill buffer is returned untouched when the window
+        is disjoint).
         """
         reader = await AsyncGeoTIFFReader.open(cog_fixture["fname"], store=cog_fixture["store"])
 
@@ -236,11 +240,45 @@ class TestAsyncGeoTIFFReader:
         with pytest.raises(rasterio.windows.WindowError):
             reader.read_from_window(outside, boundless=False)
 
-        # boundless=True view construction is permissive; the WindowError
-        # surfaces on load via window_utils.get_slice_pad.
         view = reader.read_from_window(outside, boundless=True)
-        with pytest.raises(rasterio.windows.WindowError):
-            await view.load(boundless=True)
+        gt = await view.load(boundless=True)
+        assert gt.shape == (3, 10, 10)
+        assert np.all(gt.values == view.fill_value_default)
+        # Georeferencing points at the requested (empty) region.
+        assert gt.transform == view.transform
+
+    @pytest.mark.asyncio
+    async def test_gather_batch_survives_edge_tiles(self, cog_fixture):
+        """A concurrent batch with windows sliding off the raster edge succeeds.
+
+        The tile-server pattern: some windows overlap, the trailing ones
+        are fully outside. Before the disjoint-window fix, the first
+        fully-outside window raised WindowError inside asyncio.gather and
+        the whole batch was abandoned; now the outside windows come back
+        as fill tiles, like RasterioReader.
+        """
+        reader = await AsyncGeoTIFFReader.open(cog_fixture["fname"], store=cog_fixture["store"])
+
+        # Raster is 64x64: col_off 0 and 32 overlap, col_off >= 64 is outside.
+        row = [
+            rasterio.windows.Window(col_off=c, row_off=16, width=32, height=32)
+            for c in range(0, 160, 32)
+        ]
+        chips = await asyncio.gather(
+            *[reader.read_from_window(w, boundless=True).load() for w in row]
+        )
+
+        assert len(chips) == len(row)
+        assert all(chip.shape == (3, 32, 32) for chip in chips)
+        # Fully-outside windows (col_off >= 64) are pure fill.
+        fill = reader.fill_value_default
+        assert all(
+            np.all(chip.values == fill)
+            for w, chip in zip(row, chips)
+            if w.col_off >= 64
+        )
+        # Overlapping windows carry real data.
+        assert any(not np.all(chip.values == fill) for chip in chips)
 
     # ----------------------------------------------- coverage gap #7
     def test_read_before_open_raises(self, cog_fixture):

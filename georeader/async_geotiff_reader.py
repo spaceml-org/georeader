@@ -341,16 +341,34 @@ class AsyncGeoTIFFReader(AsyncGeoData):
 
         ``boundless=True`` pads up to the focused window's shape with
         :attr:`fill_value_default` (or ``0`` when the COG has no
-        nodata); ``boundless=False`` returns the clipped intersection.
+        nodata) — including a window entirely outside the raster, which
+        returns an all-fill tensor without touching the store (matches
+        :class:`~georeader.rasterio_reader.RasterioReader`, whose
+        ``read()`` pre-allocates the fill buffer and skips I/O when the
+        window is disjoint). ``boundless=False`` returns the clipped
+        intersection.
 
         Raises:
-            rasterio.windows.WindowError: If the focused window does not
-                intersect the raster at all (regardless of ``boundless``).
+            rasterio.windows.WindowError: If ``boundless=False`` and the
+                focused window does not intersect the raster.
         """
         raster_window = self._raster_window
         target_window = self.window_focus if self.window_focus is not None else raster_window
 
         if boundless:
+            if not rasterio.windows.intersect([raster_window, target_window]):
+                # Fully-outside focus: match RasterioReader — return the
+                # fill tensor of the focused shape, no I/O, no error. One
+                # off-the-edge tile must not kill an asyncio.gather batch
+                # of window reads. (Whether this inherited silent-fill
+                # contract is ideal is tracked in issue #76.)
+                values = np.full(self.shape, self.fill_value_default, dtype=self.dtype)
+                return GeoTensor(
+                    values,
+                    transform=self.transform,
+                    crs=self.crs,
+                    fill_value_default=self.fill_value_default,
+                )
             slice_dict, pad_width = window_utils.get_slice_pad(raster_window, target_window)
             inner_window = rasterio.windows.Window.from_slices(
                 slice_dict["y"], slice_dict["x"],
