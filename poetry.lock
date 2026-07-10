@@ -371,6 +371,27 @@ astroid = ["astroid (>=2,<5)"]
 test = ["astroid (>=2,<5)", "pytest (<9.0)", "pytest-cov", "pytest-xdist"]
 
 [[package]]
+name = "async-geotiff"
+version = "0.5.1"
+description = "Async GeoTIFF reader for Python"
+optional = false
+python-versions = ">=3.11"
+files = [
+    {file = "async_geotiff-0.5.1-py3-none-any.whl", hash = "sha256:68a30a2f131f2dca95fb256c497afd25a8238098be37e068dfa96150a10a381c"},
+    {file = "async_geotiff-0.5.1.tar.gz", hash = "sha256:673e7694a6d8a39a863215e9b1b1761b2b54e2555217c65f53d0042e8eda3e30"},
+]
+
+[package.dependencies]
+affine = ">=2.4.0"
+async-tiff = ">=0.7.0"
+defusedxml = ">=0.7.1"
+numpy = ">=2.0"
+pyproj = ">=3.3.0"
+
+[package.extras]
+morecantile = ["morecantile (>=7.0,<8.0)"]
+
+[[package]]
 name = "async-lru"
 version = "2.3.0"
 description = "Simple LRU cache for asyncio"
@@ -380,6 +401,42 @@ files = [
     {file = "async_lru-2.3.0-py3-none-any.whl", hash = "sha256:eea27b01841909316f2cc739807acea1c623df2be8c5cfad7583286397bb8315"},
     {file = "async_lru-2.3.0.tar.gz", hash = "sha256:89bdb258a0140d7313cf8f4031d816a042202faa61d0ab310a0a538baa1c24b6"},
 ]
+
+[[package]]
+name = "async-tiff"
+version = "0.7.2"
+description = ""
+optional = false
+python-versions = ">=3.10"
+files = [
+    {file = "async_tiff-0.7.2-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:7a5006bfcfccda9a7fe3b2178701dbd04e64eb7fea74c952c277d350c255af18"},
+    {file = "async_tiff-0.7.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:c41fe8198001decfe66ce0d059711b175494915484b85a9bb3c8f2a98ab24350"},
+    {file = "async_tiff-0.7.2-cp310-cp310-manylinux_2_28_aarch64.whl", hash = "sha256:0be9c8dd1cc08e7dbeeb04ed9e1bf2c0b96376c46fd13c3070cee92c5ae461de"},
+    {file = "async_tiff-0.7.2-cp310-cp310-manylinux_2_28_i686.whl", hash = "sha256:04c47f376ce9de160915d26a4e8b123572e3c01e74bee36b31cf2bfdff35c91a"},
+    {file = "async_tiff-0.7.2-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:243804a56a9b2d7af2e50cab6fdca443a829ab6b678c0e6c8ff78610c0098fdd"},
+    {file = "async_tiff-0.7.2-cp310-cp310-musllinux_1_2_i686.whl", hash = "sha256:64fc6dd9459a63bf2fa55fe074bdb940d2889bc2467c528d56fb9bfba57a1be1"},
+    {file = "async_tiff-0.7.2-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:d4f74d3ec990791b08af6992f0c16b64fea938805f8e26a4931d1ffd2d3d8f60"},
+    {file = "async_tiff-0.7.2-cp310-cp310-win_amd64.whl", hash = "sha256:ca3f521d7f3b9303424a141685396044003669f5acfbe10e58aceb10320a7e85"},
+    {file = "async_tiff-0.7.2-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:028e9d629dbe8d830581d8e46b92081a656953db020b424615af3c6e51ed9249"},
+    {file = "async_tiff-0.7.2-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:97d77fcad25824321645c3b83da060b1ece827f30e76fe64db74b4df97e5da1d"},
+    {file = "async_tiff-0.7.2-cp311-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:62859389a21dc512f5c37fe17729eeeafb66c445374fcf888c1aa2c64bc79ff7"},
+    {file = "async_tiff-0.7.2-cp311-abi3-manylinux_2_28_i686.whl", hash = "sha256:1fb75527b4405107af587e55f4d34e50e8f2f8fe70bfac615e551fbe156cfe11"},
+    {file = "async_tiff-0.7.2-cp311-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:84ca597d8a6354d7b1ae46d2c41432e0dad36ffd4ad54f45aa29d11857506e9b"},
+    {file = "async_tiff-0.7.2-cp311-abi3-musllinux_1_2_i686.whl", hash = "sha256:ed2ca1842f47714a23623125bb864b858db400f9b7af4cae41dfc04f798f2557"},
+    {file = "async_tiff-0.7.2-cp311-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:0cb8ec113b5d33ad020556527ae54f2cb86f7e955fedac718779a4b12404688f"},
+    {file = "async_tiff-0.7.2-cp311-abi3-win_amd64.whl", hash = "sha256:296647adac8b05ae1bacc69feea2e42ce17220d34df1bc419be0daa94364ebd5"},
+    {file = "async_tiff-0.7.2-pp311-pypy311_pp73-macosx_10_12_x86_64.whl", hash = "sha256:e75dc8f806f60fe738cce85d5f03a014472db48ed4369b5ba03b185396d09772"},
+    {file = "async_tiff-0.7.2-pp311-pypy311_pp73-macosx_11_0_arm64.whl", hash = "sha256:49473e043083a532dd7f1210363e626f964e65be9ce68ed986a2645005ae0f0c"},
+    {file = "async_tiff-0.7.2-pp311-pypy311_pp73-manylinux_2_28_aarch64.whl", hash = "sha256:43b1399633fa5839a705c43b3f01dc9d70de5dd422098130da34a904eb0f5600"},
+    {file = "async_tiff-0.7.2-pp311-pypy311_pp73-manylinux_2_28_i686.whl", hash = "sha256:1b6ab725e061c232e4f0a74cd2aa72024a4459f521deeedc807a82a1408b61e0"},
+    {file = "async_tiff-0.7.2-pp311-pypy311_pp73-manylinux_2_28_x86_64.whl", hash = "sha256:ed74fc8a7368140d1ff56094513ee9e90ef150d83846710e9436e990d4df056b"},
+    {file = "async_tiff-0.7.2-pp311-pypy311_pp73-musllinux_1_2_i686.whl", hash = "sha256:3df1bf90c3fa40acc5eef42ca9d927467d4b34d5d1281d9779ec77396bd5a964"},
+    {file = "async_tiff-0.7.2-pp311-pypy311_pp73-musllinux_1_2_x86_64.whl", hash = "sha256:1609c254845ab6ddb2db02466fa0fdad5a7410fc24eb652e4ea44891216dd2d1"},
+    {file = "async_tiff-0.7.2.tar.gz", hash = "sha256:b2eb1f2671de4e331d1eaef1fd5bb3670e1f26ec7465115be488e60349f2dbce"},
+]
+
+[package.dependencies]
+obspec = ">=0.1.0"
 
 [[package]]
 name = "attrs"
@@ -1448,6 +1505,7 @@ files = [
     {file = "fastparquet-2024.11.0-cp312-cp312-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:0e2d7f02f57231e6c86d26e9ea71953737202f20e948790e5d4db6d6a1a150dc"},
     {file = "fastparquet-2024.11.0-cp312-cp312-musllinux_1_2_i686.whl", hash = "sha256:fbe4468146b633d8f09d7b196fea0547f213cb5ce5f76e9d1beb29eaa9593a93"},
     {file = "fastparquet-2024.11.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:29d5c718817bcd765fc519b17f759cad4945974421ecc1931d3bdc3e05e57fa9"},
+    {file = "fastparquet-2024.11.0-cp312-cp312-win_amd64.whl", hash = "sha256:74a0b3c40ab373442c0fda96b75a36e88745d8b138fcc3a6143e04682cbbb8ca"},
     {file = "fastparquet-2024.11.0-cp313-cp313-macosx_10_13_universal2.whl", hash = "sha256:59e5c5b51083d5b82572cdb7aed0346e3181e3ac9d2e45759da2e804bdafa7ee"},
     {file = "fastparquet-2024.11.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:bdadf7b6bad789125b823bfc5b0a719ba5c4a2ef965f973702d3ea89cff057f6"},
     {file = "fastparquet-2024.11.0-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:46b2db02fc2a1507939d35441c8ab211d53afd75d82eec9767d1c3656402859b"},
@@ -4445,6 +4503,84 @@ signals = ["blinker (>=1.4.0)"]
 signedtoken = ["cryptography (>=3.0.0)", "pyjwt (>=2.0.0,<3)"]
 
 [[package]]
+name = "obspec"
+version = "0.1.0"
+description = "Object storage interface definitions for Python."
+optional = false
+python-versions = ">=3.9"
+files = [
+    {file = "obspec-0.1.0-py3-none-any.whl", hash = "sha256:307f0fa2c2998b324ecf0eed6a2a89049a4c40c9b1fa2b5e1af28f0ee72136b3"},
+    {file = "obspec-0.1.0.tar.gz", hash = "sha256:b189781a53f82ef8d6abf0c9e77fd4c46ac9f244d5a91eb35ee61c2e2b204a4a"},
+]
+
+[package.dependencies]
+typing-extensions = {version = "*", markers = "python_version < \"3.12\""}
+
+[[package]]
+name = "obstore"
+version = "0.11.0"
+description = ""
+optional = false
+python-versions = ">=3.10"
+files = [
+    {file = "obstore-0.11.0-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:fc61226fecb74125f4bfdb5f8c29e440538814968e304a6df5a41e8becc21f6d"},
+    {file = "obstore-0.11.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:2427bf1c18d49c04c5f08763e921ba382b615655dd0ec6544a6f696462c9ecc6"},
+    {file = "obstore-0.11.0-cp310-cp310-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:931f58915ee9b71d82951e8c4e438a6823ba7d362f6edde394089bec07c9dd65"},
+    {file = "obstore-0.11.0-cp310-cp310-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:86055c89ebae043dedbbe7b02b07f68f3af7e9d70eedadc5d79805572ffc2543"},
+    {file = "obstore-0.11.0-cp310-cp310-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:51c5e265910bb6502b6246bef9f9f1f9151b8889d8bac549f94ab30eccae67d5"},
+    {file = "obstore-0.11.0-cp310-cp310-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:82e59348de18fa332306dd4aceee14af69d64d6626cd3244de3869041dfed461"},
+    {file = "obstore-0.11.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d9d7411de9eef9007c971059ca714e50ef1bff24ba95c4ca762c9155b569af4b"},
+    {file = "obstore-0.11.0-cp310-cp310-manylinux_2_24_aarch64.whl", hash = "sha256:9be99562b09b32e7b1e51305f9871fa6d96ecf26fa05b7df8f6064be7036e77f"},
+    {file = "obstore-0.11.0-cp310-cp310-musllinux_1_2_aarch64.whl", hash = "sha256:d40161c924435ae45c89b3b32f6329ad247b76feec17f3123f92621defa533ed"},
+    {file = "obstore-0.11.0-cp310-cp310-musllinux_1_2_armv7l.whl", hash = "sha256:b69b9e6d5fd5f36063fb17eada334fc6e52e3309daed20b04986945dbc0915a2"},
+    {file = "obstore-0.11.0-cp310-cp310-musllinux_1_2_i686.whl", hash = "sha256:2b1d9568db8af6341c7ca9ecf15bc444c1ac748933b0e0e93fb9f2797a16ea37"},
+    {file = "obstore-0.11.0-cp310-cp310-musllinux_1_2_x86_64.whl", hash = "sha256:2a569f81c835c28b247a531849b357249d96753a30b45b4f4c3b442f24d988fc"},
+    {file = "obstore-0.11.0-cp310-cp310-win_amd64.whl", hash = "sha256:545b23c2d13f2a5911a3b1a2c0b9dbf307b430684d171c5a7905c3e514a80662"},
+    {file = "obstore-0.11.0-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:42f36546c7ac44dbab1173d2330a8a1b1a3f0e37950e553b8c904e3dd0744b25"},
+    {file = "obstore-0.11.0-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:687bb9d3962d568b7c439c5d0c6fea19b2749862a8e5c8eebd0c058c4eccde9e"},
+    {file = "obstore-0.11.0-cp311-abi3-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:010b51578c7514a41719d795cdb7a1e6529be509dac3772e477187a59422bb97"},
+    {file = "obstore-0.11.0-cp311-abi3-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:cfaa8129a3f5d8518a3a75184d4b02348db0f6263177cd1f0951f6568243cc9e"},
+    {file = "obstore-0.11.0-cp311-abi3-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:c790a5cb9ff2970d1f464a6a708d734dce9939e9f668cb6708c5dba5d61589b2"},
+    {file = "obstore-0.11.0-cp311-abi3-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:827113e12fe8088e0281a9d57b90b2b8dbc8a6ffe3b15dadb9baa5feb3d266c1"},
+    {file = "obstore-0.11.0-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a2ff6d3ed553298828fb760b4aef6347fbcc7b5c5e3ce3f8381ce805c370021a"},
+    {file = "obstore-0.11.0-cp311-abi3-manylinux_2_24_aarch64.whl", hash = "sha256:39d04b324fcf984e7050734ebda77b81764025b0c011750201a0d8954087f7aa"},
+    {file = "obstore-0.11.0-cp311-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:37c0d15d775b1370ef5204ee3919a5ddf7e2592d11815213105f8db031f2ab8d"},
+    {file = "obstore-0.11.0-cp311-abi3-musllinux_1_2_armv7l.whl", hash = "sha256:7f468caf9b6e0f12ff151e5fe618de5fc9192befa9bd02734b06de4efd2e49f6"},
+    {file = "obstore-0.11.0-cp311-abi3-musllinux_1_2_i686.whl", hash = "sha256:42d8e8fad85be8ee488c1a9a9b7c6a42128abb84e67175da40d3d1165c1846df"},
+    {file = "obstore-0.11.0-cp311-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:9c8fd2a544e2e0b926669c47fcfb8d2314e234abc240ea165dae04ee42e1d7ac"},
+    {file = "obstore-0.11.0-cp311-abi3-win_amd64.whl", hash = "sha256:6fb3d4678c0f4242d3109362e9b1df5d7b27765f43d5aacb2e81af53a75cb9ef"},
+    {file = "obstore-0.11.0-cp314-cp314t-macosx_10_12_x86_64.whl", hash = "sha256:f3132393eff9f3f2b543ecbb3bcc12319a7c433fef06493b4350d6854d505a14"},
+    {file = "obstore-0.11.0-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:a3a8da19b47af4c14ecc694209b3c18ac6d89f96be5656ee3a19b77947c14155"},
+    {file = "obstore-0.11.0-cp314-cp314t-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:e91298b9b6c3a0408c28eece62bca6c5b6cda2f6350351d84e07b4dc8fb2631f"},
+    {file = "obstore-0.11.0-cp314-cp314t-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:3422c532486671dfb5e3e739bf15ec9ca2a8da544a3c23b74ae3857dcab1c6a8"},
+    {file = "obstore-0.11.0-cp314-cp314t-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:3de027ce46cf0592c2b41654e2c27dbc52a4a726f6fbc511380acc0da3a9f658"},
+    {file = "obstore-0.11.0-cp314-cp314t-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:1a80a95548678210bc336b866e37139c293565c3b163eb3fef2433d5d6640a33"},
+    {file = "obstore-0.11.0-cp314-cp314t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:acaa261dc15efb95bbeca06f8fe9b47ee23d7302a6aa1fa3a9654baab8b23d7c"},
+    {file = "obstore-0.11.0-cp314-cp314t-manylinux_2_24_aarch64.whl", hash = "sha256:a3300cabbc3129670987b3723629c791d83c117ef1b6a0c670c2043648e000a1"},
+    {file = "obstore-0.11.0-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:f4e6a9480843645cd4ee122c41d5c5a46a56f1e9cdda85638826f2e0e439fe5c"},
+    {file = "obstore-0.11.0-cp314-cp314t-musllinux_1_2_armv7l.whl", hash = "sha256:9fb2b1814c4314b8903f4e2ebbe8c3365fea6543669615ee9a0288b0d3a2edeb"},
+    {file = "obstore-0.11.0-cp314-cp314t-musllinux_1_2_i686.whl", hash = "sha256:63fb9b072815eafe4705f617f567d896b1c858adcb390795fa1e269367791031"},
+    {file = "obstore-0.11.0-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:086fafba314ff98cfab1c4bf7814699e862513e8889720cf6f7462296cb32787"},
+    {file = "obstore-0.11.0-cp314-cp314t-win_amd64.whl", hash = "sha256:676d1154f6f08721110f9b7d14ee3a3c0293abaf9da135bb90f54e276dca1cac"},
+    {file = "obstore-0.11.0-pp311-pypy311_pp73-macosx_10_12_x86_64.whl", hash = "sha256:c30aec09acff505e27b7392eb5e4b7bb7073d3f21e44ea43a64913369d83cba0"},
+    {file = "obstore-0.11.0-pp311-pypy311_pp73-macosx_11_0_arm64.whl", hash = "sha256:32ec11db91b85e4482baf2c8c0f43b469e8788765cd844839c84468516446181"},
+    {file = "obstore-0.11.0-pp311-pypy311_pp73-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:0a7f574cf222156f95846fda755365085e8c825be48359f32fa57935fa79f172"},
+    {file = "obstore-0.11.0-pp311-pypy311_pp73-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:193d8af924c24ab60c342d64c55896f8cae026851182ade6f1b650789d17b84a"},
+    {file = "obstore-0.11.0-pp311-pypy311_pp73-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:ed68e3653f12a995bca4372cdccf8663bd3df2ce9750132d11c4c04489e2dc61"},
+    {file = "obstore-0.11.0-pp311-pypy311_pp73-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:ee8d5aa13158e39d20e76730fdc81a50fd80f6d415a1dc327cf317e5c4e2e878"},
+    {file = "obstore-0.11.0-pp311-pypy311_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ca0a6bef07fc26990828528090c6b41860ca949d3cf1b81b24854674173b47ba"},
+    {file = "obstore-0.11.0-pp311-pypy311_pp73-manylinux_2_24_aarch64.whl", hash = "sha256:c9c6ccc06801afb0fc0e8f0e8c957f643c2c4f7e349eb36a736167e280709c6c"},
+    {file = "obstore-0.11.0-pp311-pypy311_pp73-musllinux_1_2_aarch64.whl", hash = "sha256:9555f36a0724d34d747b38cda0cb55b3f650a22e8671614037c52190bf4da6cc"},
+    {file = "obstore-0.11.0-pp311-pypy311_pp73-musllinux_1_2_armv7l.whl", hash = "sha256:f0c1527daf1c75d3f70ee3f6bef2767d8b07005cd7a5b43dc8c96a1323f3ac54"},
+    {file = "obstore-0.11.0-pp311-pypy311_pp73-musllinux_1_2_i686.whl", hash = "sha256:ed5910bde525d7d936d36dc78c7d4c07b57b6c9b55e402357b107103595d56ff"},
+    {file = "obstore-0.11.0-pp311-pypy311_pp73-musllinux_1_2_x86_64.whl", hash = "sha256:65c0208ead516c1a79afced16f2cda9b5542886123e53ea0a8a7d5d56b86fba5"},
+    {file = "obstore-0.11.0.tar.gz", hash = "sha256:a2f55163bcd348b4a60d12e6893eac50eddc742bad8032a1705d49140b992204"},
+]
+
+[package.dependencies]
+typing-extensions = {version = "*", markers = "python_full_version < \"3.13\""}
+
+[[package]]
 name = "openpyxl"
 version = "3.1.5"
 description = "A Python library to read/write Excel 2010 xlsx/xlsm files"
@@ -5567,6 +5703,24 @@ pluggy = ">=0.12,<2.0"
 
 [package.extras]
 testing = ["argcomplete", "attrs (>=19.2.0)", "hypothesis (>=3.56)", "mock", "nose", "pygments (>=2.7.2)", "requests", "setuptools", "xmlschema"]
+
+[[package]]
+name = "pytest-asyncio"
+version = "0.23.8"
+description = "Pytest support for asyncio"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "pytest_asyncio-0.23.8-py3-none-any.whl", hash = "sha256:50265d892689a5faefb84df80819d1ecef566eb3549cf915dfb33569359d1ce2"},
+    {file = "pytest_asyncio-0.23.8.tar.gz", hash = "sha256:759b10b33a6dc61cce40a8bd5205e302978bbbcc00e279a8b61d9a6a3c82e4d3"},
+]
+
+[package.dependencies]
+pytest = ">=7.0.0,<9"
+
+[package.extras]
+docs = ["sphinx (>=5.3)", "sphinx-rtd-theme (>=1.0)"]
+testing = ["coverage (>=6.2)", "hypothesis (>=5.7.1)"]
 
 [[package]]
 name = "python-dateutil"
@@ -7129,9 +7283,10 @@ multidict = ">=4.0"
 propcache = ">=0.2.1"
 
 [extras]
+async = ["async-geotiff"]
 carbonmapper = ["pydantic", "requests"]
 
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11,<4.0"
-content-hash = "aebb64a2f8435c9419cde4b8d8fa2544c11a91a28a7bd657836a6b330a28c385"
+content-hash = "11ceceefece9411018bcabf8f45506da5f570249e544e137740f0cec3426b532"
