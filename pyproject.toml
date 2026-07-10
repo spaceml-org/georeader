@@ -71,7 +71,10 @@ requests = ">=2"
 # backend (LocalStore here). They use ``pytest.importorskip`` so
 # environments without these installed are skipped cleanly.
 async-geotiff = ">=0.5,<0.6"
-obstore = ">=0.7"
+# Capped like async-geotiff: obstore is pre-1.0 and its constructor kwargs
+# have changed across 0.x minors; the notebooks/docstrings hardcode the
+# 0.11-era API (S3Store(..., skip_signature=True), LocalStore(prefix=...)).
+obstore = ">=0.7,<0.12"
 # Loads the repo-root .env (credentials/config) in conftest.py for the notebook tests.
 python-dotenv = "^1.0.0"
 

@@ -7289,4 +7289,4 @@ carbonmapper = ["pydantic", "requests"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11,<4.0"
-content-hash = "a6aad857b6771b9ccdee469c7ab2911a9b2d68fe2d5a85a8c41cf2f15bdf724e"
+content-hash = "11ceceefece9411018bcabf8f45506da5f570249e544e137740f0cec3426b532"
