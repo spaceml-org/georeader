@@ -203,6 +203,47 @@ def mask_sas_token(path: Any) -> Any:
         return path
     return _SAS_SIGNATURE_RE.sub("****", path)
 
+
+# Keys the reader computes itself when calling rasterio.open(). Rejected in
+# ``rio_open_kwargs`` at construction: "opener" would bypass the opener/fs
+# mutual-exclusion validation, and "mode"/"overview_level" are passed
+# positionally/explicitly by some (not all) internal call sites — a user value
+# would raise "got multiple values" on some code paths and be silently ignored
+# on others.
+_FORBIDDEN_RIO_OPEN_KEYS = frozenset({"opener", "mode", "overview_level"})
+
+
+def _validate_bytes_path_knobs(
+    opener: Optional[Any], fs: Optional[Any], rio_open_kwargs: Optional[Dict[str, Any]]
+) -> None:
+    """Construction-time validation of the opener/fs/rio_open_kwargs knobs.
+
+    Fails fast with a targeted message instead of surfacing as a confusing
+    error deep inside ``rasterio.open`` at first read.
+    """
+    if opener is not None and fs is not None:
+        raise ValueError(
+            "RasterioReader: pass either `opener=` or `fs=`, not both. "
+            "`fs=` is a shortcut for `opener=fs.open`."
+        )
+    if fs is not None and not callable(getattr(fs, "open", None)):
+        # A string ("s3") or any object without .open would otherwise surface
+        # as an AttributeError at first read.
+        raise TypeError(
+            "RasterioReader: `fs=` expects an fsspec-like filesystem object "
+            f"with a callable .open method, got {type(fs).__name__!r}. "
+            "For a protocol string use fsspec.filesystem(...) first."
+        )
+    if rio_open_kwargs is not None:
+        forbidden = _FORBIDDEN_RIO_OPEN_KEYS.intersection(rio_open_kwargs)
+        if forbidden:
+            raise ValueError(
+                f"RasterioReader: rio_open_kwargs must not contain {sorted(forbidden)}. "
+                "Use the dedicated `opener=`/`fs=` arguments and the "
+                "`overview_level=` constructor argument instead."
+            )
+
+
 class RasterioReader:
     """
     Lazy file-backed raster reader with geospatial metadata.
@@ -246,14 +287,33 @@ class RasterioReader:
             transport. Mutually exclusive with ``fs``. When neither ``opener``
             nor ``fs`` is set, rasterio routes bytes through GDAL VSI (the
             default, fastest cloud path).
+
+            .. warning::
+                The reader's pickle contract (multiprocessing / joblib /
+                Dask) narrows to whatever the callback can do: a lambda,
+                a closure over a session, or anything holding locks will
+                fail to pickle at ``pool.map``/``submit`` time. Use a
+                module-level function (or a picklable fsspec filesystem
+                via ``fs=``) when the reader must cross process
+                boundaries. Python openers also come with rasterio-side
+                constraints: no GDAL VSI chaining (e.g. ``/vsizip/``),
+                and the file object is shared with GDAL's threads — avoid
+                combining ``opener=`` with multi-threaded GDAL options in
+                ``rio_env_options`` (e.g. ``GDAL_NUM_THREADS``).
         fs (Optional[fsspec.AbstractFileSystem], optional): Keyword-only.
             Shortcut equivalent to ``opener=fs.open``. Useful for niche
             backends (FTP, SFTP, GitHub) or custom auth that fsspec speaks
-            but GDAL VSI does not. Mutually exclusive with ``opener``.
+            but GDAL VSI does not. Mutually exclusive with ``opener``. Must
+            expose a callable ``.open`` (validated at construction). Most
+            fsspec filesystems pickle cleanly, so this is the knob to
+            prefer for multiprocessing workloads.
         rio_open_kwargs (Optional[Dict[str, Any]], optional): Keyword-only.
             Arbitrary additional keyword arguments forwarded to every
             ``rasterio.open(...)`` call (e.g. ``{"sharing": False}``). Escape
             hatch for rasterio options not surfaced as first-class kwargs.
+            The dict is copied at construction, and the reader-computed keys
+            (``opener``, ``mode``, ``overview_level``) are rejected — use
+            the dedicated arguments for those.
 
     Attributes:
         crs (rasterio.crs.CRS): Coordinate reference system.
@@ -366,14 +426,13 @@ class RasterioReader:
         # ``rio_open_kwargs`` is an escape hatch for arbitrary additional
         # keyword arguments passed straight to rasterio.open() (e.g.
         # ``{"sharing": False}``).
-        if opener is not None and fs is not None:
-            raise ValueError(
-                "RasterioReader: pass either `opener=` or `fs=`, not both. "
-                "`fs=` is a shortcut for `opener=fs.open`."
-            )
+        _validate_bytes_path_knobs(opener, fs, rio_open_kwargs)
         self._opener = opener
         self._fs = fs
-        self._rio_open_kwargs = rio_open_kwargs
+        # Copy: child readers (read_from_window / isel / copy / reader_overview)
+        # receive this dict — sharing by reference would let post-construction
+        # mutation retroactively change every derived reader.
+        self._rio_open_kwargs = dict(rio_open_kwargs) if rio_open_kwargs is not None else None
 
         self.paths = paths
 
@@ -429,25 +488,30 @@ class RasterioReader:
         # Assert all paths have same tranform and crs
         #  (checking width and height will not be needed since we're reading with boundless option but I don't see the point to ignore it)
         if check and len(self.paths) > 1:
+            # Mask any Azure SAS token signature before interpolating paths
+            # into error/warning text — these messages end up in logs and
+            # tracebacks (the masking in __repr__ alone doesn't cover them).
+            p0_masked = mask_sas_token(self.paths[0])
             for p in self.paths:
+                p_masked = mask_sas_token(p)
                 with rasterio.Env(**self._get_rio_options_path(p)):
                     with rasterio.open(p, "r", overview_level=overview_level,
                                        **self._resolve_open_kwargs()) as src:
                         if not src.transform.almost_equals(self.real_transform, 1e-6):
-                            raise ValueError(f"Different transform in {self.paths[0]} and {p}: {self.real_transform} {src.transform}")
+                            raise ValueError(f"Different transform in {p0_masked} and {p_masked}: {self.real_transform} {src.transform}")
                         if not str(src.crs).lower() == str(self.crs).lower():
-                            raise ValueError(f"Different CRS in {self.paths[0]} and {p}: {self.crs} {src.crs}")
+                            raise ValueError(f"Different CRS in {p0_masked} and {p_masked}: {self.crs} {src.crs}")
                         if self.real_count != src.count:
-                            raise ValueError(f"Different number of bands in {self.paths[0]} and {p} {self.real_count} {src.count}")
+                            raise ValueError(f"Different number of bands in {p0_masked} and {p_masked} {self.real_count} {src.count}")
                         if src.nodata != self.nodata:
                             warnings.warn(
-                                f"Different nodata in {self.paths[0]} and {p}: {self.nodata} {src.nodata}. This might lead to unexpected behaviour")
+                                f"Different nodata in {p0_masked} and {p_masked}: {self.nodata} {src.nodata}. This might lead to unexpected behaviour")
 
                         if (self.real_width != src.width) or (self.real_height != src.height):
                             if allow_different_shape:
-                                warnings.warn(f"Different shape in {self.paths[0]} and {p}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width}) Might lead to unexpected behaviour")
+                                warnings.warn(f"Different shape in {p0_masked} and {p_masked}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width}) Might lead to unexpected behaviour")
                             else:
-                                raise ValueError(f"Different shape in {self.paths[0]} and {p}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width})")
+                                raise ValueError(f"Different shape in {p0_masked} and {p_masked}: ({self.real_height}, {self.real_width}) ({src.height}, {src.width})")
 
         self.check = check
         if indexes is not None:

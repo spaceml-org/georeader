@@ -740,6 +740,37 @@ class TestBytesPathKnobs:
         # And the sub-reader can actually read.
         assert sub.load().values.shape[-2:] == (50, 50)
 
+    def test_fs_without_open_rejected_at_construction(self, test_raster_path):
+        """A non-filesystem ``fs=`` (e.g. a protocol string) fails fast, not at first read."""
+        with pytest.raises(TypeError, match="callable .open"):
+            rasterio_reader.RasterioReader(test_raster_path, fs="file")
+
+    @pytest.mark.parametrize("key", ["opener", "mode", "overview_level"])
+    def test_reserved_rio_open_kwargs_rejected(self, test_raster_path, key):
+        """Reader-computed keys in ``rio_open_kwargs`` raise at construction.
+
+        ``opener`` would bypass the opener/fs exclusivity check; ``mode`` and
+        ``overview_level`` collide with explicit arguments at some (not all)
+        rasterio.open call sites — failing on some code paths and being
+        silently ignored on others.
+        """
+        with pytest.raises(ValueError, match="rio_open_kwargs must not contain"):
+            rasterio_reader.RasterioReader(test_raster_path, rio_open_kwargs={key: None})
+
+    def test_rio_open_kwargs_copied_not_shared(self, test_raster_path):
+        """Post-construction mutation of the caller's dict does not leak into the reader."""
+        kwargs = {"sharing": False}
+        reader = rasterio_reader.RasterioReader(test_raster_path, rio_open_kwargs=kwargs)
+        kwargs["opener"] = "mutated-after-construction"
+
+        assert reader._rio_open_kwargs == {"sharing": False}
+        # Child readers get their own copy too.
+        sub = reader.read_from_window(
+            rasterio.windows.Window(col_off=0, row_off=0, width=50, height=50)
+        )
+        assert sub._rio_open_kwargs == {"sharing": False}
+        assert sub._rio_open_kwargs is not reader._rio_open_kwargs
+
 
 # Example expiry/start times and signature kept separate so the secret value is
 # only ever assembled inside the tests.
