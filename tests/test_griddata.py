@@ -11,6 +11,7 @@ These tests verify gridded data operations including:
 import numpy as np
 import pytest
 from rasterio.transform import from_origin
+from shapely.geometry import Polygon, MultiPolygon, box
 
 from georeader import griddata
 from georeader.geotensor import GeoTensor
@@ -237,3 +238,179 @@ class TestGeorreference:
         # Invalid areas should have fill value
         assert result.shape == data.shape
         assert isinstance(result, GeoTensor)
+
+
+class TestPolygonToImageCoords:
+    """Tests for polygon_to_image_coords function."""
+
+    @staticmethod
+    def _grid(H=20, W=30, lon_min=0.0, lon_max=1.0, lat_min=45.0, lat_max=46.0):
+        """
+        Build a regular lon/lat grid where the inverse mapping is closed-form:
+
+            col = (lon - lon_min) / (lon_max - lon_min) * (W - 1)
+            row = (lat - lat_min) / (lat_max - lat_min) * (H - 1)
+        """
+        lons, lats = np.meshgrid(
+            np.linspace(lon_min, lon_max, W),
+            np.linspace(lat_min, lat_max, H),
+        )
+        return lons, lats
+
+    def test_polygon_basic(self):
+        """Polygon vertices on grid lines should map to integer pixel coords."""
+        H, W = 20, 30
+        lons, lats = self._grid(H, W)
+
+        # box covering exactly half the grid extent in each axis
+        pol = box(0.0, 45.0, 0.5, 45.5)
+        result = griddata.polygon_to_image_coords(pol, lons, lats)
+
+        assert isinstance(result, Polygon)
+        assert not result.is_empty
+
+        xs, ys = result.exterior.coords.xy
+        xs = np.asarray(xs)
+        ys = np.asarray(ys)
+        # Expected pixel extent: col in [0, 14.5], row in [0, 9.5]
+        assert np.isclose(xs.min(), 0.0, atol=1e-6)
+        assert np.isclose(xs.max(), 14.5, atol=1e-6)
+        assert np.isclose(ys.min(), 0.0, atol=1e-6)
+        assert np.isclose(ys.max(), 9.5, atol=1e-6)
+
+    def test_polygon_preserves_holes(self):
+        """Interior rings (holes) should be transformed too."""
+        H, W = 20, 30
+        lons, lats = self._grid(H, W)
+
+        shell = [(0.0, 45.0), (1.0, 45.0), (1.0, 46.0), (0.0, 46.0)]
+        hole = [(0.25, 45.25), (0.75, 45.25), (0.75, 45.75), (0.25, 45.75)]
+        pol = Polygon(shell, [hole])
+
+        result = griddata.polygon_to_image_coords(pol, lons, lats)
+
+        assert isinstance(result, Polygon)
+        assert len(result.interiors) == 1
+
+        # Shell should span the full image extent
+        sx, sy = result.exterior.coords.xy
+        assert np.isclose(min(sx), 0.0, atol=1e-6)
+        assert np.isclose(max(sx), W - 1, atol=1e-6)
+        assert np.isclose(min(sy), 0.0, atol=1e-6)
+        assert np.isclose(max(sy), H - 1, atol=1e-6)
+
+        # Hole should be the inner box at 25%-75% of each axis
+        hx, hy = result.interiors[0].coords.xy
+        assert np.isclose(min(hx), 0.25 * (W - 1), atol=1e-6)
+        assert np.isclose(max(hx), 0.75 * (W - 1), atol=1e-6)
+        assert np.isclose(min(hy), 0.25 * (H - 1), atol=1e-6)
+        assert np.isclose(max(hy), 0.75 * (H - 1), atol=1e-6)
+
+    def test_multipolygon(self):
+        """MultiPolygon input should yield MultiPolygon output with same arity."""
+        H, W = 20, 30
+        lons, lats = self._grid(H, W)
+
+        a = box(0.0, 45.0, 0.25, 45.25)
+        b = box(0.75, 45.75, 1.0, 46.0)
+        mp = MultiPolygon([a, b])
+
+        result = griddata.polygon_to_image_coords(mp, lons, lats)
+
+        assert isinstance(result, MultiPolygon)
+        assert len(result.geoms) == 2
+
+        # First part: top-left quadrant of the image
+        ax, ay = result.geoms[0].exterior.coords.xy
+        assert np.isclose(min(ax), 0.0, atol=1e-6)
+        assert np.isclose(max(ax), 0.25 * (W - 1), atol=1e-6)
+        assert np.isclose(min(ay), 0.0, atol=1e-6)
+        assert np.isclose(max(ay), 0.25 * (H - 1), atol=1e-6)
+
+        # Second part: bottom-right quadrant
+        bx, by = result.geoms[1].exterior.coords.xy
+        assert np.isclose(min(bx), 0.75 * (W - 1), atol=1e-6)
+        assert np.isclose(max(bx), W - 1, atol=1e-6)
+        assert np.isclose(min(by), 0.75 * (H - 1), atol=1e-6)
+        assert np.isclose(max(by), H - 1, atol=1e-6)
+
+    def test_empty_polygon(self):
+        """Empty Polygon in -> empty Polygon out."""
+        lons, lats = self._grid()
+        result = griddata.polygon_to_image_coords(Polygon(), lons, lats)
+        assert isinstance(result, Polygon)
+        assert result.is_empty
+
+    def test_empty_multipolygon(self):
+        """Empty MultiPolygon in -> empty MultiPolygon out."""
+        lons, lats = self._grid()
+        result = griddata.polygon_to_image_coords(MultiPolygon(), lons, lats)
+        assert isinstance(result, MultiPolygon)
+        assert result.is_empty
+
+    def test_nearest_method_snaps_to_pixels(self):
+        """method='nearest' should yield integer-valued coordinates."""
+        H, W = 20, 30
+        lons, lats = self._grid(H, W)
+
+        # Vertices deliberately off-grid (between pixels)
+        pol = Polygon([
+            (0.012, 45.012),
+            (0.488, 45.012),
+            (0.488, 45.488),
+            (0.012, 45.488),
+        ])
+
+        result = griddata.polygon_to_image_coords(pol, lons, lats, method="nearest")
+        coords = np.asarray(result.exterior.coords)
+        # All values must be integer pixel indices
+        assert np.allclose(coords, np.round(coords))
+        # And within the image bounds
+        assert coords[:, 0].min() >= 0
+        assert coords[:, 0].max() <= W - 1
+        assert coords[:, 1].min() >= 0
+        assert coords[:, 1].max() <= H - 1
+
+    def test_vertex_outside_convex_hull_falls_back(self):
+        """A vertex outside the LUT extent should fall back to nearest pixel
+        instead of becoming NaN under method='linear'."""
+        H, W = 20, 30
+        lons, lats = self._grid(H, W)
+
+        # Far outside the grid (lon=2.0, lat=47.0 vs grid [0,1]x[45,46])
+        pol = Polygon([
+            (0.0, 45.0),
+            (2.0, 47.0),
+            (0.5, 45.5),
+        ])
+
+        result = griddata.polygon_to_image_coords(pol, lons, lats, method="linear")
+        coords = np.asarray(result.exterior.coords)
+        # No NaNs
+        assert np.isfinite(coords).all()
+        # The out-of-hull vertex snaps to the corner pixel (W-1, H-1)
+        assert np.isclose(coords[1, 0], W - 1, atol=1e-6)
+        assert np.isclose(coords[1, 1], H - 1, atol=1e-6)
+
+    def test_invalid_method_raises(self):
+        lons, lats = self._grid()
+        with pytest.raises(ValueError, match="method"):
+            griddata.polygon_to_image_coords(box(0, 45, 0.5, 45.5), lons, lats, method="cubic")
+
+    def test_shape_mismatch_raises(self):
+        lons = np.zeros((10, 20))
+        lats = np.zeros((20, 10))
+        with pytest.raises(ValueError, match="shape"):
+            griddata.polygon_to_image_coords(box(0, 0, 1, 1), lons, lats)
+
+    def test_non_2d_raises(self):
+        lons = np.zeros(10)
+        lats = np.zeros(10)
+        with pytest.raises(ValueError, match="2D"):
+            griddata.polygon_to_image_coords(box(0, 0, 1, 1), lons, lats)
+
+    def test_wrong_geometry_type_raises(self):
+        from shapely.geometry import Point
+        lons, lats = self._grid()
+        with pytest.raises(TypeError, match="Polygon or MultiPolygon"):
+            griddata.polygon_to_image_coords(Point(0.5, 45.5), lons, lats)
