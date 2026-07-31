@@ -544,6 +544,8 @@ def georreference(glt:GeoTensor, data:NDArray, valid_glt:Optional[NDArray] = Non
 
     Raises:
         ValueError: If data shape is not 2D or 3D.
+        ValueError: If GLT contains negative indices or indices exceeding
+            data dimensions, indicating degenerate geolocation data.
 
     Examples
     --------
@@ -606,13 +608,35 @@ def georreference(glt:GeoTensor, data:NDArray, valid_glt:Optional[NDArray] = Non
 
     if valid_glt is None:
         valid_glt = np.all(glt.values != glt.fill_value_default, axis=0)
-    
+
+    # Early return if no valid GLT pixels exist (e.g., entirely degenerate tile)
+    if not valid_glt.any():
+        return GeoTensor(values=outdat, transform=glt.transform, crs=glt.crs,
+                         fill_value_default=fill_value_default)
+
+    # Extract GLT index arrays for validation
+    glt_y = glt.values[1, valid_glt]
+    glt_x = glt.values[0, valid_glt]
+
+    # Validate GLT values are within data bounds to prevent
+    # multi-terabyte memory allocation from xarray outer indexing
+    # (see https://github.com/spaceml-org/georeader/issues/42)
+    data_h, data_w = data.shape[-2], data.shape[-1]
+    if glt_y.min() < 0 or glt_x.min() < 0:
+        raise ValueError(
+            f"GLT contains negative indices: min (x={glt_x.min()}, y={glt_y.min()}). "
+            f"The GLT may contain degenerate values."
+        )
+    if glt_y.max() >= data_h or glt_x.max() >= data_w:
+        raise ValueError(
+            f"GLT values exceed data dimensions: GLT max (x={glt_x.max()}, y={glt_y.max()}) "
+            f"vs data shape ({data_h}, {data_w}). The GLT may contain degenerate values."
+        )
+
     if len(data.shape) == 3:
-        outdat[:, valid_glt] = data[:, glt.values[1, valid_glt], 
-                                            glt.values[0, valid_glt]]
+        outdat[:, valid_glt] = data[:, glt_y, glt_x]
     else:
-        outdat[valid_glt] = data[glt.values[1, valid_glt], 
-                                 glt.values[0, valid_glt]]
+        outdat[valid_glt] = data[glt_y, glt_x]
         
     return GeoTensor(values=outdat, transform=glt.transform, crs=glt.crs,
                      fill_value_default=fill_value_default)

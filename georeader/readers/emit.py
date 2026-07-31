@@ -1169,6 +1169,17 @@ def valid_mask(filename:str, with_buffer:bool=False,
                                resolution_dst_crs=resolution_dst_crs)
     
     valid_glt = np.all(glt.values != glt.fill_value_default, axis=0)
+
+    # Early return if no valid geolocation data exists (degenerate tile)
+    # This prevents georreference() from crashing on empty GLT
+    # (see https://github.com/spaceml-org/georeader/issues/42)
+    if not valid_glt.any():
+        empty_mask = GeoTensor(
+            values=np.full(glt.shape[-2:], fill_value=False, dtype=bool),
+            transform=glt.transform, crs=glt.crs, fill_value_default=False
+        )
+        return empty_mask, 0.0
+
     xmin = np.min(glt.values[0, valid_glt])
     ymin = np.min(glt.values[1, valid_glt])
 

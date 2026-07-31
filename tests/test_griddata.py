@@ -237,3 +237,67 @@ class TestGeorreference:
         # Invalid areas should have fill value
         assert result.shape == data.shape
         assert isinstance(result, GeoTensor)
+
+    def test_georreference_degenerate_glt_all_zeros(self):
+        """GLT with all-zero values (fill_value_default=0) should return empty result, not OOM.
+
+        Regression test for https://github.com/spaceml-org/georeader/issues/42
+        """
+        glt_arr = np.zeros((2, 100, 100), dtype=np.int32)
+        glt = GeoTensor(glt_arr, transform=from_origin(0, 100, 10, 10),
+                        crs="EPSG:4326", fill_value_default=0)
+        data = np.ones((50, 50), dtype=bool)
+
+        # All GLT values equal fill_value_default -> no valid pixels -> empty result
+        result = griddata.georreference(glt, data)
+        assert result.values.shape == (100, 100)
+        assert not result.values.any()  # all fill values
+
+    def test_georreference_glt_out_of_bounds(self):
+        """GLT values exceeding data dimensions should raise ValueError.
+
+        Regression test for https://github.com/spaceml-org/georeader/issues/42
+        """
+        glt_arr = np.array([[[999]], [[999]]], dtype=np.int32)
+        glt = GeoTensor(glt_arr, transform=from_origin(0, 100, 10, 10),
+                        crs="EPSG:4326", fill_value_default=0)
+        data = np.ones((50, 50), dtype=bool)
+
+        with pytest.raises(ValueError, match="GLT values exceed data dimensions"):
+            griddata.georreference(glt, data)
+
+    def test_georreference_glt_negative_indices(self):
+        """GLT with negative indices (not equal to fill_value) should raise ValueError.
+
+        Regression test for https://github.com/spaceml-org/georeader/issues/42
+        """
+        glt_arr = np.array([[[-5]], [[-5]]], dtype=np.int32)
+        glt = GeoTensor(glt_arr, transform=from_origin(0, 100, 10, 10),
+                        crs="EPSG:4326", fill_value_default=0)
+        data = np.ones((50, 50), dtype=bool)
+
+        with pytest.raises(ValueError, match="negative indices"):
+            griddata.georreference(glt, data)
+
+    def test_georreference_valid_glt_within_bounds(self):
+        """Normal case: valid GLT values within data bounds should work correctly.
+
+        Regression test for https://github.com/spaceml-org/georeader/issues/42
+        """
+        # Create a 2x2 output grid that maps to specific pixels in a 5x5 input
+        glt_arr = np.array([
+            [[1, 2], [3, 0]],  # x indices (columns)
+            [[1, 2], [3, 0]],  # y indices (rows)
+        ], dtype=np.int32)
+        glt = GeoTensor(glt_arr, transform=from_origin(0, 100, 10, 10),
+                        crs="EPSG:4326", fill_value_default=-1)
+        data = np.arange(25, dtype=float).reshape(5, 5)
+
+        result = griddata.georreference(glt, data)
+        assert result.values.shape == (2, 2)
+        # Verify correct pixel lookups: data[y, x]
+        assert result.values[0, 0] == data[1, 1]  # glt_y=1, glt_x=1
+        assert result.values[0, 1] == data[2, 2]  # glt_y=2, glt_x=2
+        assert result.values[1, 0] == data[3, 3]  # glt_y=3, glt_x=3
+        # glt_arr[:, 1, 1] == [0, 0] which is valid (not fill_value=-1)
+        assert result.values[1, 1] == data[0, 0]  # glt_y=0, glt_x=0
