@@ -530,8 +530,26 @@ def interpolate_20mbands_s2ee(geotensor:GeoTensor,
         GeoTensor: GeoTensor object with 20m bands interpolated to 10m
     """
     from georeader.readers import S2_SAFE_reader
-    # Assert image is of type np.uint16
-    assert geotensor.dtype == np.uint16, f"Expected np.uint16, found {geotensor.dtype}"
+    # GEE may return uint8 instead of uint16 for certain tiles (e.g., due to
+    # corrupt assets or non-standard ESA processing baselines).
+    # Cast to uint16 with a warning instead of crashing.
+    # (see https://github.com/spaceml-org/georeader/issues/43)
+    if geotensor.dtype != np.uint16:
+        warnings.warn(
+            f"interpolate_20mbands_s2ee: Expected np.uint16, found {geotensor.dtype}. "
+            f"Casting to uint16.",
+            UserWarning,
+            stacklevel=2,
+        )
+        # We must create a new GeoTensor because ndarray subclasses cannot
+        # change dtype in-place.
+        geotensor = GeoTensor(
+            geotensor.values.astype(np.uint16),
+            transform=geotensor.transform,
+            crs=geotensor.crs,
+            fill_value_default=geotensor.fill_value_default
+        )
+        inplace = True  # already a new object, avoid double-copy below
     
     if channels_query_original is None:
         channels_query_original = S2_SAFE_reader.BANDS_S2_L1C
