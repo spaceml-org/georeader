@@ -261,9 +261,14 @@ class CMSourceRaster:
 
         Resolves the tile's ``cmf`` GeoTIFF header to inherit
         ``(transform, shape, crs)``. Issues one HEAD/GET-range read.
+        STAC items key the asset with its extension (``cmf.tif``); the
+        extension-less form is accepted too.
         """
-        cmf_url = tile.assets.get("cmf") or tile.assets.get("ch4-mfa")
-        if cmf_url is None:
+        assets = tile.asset_urls
+        cmf_url = (
+            assets.get("cmf.tif") or assets.get("cmf") or assets.get("ch4-mfa")
+        )
+        if not cmf_url:
             raise ValueError(
                 f"CMTileItem {tile.scene_id!r} has no 'cmf' asset to align to."
             )

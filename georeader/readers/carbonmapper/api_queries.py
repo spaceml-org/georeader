@@ -67,9 +67,11 @@ georeader.readers.carbonmapper.source.CMSource : typed source model.
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Iterable, Literal, Mapping
+from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Any, Literal
 
 import requests
 from shapely.geometry import shape
@@ -77,6 +79,11 @@ from shapely.geometry.base import BaseGeometry
 
 from georeader.readers.carbonmapper import download as _dl
 from georeader.readers.carbonmapper.plume import CMRawPlume, Gas
+from georeader.readers.carbonmapper.products import (
+    CMCollectionSpec,
+    CMProductFamily,
+    parse_item_date,
+)
 from georeader.readers.carbonmapper.source import CMSource, _strip_query_suffix
 
 if TYPE_CHECKING:
@@ -88,7 +95,19 @@ if TYPE_CHECKING:
 
 BBox = tuple[float, float, float, float]   # (W, S, E, N) WGS-84
 
+_log = logging.getLogger(__name__)
+
+#: Legacy default STAC collection for the explicit single-resource
+#: :func:`get_tile`. The cross-resolution helpers no longer default to
+#: it — they resolve the collection from the plume record, because a
+#: fixed v3a default returns nothing for every plume after 2025-12.
 DEFAULT_L2B_COLLECTION = "l2b-ch4-mfa-v3a"
+
+#: Server-side page cap of ``/catalog/plumes/annotated``.
+_ANNOTATED_PAGE_SIZE = 1_000
+
+#: Max ids per STAC ``/search?ids=`` request (keeps URLs short).
+_STAC_IDS_PER_REQUEST = 100
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -233,8 +252,9 @@ class CMTileItem:
         """Build a :class:`CMTileItem` from a raw STAC item dict.
 
         Tolerates both string and pre-parsed datetime values for
-        ``properties["datetime"]`` and falls back to ``utcnow`` if the
-        property is missing entirely.
+        ``properties["datetime"]``. When it is null (allowed by STAC for
+        interval items), falls back to ``start_datetime`` then
+        ``end_datetime``.
 
         Parameters
         ----------
@@ -250,20 +270,29 @@ class CMTileItem:
         Raises
         ------
         ValueError
-            If ``item["bbox"]`` is missing or not 4-length.
+            If ``item["bbox"]`` is missing or not 4-length, or the item
+            carries no ``datetime`` / ``start_datetime`` /
+            ``end_datetime`` at all.
         """
         props = dict(item.get("properties") or {})
         bbox = tuple(item.get("bbox") or ())
         if len(bbox) != 4:
             raise ValueError(f"STAC item missing 4-tuple bbox: {item.get('id')!r}")
 
-        dt_raw = props.get("datetime")
+        dt_raw = (
+            props.get("datetime")
+            or props.get("start_datetime")
+            or props.get("end_datetime")
+        )
         if isinstance(dt_raw, datetime):
             dt = dt_raw
         elif isinstance(dt_raw, str):
             dt = datetime.fromisoformat(dt_raw.replace("Z", "+00:00"))
         else:
-            dt = datetime.now(timezone.utc)
+            raise ValueError(
+                f"STAC item {item.get('id')!r} has no datetime, "
+                "start_datetime or end_datetime."
+            )
 
         geom_dict = item.get("geometry") or {}
         if not geom_dict:
@@ -308,6 +337,78 @@ def _scene_id_from_plume(plume_id: str) -> str:
     ``plume_id = "{scene_id}-{part}"`` per Carbon Mapper convention.
     """
     return plume_id.rsplit("-", 1)[0]
+
+
+def _flatten_source_detail(
+    raw: Mapping[str, Any], fallback_name: str | None,
+) -> Mapping[str, Any]:
+    """Flatten a source *detail* payload to a GeoJSON-feature shape.
+
+    ``/catalog/source/{name}`` and ``/catalog/source/plume/name/{id}``
+    both return the nested detail shape (since 2026-07): aggregate stats
+    under ``source``, the full plume records under ``plumes``, the
+    centroid under ``point``, plus detection/observation date lists.
+    :meth:`CMSource.from_geojson_feature` expects flat properties, so
+    unflattened stats would read as zero. Other shapes pass through.
+    """
+    if "source" not in raw or "plumes" not in raw:
+        return raw
+    stats = dict(raw.get("source") or {})
+    plumes = raw.get("plumes") or []
+    props = {
+        "source_name": raw.get("source_name", fallback_name),
+        **stats,
+        "plume_count": len(plumes),
+        "plume_ids": [p.get("plume_id") for p in plumes],
+        "detection_date_count": len(raw.get("detection_dates") or []),
+        "observation_date_count": len(raw.get("observation_dates") or []),
+    }
+    return {"properties": props, "geometry": raw.get("point")}
+
+
+def _spec_for_plume(token: str, plume_id: str) -> CMCollectionSpec | None:
+    """Fetch the plume record and resolve its collection spec.
+
+    ``None`` when the plume is unknown (404) or its record carries no
+    resolvable spec. Every other failure (401, 429 after retries, 5xx,
+    transport errors) propagates — a throttled lookup must not turn
+    into a silent "not published".
+    """
+    try:
+        record = _dl.get_plume_by_id(plume_id, token=token)
+    except requests.HTTPError as exc:
+        if _is_404(exc):
+            return None
+        raise
+    try:
+        return CMCollectionSpec.from_plume_record(record)
+    except ValueError:
+        return None
+
+
+def _stac_l2b_candidates(spec: CMCollectionSpec | None) -> tuple[str, ...]:
+    """STAC collections to try for a plume's parent L2B item, in order."""
+    from georeader.readers.carbonmapper.rasters import (
+        DEFAULT_L2B_CH4_COLLECTION_CANDIDATES,
+        l2b_collection_candidates_for_spec,
+    )
+
+    if spec is None:
+        return DEFAULT_L2B_CH4_COLLECTION_CANDIDATES
+    return l2b_collection_candidates_for_spec(spec)
+
+
+def _first_published_tile(
+    token: str, scene_id: str, collections: Iterable[str],
+) -> CMTileItem | None:
+    """First STAC item for ``scene_id`` across ``collections``; ``None``
+    when every collection 404s."""
+    for coll in collections:
+        try:
+            return get_tile(token, scene_id, collection=coll)
+        except CMSceneNotPublished:
+            continue
+    return None
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -440,6 +541,7 @@ def get_source(token: str, source_name: str) -> CMSource:
         if _is_404(exc):
             raise CMSourceNotFound(cleaned) from exc
         raise
+    raw = _flatten_source_detail(raw, cleaned)
     # The single-source endpoint can return either a Feature or properties
     # directly; coerce to a Feature shape so CMSource.from_geojson_feature
     # handles both.
@@ -480,14 +582,21 @@ def list_plumes(
     instruments: list[str] | None = None,
     datetime_min: datetime | None = None,
     datetime_max: datetime | None = None,
-    gas: Gas | Literal["CH4"] = Gas.CH4,
+    published_at_min: datetime | None = None,
+    published_at_max: datetime | None = None,
+    gas: Gas | Literal["CH4", "CO2"] | None = Gas.CH4,
     limit: int = 1_000,
 ) -> list[CMRawPlume]:
     """Materialised list of plumes matching filters.
 
-    Wraps ``/catalog/plumes/annotated`` and converts each row into a
-    :class:`CMRawPlume`. The bbox is encoded as repeated keys (REST
-    style — see :func:`georeader.readers.carbonmapper.download._rest_bbox_params`).
+    1. Request ``/catalog/plumes/annotated`` pages of at most 1 000 rows
+       (the server cap) at increasing offsets.
+    2. Stop at ``limit`` rows, on an empty or short page, or once the
+       offset reaches the response's ``total_count``.
+    3. Convert each row into a :class:`CMRawPlume`.
+
+    The bbox is encoded as repeated keys (REST style — see
+    :func:`georeader.readers.carbonmapper.download._rest_bbox_params`).
 
     Parameters
     ----------
@@ -502,13 +611,19 @@ def list_plumes(
         :class:`Instrument` members like ``[Instrument.EMIT, Instrument.TANAGER]``.
     datetime_min, datetime_max:
         Optional UTC bounds — combined into an RFC 3339 interval.
+        Filters on **observation time** (``scene_timestamp``).
+    published_at_min, published_at_max:
+        Optional UTC bounds on **publication date** (``published_at``).
+        Carbon Mapper frequently publishes plumes weeks-to-months
+        after acquisition, so this is the axis to poll for newly
+        published data — e.g. ``published_at_min=last_poll_time``.
     gas:
-        :data:`Gas.CH4` (default). **CH4-only for this PR**;
-        ``Gas.CO2`` lands in a follow-up. Typed as
-        ``Gas | Literal["CH4"]`` so plain string call-sites
-        (``gas="CH4"``) continue to type-check.
+        :data:`Gas.CH4` (default), :data:`Gas.CO2`, or ``None`` for
+        both gases. Plain strings (``"CH4"`` / ``"CO2"``) work too.
     limit:
-        Max rows returned in this call. The API caps at 1 000 per page.
+        Max rows returned in total. Pages of up to 1 000 rows (the
+        server cap) are fetched until ``limit`` is reached or the
+        results run out.
 
     Returns
     -------
@@ -531,17 +646,27 @@ def list_plumes(
     412350.0
     """
     dt_range = _build_datetime_range(datetime_min, datetime_max)
-    result = _dl.get_plumes_annotated(
-        plume_gas=str(gas),
-        bbox=bbox,
-        datetime_range=dt_range,
-        sectors=sectors,
-        instruments=instruments,
-        limit=limit,
-        token=token,
-    )
-    items = result.get("items", []) if isinstance(result, Mapping) else []
-    return [CMRawPlume(**row) for row in items]
+    pub_range = _build_datetime_range(published_at_min, published_at_max)
+    rows: list[Mapping[str, Any]] = []
+    while len(rows) < limit:
+        page_size = min(_ANNOTATED_PAGE_SIZE, limit - len(rows))
+        result = _dl.get_plumes_annotated(
+            plume_gas=None if gas is None else str(gas),
+            bbox=bbox,
+            datetime_range=dt_range,
+            published_at_range=pub_range,
+            sectors=sectors,
+            instruments=instruments,
+            limit=page_size,
+            offset=len(rows),
+            token=token,
+        )
+        page = result.get("items", []) if isinstance(result, Mapping) else []
+        rows.extend(page)
+        total = result.get("total_count") if isinstance(result, Mapping) else None
+        if len(page) < page_size or (total is not None and len(rows) >= total):
+            break
+    return [CMRawPlume(**row) for row in rows[:limit]]
 
 
 def list_tiles(
@@ -550,12 +675,14 @@ def list_tiles(
     bbox: BBox | None = None,
     datetime_min: datetime | None = None,
     datetime_max: datetime | None = None,
-    collection: str = DEFAULT_L2B_COLLECTION,
+    collection: str | Sequence[str] | None = None,
     limit: int = 1_000,
 ) -> list[CMTileItem]:
     """Materialised list of L2B STAC items matching filters.
 
-    Wraps ``/stac/search`` (comma-joined STAC bbox encoding).
+    Wraps ``/stac/search`` (comma-joined STAC bbox encoding). A scene
+    registered under several collection versions is returned once, from
+    the newest version.
 
     Parameters
     ----------
@@ -566,7 +693,10 @@ def list_tiles(
     datetime_min, datetime_max:
         Optional UTC bounds.
     collection:
-        STAC collection — defaults to :data:`DEFAULT_L2B_COLLECTION`.
+        One STAC collection id or several. ``None`` (default) searches
+        every known CH4 L2B version
+        (:data:`~georeader.readers.carbonmapper.rasters.DEFAULT_L2B_CH4_COLLECTION_CANDIDATES`)
+        — STAC registers current versions as of 2026-09.
     limit:
         Max items in this call.
 
@@ -582,16 +712,26 @@ def list_tiles(
     >>> {t.platform for t in tiles}  # doctest: +SKIP
     {'Tanager1', 'EMIT'}
     """
+    if collection is None:
+        from georeader.readers.carbonmapper.rasters import (
+            DEFAULT_L2B_CH4_COLLECTION_CANDIDATES,
+        )
+
+        collections = list(DEFAULT_L2B_CH4_COLLECTION_CANDIDATES)
+    elif isinstance(collection, str):
+        collections = [collection]
+    else:
+        collections = list(collection)
     dt_range = _build_datetime_range(datetime_min, datetime_max)
     result = _dl.stac_search(
-        collections=[collection],
+        collections=collections,
         bbox=bbox,
         datetime_range=dt_range,
         limit=limit,
         token=token,
     )
     features = result.get("features", []) if isinstance(result, Mapping) else []
-    return [CMTileItem.from_stac_item(f) for f in features]
+    return _dedupe_newest([CMTileItem.from_stac_item(f) for f in features])
 
 
 def list_sources(
@@ -599,7 +739,7 @@ def list_sources(
     *,
     bbox: BBox | None = None,
     sectors: list[str] | None = None,
-    gas: Gas | Literal["CH4"] = Gas.CH4,
+    gas: Gas | Literal["CH4", "CO2"] | None = Gas.CH4,
 ) -> list[CMSource]:
     """List Carbon Mapper sources matching filters.
 
@@ -617,8 +757,8 @@ def list_sources(
     sectors:
         IPCC sector codes.
     gas:
-        :data:`Gas.CH4` (default). **CH4-only for this PR**;
-        ``Gas.CO2`` lands in a follow-up.
+        :data:`Gas.CH4` (default), :data:`Gas.CO2`, or ``None`` for
+        both gases.
 
     Returns
     -------
@@ -640,14 +780,16 @@ def list_sources(
     # `/plumes/annotated` (see its docstring) — the true source listing
     # lives at `/catalog/sources.geojson` and returns a GeoJSON
     # FeatureCollection. Hit it directly with REST repeated-keys bbox.
-    params: list[tuple[str, str]] = [("plume_gas", str(gas))]
-    if bbox is not None:
-        for v in bbox:
-            params.append(("bbox", str(v)))
+    params: list[tuple[str, str]] = []
+    if gas is not None:
+        params.append(("plume_gas", str(gas)))
+    for key, values in _dl._rest_bbox_params(bbox).items():
+        params.extend((key, v) for v in values)
     if sectors:
         for s in sectors:
             params.append(("sectors", s))
-    resp = requests.get(
+    resp = _dl._request(
+        "GET",
         f"{_dl.CATALOG_URL}/sources.geojson",
         params=params,
         headers=_dl._headers(token),
@@ -668,13 +810,18 @@ def get_tile_for_plume(
     token: str,
     plume_id: str,
     *,
-    collection: str = DEFAULT_L2B_COLLECTION,
+    collection: str | None = None,
+    spec: CMCollectionSpec | None = None,
 ) -> CMTileItem | None:
     """Resolve a plume to its parent L2B STAC item.
 
-    Derives the parent ``scene_id`` via
-    ``plume_id.rsplit("-", 1)[0]`` and looks up the corresponding
-    STAC item.
+    1. Derive the parent ``scene_id`` via ``plume_id.rsplit("-", 1)[0]``.
+    2. Pick the STAC collections to try: ``collection`` verbatim when
+       given; else the candidates of the plume's
+       :class:`CMCollectionSpec` (``spec`` if passed, otherwise
+       resolved from the plume record — one extra catalog call); else,
+       for an unknown plume, the default CH4 candidates.
+    3. Return the first collection's item for the scene.
 
     Unlike :func:`get_tile`, this helper **catches**
     :class:`CMSceneNotPublished` and returns ``None`` — appropriate for
@@ -687,12 +834,22 @@ def get_tile_for_plume(
     plume_id:
         Colloquial plume id (with the ``-{part}`` suffix).
     collection:
-        STAC collection — defaults to :data:`DEFAULT_L2B_COLLECTION`.
+        Explicit STAC collection. ``None`` (default) resolves it from
+        the plume's own version and gas (same-gas candidates only).
+    spec:
+        Pre-resolved collection spec (e.g. ``CMRawPlume.collection_spec``)
+        — skips the record fetch.
 
     Returns
     -------
     CMTileItem | None
         ``None`` when the L2B scene has not been published yet.
+
+    Raises
+    ------
+    requests.HTTPError
+        For non-404 failures of the record or STAC lookups (401, 429
+        after retries, 5xx).
 
     Examples
     --------
@@ -701,10 +858,13 @@ def get_tile_for_plume(
     'tan20251212t185057c20s4001'
     """
     scene_id = _scene_id_from_plume(plume_id)
-    try:
-        return get_tile(token, scene_id, collection=collection)
-    except CMSceneNotPublished:
-        return None
+    if collection is not None:
+        candidates: tuple[str, ...] = (collection,)
+    else:
+        if spec is None:
+            spec = _spec_for_plume(token, plume_id)
+        candidates = _stac_l2b_candidates(spec)
+    return _first_published_tile(token, scene_id, candidates)
 
 
 def get_image_raster_for_scene(
@@ -770,14 +930,13 @@ def get_image_raster_for_scene(
     # ── 1. STAC path (cheap when it works) ──────────────────────────
     try:
         ch4_item = get_tile(token, scene_id, collection=collection)
-        ir = CMImageRaster.from_cm_tile_item(ch4_item)
+        ir = CMImageRaster.from_cm_tile_item(ch4_item, token=token)
         if with_rgb:
             try:
-                # RGB sibling lives in `l2b-rgb-v3a` (string defined here
-                # rather than imported from rasters.py to avoid the
-                # rasters→api_queries circular import).
+                # The RGB sibling shares the retrieval's version
+                # (`l2b-ch4-mfa-v3e` → `l2b-rgb-v3e`).
                 rgb_item = get_tile(
-                    token, scene_id, collection="l2b-rgb-v3a",
+                    token, scene_id, collection=_rgb_collection_for(collection),
                 )
                 ir = ir.with_rgb(rgb_item)
             except CMSceneNotPublished:
@@ -803,26 +962,43 @@ def get_image_raster_for_plume(
     token: str,
     plume_id: str,
     *,
-    collection: str = DEFAULT_L2B_COLLECTION,
+    collection: str | None = None,
     prefer_url_pattern_fallback: bool = True,
     with_rgb: bool = True,
 ) -> CMImageRaster | None:
     """Resolve a plume to its parent :class:`CMImageRaster`.
 
-    Sugar over :func:`get_image_raster_for_scene` that derives the
-    parent ``scene_id`` from ``plume_id`` first. Same STAC-first /
-    URL-pattern-fallback behaviour.
+    1. Derive the parent ``scene_id`` from ``plume_id``.
+    2. Unless ``collection`` is pinned or the URL-pattern path is
+       disabled, fetch the plume record and resolve its
+       :class:`CMCollectionSpec`; probe the asset proxy for that
+       gas/version first (same-gas fallbacks only).
+    3. Otherwise — or when the plume is unknown (404) — defer to
+       :func:`get_image_raster_for_scene` (STAC first, then default
+       candidate probing).
 
     Parameters
     ----------
-    token, collection, prefer_url_pattern_fallback, with_rgb:
+    token, prefer_url_pattern_fallback, with_rgb:
         Forwarded to :func:`get_image_raster_for_scene`.
+    collection:
+        Explicit STAC collection. When given, step 2 is skipped and the
+        STAC path uses it verbatim. ``None`` (default) resolves the
+        collection from the plume record.
     plume_id:
         Colloquial plume id (with the ``-{part}`` suffix).
 
     Returns
     -------
     CMImageRaster | None
+        ``None`` when the scene is not published in any probed
+        collection.
+
+    Raises
+    ------
+    requests.HTTPError
+        For non-404 failures (401, 429 after retries, 5xx) — never
+        reported as "not published".
 
     Examples
     --------
@@ -833,9 +1009,31 @@ def get_image_raster_for_plume(
     True
     """
     scene_id = _scene_id_from_plume(plume_id)
+
+    # Preferred path: one catalog fetch resolves the CMCollectionSpec
+    # (gas / cmf_type / version) from the plume's own record; its L2B
+    # collection is probed first, with same-gas backups for re-versioned
+    # plumes, so this never goes stale when Carbon Mapper bumps
+    # versions. Only a 404 (unknown plume) or an unparseable record
+    # falls back to the STAC-first path — throttling and auth errors
+    # propagate instead of costing a dozen extra calls.
+    spec: CMCollectionSpec | None = None
+    if collection is None and prefer_url_pattern_fallback:
+        spec = _spec_for_plume(token, plume_id)
+
+    if spec is not None:
+        from georeader.readers.carbonmapper.rasters import CMImageRaster
+
+        try:
+            return CMImageRaster.from_scene_id(
+                scene_id, token=token, spec=spec, with_rgb=with_rgb,
+            )
+        except CMSceneNotPublished:
+            return None
+
     return get_image_raster_for_scene(
         token, scene_id,
-        collection=collection,
+        collection=collection or DEFAULT_L2B_COLLECTION,
         prefer_url_pattern_fallback=prefer_url_pattern_fallback,
         with_rgb=with_rgb,
     )
@@ -879,6 +1077,7 @@ def get_source_for_plume(
         raise
     if not raw:
         return None
+    raw = _flatten_source_detail(raw, None)
     if "geometry" not in raw and "properties" not in raw:
         feature = {
             "properties": dict(raw),
@@ -956,7 +1155,7 @@ def get_plume_context(
     ...     print(f"source {source.source_name} sector {source.sector}")
     """
     plume = get_plume(token, plume_id)
-    tile = get_tile_for_plume(token, plume_id)
+    tile = get_tile_for_plume(token, plume_id, spec=plume.collection_spec)
     source = get_source_for_plume(token, plume_id)
     return plume, tile, source
 
@@ -965,13 +1164,15 @@ def list_plumes_for_tile(
     token: str,
     scene_id: str,
     *,
-    gas: Gas | Literal["CH4"] = Gas.CH4,
+    gas: Gas | Literal["CH4", "CO2"] | None = None,
 ) -> list[CMRawPlume]:
     """All plumes attributed to a given L2B scene.
 
-    Carbon Mapper plume_ids embed the scene_id —
-    ``plume_id = "{scene_id}-{part}"`` — so we filter the annotated
-    plumes listing client-side by prefix.
+    1. Parse the acquisition date from the scene name and restrict the
+       annotated-plumes query to that day (± 1 day of slack).
+    2. Page through every matching plume (:func:`list_plumes`).
+    3. Keep the plumes whose ``plume_id`` starts with ``"{scene_id}-"``
+       (Carbon Mapper convention: ``plume_id = "{scene_id}-{part}"``).
 
     Parameters
     ----------
@@ -980,8 +1181,8 @@ def list_plumes_for_tile(
     scene_id:
         L2B scene id, e.g. ``"tan20251212t185057c20s4001"``.
     gas:
-        :data:`Gas.CH4` (default). **CH4-only for this PR**;
-        ``Gas.CO2`` lands in a follow-up.
+        ``None`` (default) for both gases, or :data:`Gas.CH4` /
+        :data:`Gas.CO2` to restrict.
 
     Returns
     -------
@@ -989,10 +1190,8 @@ def list_plumes_for_tile(
 
     Note
     ----
-    The current implementation pulls a 1 000-plume page and filters
-    in Python. For high-volume scenes that may miss tail rows; pass a
-    bbox filter or use :func:`list_plumes` directly when completeness
-    matters.
+    Scene names that don't carry a parseable date fall back to an
+    unfiltered (but still fully paginated) listing — slow, but complete.
 
     Examples
     --------
@@ -1002,18 +1201,24 @@ def list_plumes_for_tile(
     >>> [p.plume_id[-1] for p in plumes]  # doctest: +SKIP
     ['A', 'B', 'C', 'E']
     """
-    result = _dl.get_plumes_annotated(
-        plume_gas=str(gas),
-        limit=1_000,
-        token=token,
+    dt_min = dt_max = None
+    try:
+        yyyy, mm, dd = parse_item_date(scene_id)
+        day = datetime(int(yyyy), int(mm), int(dd), tzinfo=timezone.utc)
+        dt_min, dt_max = day - timedelta(days=1), day + timedelta(days=2)
+    except ValueError:
+        _log.warning(
+            "scene_id %r carries no date; listing plumes unfiltered", scene_id,
+        )
+    plumes = list_plumes(
+        token,
+        datetime_min=dt_min,
+        datetime_max=dt_max,
+        gas=gas,
+        limit=1_000_000,
     )
-    items = result.get("items", []) if isinstance(result, Mapping) else []
     prefix = f"{scene_id}-"
-    return [
-        CMRawPlume(**row)
-        for row in items
-        if str(row.get("plume_id", "")).startswith(prefix)
-    ]
+    return [p for p in plumes if p.plume_id.startswith(prefix)]
 
 
 def list_plumes_for_source(
@@ -1024,9 +1229,12 @@ def list_plumes_for_source(
 ) -> list[CMRawPlume]:
     """All plumes attributed to a Carbon Mapper source.
 
-    Wraps ``/catalog/source-plumes-csv/{source_name}``. The CSV
-    endpoint is single-shot (no pagination) — the result is fully
-    materialised.
+    Wraps ``/catalog/source/{source_name}`` and reads the **embedded**
+    ``plumes`` records (full annotated-shape dicts; verified complete
+    against the source's ``plume_count`` in the 2026-07 audit). The
+    old ``/catalog/source-plumes-csv/{source_name}`` route now 400s
+    for name keys upstream and is kept only as a fallback for
+    pre-drift API deployments that don't embed ``plumes``.
 
     Strips the ``?...`` query suffix from ``source_name`` automatically
     (``data_model §2.2``).
@@ -1045,6 +1253,14 @@ def list_plumes_for_source(
     -------
     list[CMRawPlume]
 
+    Raises
+    ------
+    CMSourceNotFound
+        When the API returns 404 for ``source_name``. (Source names
+        are re-clustered over time — resolve fresh names via
+        :func:`list_sources` / :func:`get_source_for_plume` rather
+        than persisting them.)
+
     Examples
     --------
     >>> plumes = list_plumes_for_source(  # doctest: +SKIP
@@ -1053,33 +1269,43 @@ def list_plumes_for_source(
     >>> len(plumes), plumes[0].plume_id[:3]  # doctest: +SKIP
     (47, 'tan')
     """
-    import io
-    import pandas as pd
-
     cleaned = _strip_query_suffix(source_name)
-    csv_text = _dl.get_source_plumes_csv(cleaned, token=token)
-    if not csv_text:
-        return []
-    df = pd.read_csv(io.StringIO(csv_text))
-    if limit and len(df) > limit:
-        df = df.head(limit)
-    # CSV -> dict gives `float('nan')` for empty cells. Pydantic
-    # str-typed fields like `sensitivity_mode` reject NaN; coerce
-    # NaNs to None so optional fields fall back to their defaults.
-    rows = df.to_dict(orient="records")
-    cleaned: list[CMRawPlume] = []
-    for row in rows:
-        sane = {k: (None if isinstance(v, float) and v != v else v)
-                for k, v in row.items()}
-        cleaned.append(CMRawPlume(**sane))
-    return cleaned
+    try:
+        raw = _dl.get_source_by_name(cleaned, token=token)
+    except requests.HTTPError as exc:
+        if _is_404(exc):
+            raise CMSourceNotFound(cleaned) from exc
+        raise
+
+    records = raw.get("plumes")
+    if records is None:
+        # Pre-drift API shape — fall back to the CSV endpoint.
+        import io
+        import pandas as pd
+
+        csv_text = _dl.get_source_plumes_csv(cleaned, token=token)
+        if not csv_text:
+            return []
+        df = pd.read_csv(io.StringIO(csv_text))
+        # CSV -> dict gives `float('nan')` for empty cells. Pydantic
+        # str-typed fields like `sensitivity_mode` reject NaN; coerce
+        # NaNs to None so optional fields fall back to their defaults.
+        records = [
+            {k: (None if isinstance(v, float) and v != v else v)
+             for k, v in row.items()}
+            for row in df.to_dict(orient="records")
+        ]
+
+    if limit and len(records) > limit:
+        records = records[:limit]
+    return [CMRawPlume(**rec) for rec in records]
 
 
 def list_tiles_for_source(
     token: str,
     source_name: str,
     *,
-    collection: str = DEFAULT_L2B_COLLECTION,
+    collection: str | None = None,
 ) -> list[CMTileItem]:
     """All distinct parent L2B tiles touched by a source's plumes.
 
@@ -1087,8 +1313,11 @@ def list_tiles_for_source(
 
     1. :func:`list_plumes_for_source` — every plume attributed to the
        source.
-    2. ``{plume_id.rsplit("-", 1)[0] for ...}`` — distinct scene_ids.
-    3. ``stac_search(ids=[...])`` — resolve to STAC items.
+    2. Map each distinct scene_id to the L2B collection(s) of its
+       plume's own gas and version (``collection`` overrides this).
+    3. ``stac_search(collections=..., ids=[...])`` per collection group,
+       at most 100 ids per request — resolve to STAC items, one per
+       scene.
 
     Useful for tile-level backfill: given a chronic emitter, fetch
     every L2B scene that ever observed it, regardless of whether
@@ -1101,12 +1330,15 @@ def list_tiles_for_source(
     source_name:
         Canonical or query-suffixed source name.
     collection:
-        STAC collection — defaults to :data:`DEFAULT_L2B_COLLECTION`.
+        Explicit STAC collection for every scene. ``None`` (default)
+        uses each plume's own gas/version collection(s).
 
     Returns
     -------
     list[CMTileItem]
-        Empty list if the source has no plumes.
+        Empty list if the source has no plumes. Scenes whose L2B item
+        isn't in STAC under the plume's version are omitted — use
+        :func:`get_image_raster_for_plume` to probe older versions.
 
     Examples
     --------
@@ -1117,19 +1349,50 @@ def list_tiles_for_source(
     ['EMIT', 'Tanager1']
     """
     plumes = list_plumes_for_source(token, source_name)
-    scene_ids = sorted({_scene_id_from_plume(p.plume_id) for p in plumes})
-    if not scene_ids:
-        return []
-    result = _dl.stac_search(
-        collections=[collection], ids=scene_ids, limit=len(scene_ids), token=token,
-    )
-    features = result.get("features", []) if isinstance(result, Mapping) else []
-    return [CMTileItem.from_stac_item(f) for f in features]
+    by_collections: dict[tuple[str, ...], set[str]] = {}
+    for p in plumes:
+        if collection is not None:
+            colls: tuple[str, ...] = (collection,)
+        else:
+            spec = p.collection_spec
+            colls = (
+                tuple(
+                    c for c in _stac_l2b_candidates(spec)
+                    if c.endswith(f"-{spec.version}")
+                )
+                if spec is not None else (DEFAULT_L2B_COLLECTION,)
+            )
+        by_collections.setdefault(colls, set()).add(_scene_id_from_plume(p.plume_id))
+
+    tiles: dict[str, CMTileItem] = {}
+    for colls, scene_set in by_collections.items():
+        scene_ids = sorted(scene_set)
+        for i in range(0, len(scene_ids), _STAC_IDS_PER_REQUEST):
+            chunk = scene_ids[i:i + _STAC_IDS_PER_REQUEST]
+            result = _dl.stac_search(
+                collections=list(colls),
+                ids=chunk,
+                limit=len(chunk) * len(colls),
+                token=token,
+            )
+            features = result.get("features", []) if isinstance(result, Mapping) else []
+            for f in features:
+                item = CMTileItem.from_stac_item(f)
+                tiles.setdefault(item.scene_id, item)
+    return [tiles[k] for k in sorted(tiles)]
 
 
 # ─────────────────────────────────────────────────────────────────────
 #  Helpers (private)
 # ─────────────────────────────────────────────────────────────────────
+
+
+def _rfc3339_utc(dt: datetime) -> str:
+    """Format ``dt`` as RFC 3339 UTC with a ``Z`` suffix. Naive datetimes
+    are taken to be UTC; aware ones are converted to UTC."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _build_datetime_range(
@@ -1138,9 +1401,34 @@ def _build_datetime_range(
     """Build an RFC 3339 datetime-range string from optional bounds."""
     if dt_min is None and dt_max is None:
         return None
-    lo = dt_min.isoformat().replace("+00:00", "Z") if dt_min else ".."
-    hi = dt_max.isoformat().replace("+00:00", "Z") if dt_max else ".."
+    lo = _rfc3339_utc(dt_min) if dt_min else ".."
+    hi = _rfc3339_utc(dt_max) if dt_max else ".."
     return f"{lo}/{hi}"
+
+
+def _rgb_collection_for(collection: str) -> str:
+    """The ``l2b-rgb-*`` sibling of an L2B retrieval collection (same
+    version); ``l2b-rgb-v3a`` when ``collection`` doesn't parse."""
+    try:
+        spec = CMCollectionSpec.from_collection_id(collection)
+    except ValueError:
+        return "l2b-rgb-v3a"
+    return spec.collection_id(CMProductFamily.L2B_RGB)
+
+
+def _dedupe_newest(tiles: list[CMTileItem]) -> list[CMTileItem]:
+    """Keep one item per scene — the one from the newest collection
+    version — preserving first-seen scene order."""
+    from georeader.readers.carbonmapper.rasters import _version_key
+
+    best: dict[str, CMTileItem] = {}
+    for t in tiles:
+        prev = best.get(t.scene_id)
+        if prev is None or _version_key(t.collection.rsplit("-", 1)[-1]) > _version_key(
+            prev.collection.rsplit("-", 1)[-1]
+        ):
+            best[t.scene_id] = t
+    return list(best.values())
 
 
 __all__ = [

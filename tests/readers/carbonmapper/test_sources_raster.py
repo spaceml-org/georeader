@@ -13,7 +13,6 @@ from georeader.readers.carbonmapper.sources_raster import (
     rasterize_sources,
 )
 
-
 # ─── Helpers ──────────────────────────────────────────────────────────
 
 
@@ -210,3 +209,28 @@ def test_cmsourceraster_from_geodata_inherits_grid():
     assert raster.shape == g["shape"]
     assert rasterio.crs.CRS.from_user_input(raster.crs).to_epsg() == 32613
     assert raster.buffer_m == 15.0
+
+
+def test_cmsourceraster_from_cmtileitem_aligns_to_cmf(tmp_path):
+    """Used to read `tile.assets` (which doesn't exist) and always crash;
+    STAC keys the asset as `cmf.tif`."""
+    from georeader.readers.carbonmapper.api_queries import CMTileItem
+
+    grid = _utm_grid(shape=(20, 30))
+    cmf = tmp_path / "cmf.tif"
+    with rasterio.open(
+        str(cmf), "w", driver="GTiff", count=1, dtype="float32",
+        width=30, height=20, transform=grid["transform"], crs=grid["crs"],
+    ) as dst:
+        dst.write(np.zeros((1, 20, 30), dtype="float32"))
+    tile = CMTileItem.from_stac_item({
+        "id": "tan20260824t065735c39s4001",
+        "collection": "l2b-ch4-mfa-v3e",
+        "properties": {"datetime": "2026-08-24T06:57:35Z"},
+        "bbox": [-104, 31, -103, 32],
+        "geometry": {"type": "Point", "coordinates": [-103.5, 31.5]},
+        "assets": {"cmf.tif": {"href": str(cmf)}},
+    })
+    sr = CMSourceRaster.from_cmtileitem([_make_source(-103.5, 31.5)], tile)
+    assert sr.shape == (20, 30)
+    assert sr.transform == grid["transform"]

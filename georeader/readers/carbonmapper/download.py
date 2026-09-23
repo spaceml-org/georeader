@@ -30,6 +30,8 @@ from __future__ import annotations
 import json
 import logging
 import time
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, cast
 import requests
@@ -45,6 +47,31 @@ CATALOG_URL = f"{BASE_URL}/catalog"
 STAC_URL = f"{BASE_URL}/stac"
 
 BBox = tuple[float, float, float, float]   # (W, S, E, N) WGS-84
+
+
+def _validate_bbox(bbox: BBox) -> None:
+    """Reject malformed ``(W, S, E, N)`` boxes before they reach the API.
+
+    Raises
+    ------
+    ValueError
+        If ``bbox`` is not length 4, a latitude is outside ``[-90, 90]``,
+        ``S > N``, or ``W > E``. Antimeridian-crossing boxes (``W > E``)
+        are rejected rather than silently misread — split them into two
+        boxes, one on each side of ±180°.
+    """
+    if len(bbox) != 4:
+        raise ValueError(f"bbox must be (W, S, E, N); got {bbox!r}")
+    w, s, e, n = (float(v) for v in bbox)
+    if not (-90.0 <= s <= 90.0 and -90.0 <= n <= 90.0):
+        raise ValueError(f"bbox latitudes must lie in [-90, 90]; got {bbox!r}")
+    if s > n:
+        raise ValueError(f"bbox south > north; got {bbox!r}")
+    if w > e:
+        raise ValueError(
+            f"bbox west > east ({bbox!r}) — antimeridian-crossing boxes are "
+            "not supported; split into two boxes on either side of ±180°."
+        )
 
 
 def _rest_bbox_params(bbox: BBox | None) -> dict[str, list[str]]:
@@ -71,7 +98,7 @@ def _rest_bbox_params(bbox: BBox | None) -> dict[str, list[str]]:
     Raises
     ------
     ValueError
-        If ``bbox`` is not length 4.
+        If ``bbox`` is malformed — see :func:`_validate_bbox`.
 
     Examples
     --------
@@ -88,8 +115,7 @@ def _rest_bbox_params(bbox: BBox | None) -> dict[str, list[str]]:
     """
     if bbox is None:
         return {}
-    if len(bbox) != 4:
-        raise ValueError(f"bbox must be (W, S, E, N); got {bbox!r}")
+    _validate_bbox(bbox)
     return {"bbox": [str(v) for v in bbox]}
 
 
@@ -117,7 +143,7 @@ def _stac_bbox_param(bbox: BBox | None) -> dict[str, str]:
     Raises
     ------
     ValueError
-        If ``bbox`` is not length 4.
+        If ``bbox`` is malformed — see :func:`_validate_bbox`.
 
     Examples
     --------
@@ -128,8 +154,7 @@ def _stac_bbox_param(bbox: BBox | None) -> dict[str, str]:
     """
     if bbox is None:
         return {}
-    if len(bbox) != 4:
-        raise ValueError(f"bbox must be (W, S, E, N); got {bbox!r}")
+    _validate_bbox(bbox)
     return {"bbox": ",".join(str(v) for v in bbox)}
 
 
@@ -141,14 +166,75 @@ def _headers(token: str | None = None) -> dict[str, str]:
     return h
 
 
+#: How many times a 429 response is retried before it is returned to
+#: the caller (who then sees it via ``raise_for_status``).
+MAX_RATE_LIMIT_RETRIES = 3
+
+#: Upper bound on a single rate-limit sleep, whatever the server asks.
+MAX_RATE_LIMIT_WAIT_S = 300.0
+
+
+def _retry_after_seconds(resp: requests.Response, attempt: int) -> float:
+    """Seconds to wait before retrying a 429 response.
+
+    1. Honour ``Retry-After`` as delta-seconds (int or float).
+    2. Else honour ``Retry-After`` as an HTTP-date.
+    3. Else back off exponentially: 5 s, 10 s, 20 s, ...
+
+    The result is clamped to ``[0, MAX_RATE_LIMIT_WAIT_S]``.
+    """
+    header = (resp.headers.get("Retry-After") or "").strip()
+    wait: float | None = None
+    if header:
+        try:
+            wait = float(header)
+        except ValueError:
+            try:
+                when = parsedate_to_datetime(header)
+                wait = (when - datetime.now(timezone.utc)).total_seconds()
+            except (TypeError, ValueError):
+                wait = None
+    if wait is None:
+        wait = 5.0 * (2 ** attempt)
+    return max(0.0, min(wait, MAX_RATE_LIMIT_WAIT_S))
+
+
+def _request(method: str, url: str, **kwargs: Any) -> requests.Response:
+    """Issue one HTTP request, retrying on HTTP 429 with back-off.
+
+    1. Send the request (``requests.get`` / ``requests.post`` / ...,
+       looked up at call time so tests can monkeypatch them).
+    2. On 429, sleep per :func:`_retry_after_seconds` and retry, up to
+       :data:`MAX_RATE_LIMIT_RETRIES` times.
+    3. Return the final response **unchecked** — callers decide how to
+       treat its status (``raise_for_status``, 404-as-absent, ...).
+
+    Every Carbon Mapper HTTP call in this package goes through here, so
+    throttling is handled the same way everywhere.
+    """
+    send = getattr(requests, method.lower())
+    for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
+        resp = send(url, **kwargs)
+        if resp.status_code != 429 or attempt == MAX_RATE_LIMIT_RETRIES:
+            return resp
+        wait = _retry_after_seconds(resp, attempt)
+        logger.warning(
+            "Rate-limited by %s; sleeping %.1f s (retry %d/%d)",
+            url, wait, attempt + 1, MAX_RATE_LIMIT_RETRIES,
+        )
+        resp.close()
+        _sleep(wait)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
+def _sleep(seconds: float) -> None:
+    """Rate-limit sleep — a module-level hook so tests can skip the wait."""
+    time.sleep(seconds)
+
+
 def _get(url: str, params: dict | None = None, token: str | None = None) -> dict | list | str:
-    """GET with basic error handling and rate-limit back-off."""
-    resp = requests.get(url, params=params, headers=_headers(token), timeout=60)
-    if resp.status_code == 429:
-        wait = min(int(resp.headers.get("Retry-After", 5)), 300)
-        logger.warning("Rate-limited; sleeping %d s", wait)
-        time.sleep(wait)
-        resp = requests.get(url, params=params, headers=_headers(token), timeout=60)
+    """GET with error handling and rate-limit back-off."""
+    resp = _request("GET", url, params=params, headers=_headers(token), timeout=60)
     resp.raise_for_status()
     content_type = resp.headers.get("Content-Type", "")
     if "json" in content_type:
@@ -157,8 +243,8 @@ def _get(url: str, params: dict | None = None, token: str | None = None) -> dict
 
 
 def _post(url: str, body: dict, token: str | None = None) -> dict:
-    """POST JSON with basic error handling."""
-    resp = requests.post(url, json=body, headers=_headers(token), timeout=60)
+    """POST JSON with error handling and rate-limit back-off."""
+    resp = _request("POST", url, json=body, headers=_headers(token), timeout=60)
     resp.raise_for_status()
     return resp.json()
 
@@ -231,6 +317,9 @@ def get_plumes_annotated(
     plume_gas: str | None = None,
     bbox: tuple[float, float, float, float] | None = None,
     datetime_range: str | None = None,
+    published_at_range: str | None = None,
+    created_at_range: str | None = None,
+    modified_at_range: str | None = None,
     sectors: list[str] | None = None,
     instruments: list[str] | None = None,
     emission_min: int | None = None,
@@ -262,7 +351,22 @@ def get_plumes_annotated(
     datetime_range:
         RFC 3339 time interval string, e.g.
         ``"2024-01-01T00:00:00Z/2024-06-01T00:00:00Z"``.  Either bound
-        may be replaced with ``".."`` to indicate open-ended.
+        may be replaced with ``".."`` to indicate open-ended.  Filters
+        on **observation time** (``scene_timestamp``) — for "what was
+        *published* this period?" use *published_at_range* instead:
+        Carbon Mapper frequently publishes plumes weeks-to-months
+        after acquisition.
+    published_at_range:
+        RFC 3339 interval (same format as *datetime_range*) filtering
+        on **publication date** (``published_at``) — the axis ingest
+        pipelines polling for newly published plumes need.  Sent as
+        the API's ``published_at_datetime`` param.
+    created_at_range:
+        RFC 3339 interval filtering on catalog-record **creation
+        date** (``created_at``).
+    modified_at_range:
+        RFC 3339 interval filtering on catalog-record **modification
+        date** (``modified_at``).
     sectors:
         One or more IPCC sector codes to filter by.  Common values:
         ``"1B2"`` (Oil & Gas), ``"6A"`` (Solid Waste), ``"1B1a"``
@@ -364,6 +468,12 @@ def get_plumes_annotated(
     params.update(_rest_bbox_params(bbox))
     if datetime_range:
         params["datetime"] = datetime_range
+    if published_at_range:
+        params["published_at_datetime"] = published_at_range
+    if created_at_range:
+        params["created_at"] = created_at_range
+    if modified_at_range:
+        params["modified_at"] = modified_at_range
     if sectors:
         params["sectors"] = sectors
     if instruments:
@@ -413,6 +523,9 @@ def get_plumes_csv(
     plume_gas: str | None = None,
     bbox: tuple[float, float, float, float] | None = None,
     datetime_range: str | None = None,
+    published_at_range: str | None = None,
+    created_at_range: str | None = None,
+    modified_at_range: str | None = None,
     sectors: list[str] | None = None,
     instruments: list[str] | None = None,
     limit: int = 50_000,
@@ -435,7 +548,17 @@ def get_plumes_csv(
         ``(west_lon, south_lat, east_lon, north_lat)`` in WGS 84.
     datetime_range:
         RFC 3339 time interval, e.g.
-        ``"2024-01-01T00:00:00Z/2024-06-01T00:00:00Z"``.
+        ``"2024-01-01T00:00:00Z/2024-06-01T00:00:00Z"``.  Filters on
+        **observation time** (``scene_timestamp``).
+    published_at_range:
+        RFC 3339 interval filtering on **publication date** — sent as
+        the API's ``published_at_datetime`` param.  See
+        :func:`get_plumes_annotated`.
+    created_at_range:
+        RFC 3339 interval on record **creation date** (``created_at``).
+    modified_at_range:
+        RFC 3339 interval on record **modification date**
+        (``modified_at``).
     sectors:
         IPCC sector codes to include, e.g. ``["1B2", "6A"]``.
     instruments:
@@ -488,6 +611,12 @@ def get_plumes_csv(
     params.update(_rest_bbox_params(bbox))
     if datetime_range:
         params["datetime"] = datetime_range
+    if published_at_range:
+        params["published_at_datetime"] = published_at_range
+    if created_at_range:
+        params["created_at"] = created_at_range
+    if modified_at_range:
+        params["modified_at"] = modified_at_range
     if sectors:
         params["sectors"] = sectors
     if instruments:
@@ -682,7 +811,7 @@ def download_asset(asset_key: str, dest: Path | str, token: str | None = None) -
     """
     dest = Path(dest)
     url = f"{CATALOG_URL}/asset/{asset_key}"
-    resp = requests.get(url, headers=_headers(token), timeout=120, stream=True)
+    resp = _request("GET", url, headers=_headers(token), timeout=120, stream=True)
     resp.raise_for_status()
     dest.parent.mkdir(parents=True, exist_ok=True)
     with open(dest, "wb") as f:
@@ -749,7 +878,7 @@ def download_plume_assets(plume: dict, dest_dir: Path | str) -> dict[str, Path]:
         short = key.replace("_tif", "").replace("_png", "")
         local = dest_dir / f"{plume_name}_{short}{suffix}"
         try:
-            resp = requests.get(url, timeout=120, stream=True)
+            resp = _request("GET", url, timeout=120, stream=True)
             resp.raise_for_status()
             with open(local, "wb") as f:
                 for chunk in resp.iter_content(8192):
@@ -1091,19 +1220,24 @@ def stac_search(
 
 def paginate_plumes(
     *,
-    plume_gas: str = "CH4",
+    plume_gas: str | None = "CH4",
     bbox: tuple[float, float, float, float] | None = None,
     datetime_range: str | None = None,
     max_plumes: int = 100,
     page_size: int = 50,
     token: str | None = None,
+    **filters: Any,
 ) -> list[dict]:
     """
     Auto-paginate through the annotated plumes endpoint.
 
-    Repeatedly calls :func:`get_plumes_annotated` with increasing offsets
-    until *max_plumes* items have been collected or the server reports no
-    more results.
+    1. Request a page of ``min(page_size, remaining)`` rows at the
+       current offset via :func:`get_plumes_annotated`.
+    2. Stop when the page is empty, **short** (fewer rows than asked
+       for — the server has no more), or the offset has reached the
+       response's ``total_count`` (when the server reports one).
+    3. Otherwise advance the offset and repeat until *max_plumes* rows
+       have been collected.
 
     Parameters
     ----------
@@ -1121,6 +1255,10 @@ def paginate_plumes(
         Number of plumes to request per API call.  Must not exceed 1 000.
     token:
         Optional Bearer token for authenticated requests.
+    **filters:
+        Any other :func:`get_plumes_annotated` filter, forwarded
+        unchanged to every page — e.g. ``published_at_range``,
+        ``sectors``, ``instruments``, ``qualities``, ``source_name``.
 
     Returns
     -------
@@ -1156,14 +1294,17 @@ def paginate_plumes(
             limit=batch_size,
             offset=offset,
             token=token,
+            **filters,
         )
         items = result.get("items", [])
         if not items:
             break
         all_items.extend(items)
         offset += len(items)
-        total = result.get("total_count", 0)
-        if offset >= total:
+        if len(items) < batch_size:
+            break
+        total = result.get("total_count")
+        if total is not None and offset >= total:
             break
     return all_items[:max_plumes]
 
