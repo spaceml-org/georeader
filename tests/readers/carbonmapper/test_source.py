@@ -57,3 +57,15 @@ def test_from_geojson_feature_missing_geometry_raises():
     feature = {"properties": {"source_name": "x"}, "geometry": {}}
     with pytest.raises(ValueError):
         CMSource.from_geojson_feature(feature)
+
+
+def test_cmsource_is_hashable():
+    """Documented as hashable, but the `raw` dict made `hash()` raise."""
+    src = CMSource.from_geojson_feature({
+        "properties": {
+            "source_name": "CH4_1B2_100m_-104_32", "sector": "1B2",
+            "gas": "CH4", "plume_count": 1, "persistence": 0.1,
+        },
+        "geometry": {"type": "Point", "coordinates": [-104.0, 32.0]},
+    })
+    assert src in {src}

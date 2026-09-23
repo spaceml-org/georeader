@@ -459,3 +459,27 @@ class TestCollectionEnum:
         assert Collection.L3A_VIS_V3A.value == "l3a-vis-ch4-mfa-v3a"
         assert Collection.L3A_IME_V3C.value == "l3a-ime-ch4-mfa-v3c"
         assert Collection.L2B_RGB_V3A.value == "l2b-rgb-v3a"
+
+
+@pytest.mark.parametrize("value", [float("nan"), "NaN", "inf", float("-inf")])
+def test_non_finite_numbers_become_none(value):
+    """NaN / inf (e.g. empty CSV cells) must not leak into JSON / DB writes."""
+    p = CMRawPlume(plume_id="tan20260101t000000c00s4001-A", emission_auto=value)
+    assert p.emission_auto is None
+
+
+def test_collection_spec_reads_con_tif_for_co2():
+    pid = "tan20260823t091609c53s4001-A"
+    p = CMRawPlume(
+        plume_id=pid, gas="CO2", emission_cmf_type="mfal", emission_version="v3e",
+        plume_tif=(
+            "https://catalog.carbonmapper.org/l3a-vis-co2-mfa-v3e/2026/08/23/"
+            f"{pid}/{pid}_l3a-vis-co2-mfa-v3e_plume.tif"
+        ),
+        con_tif=(
+            "https://catalog.carbonmapper.org/l3a-ime-co2-mfal-v3e/2026/08/23/"
+            f"{pid}/{pid}_l3a-ime-co2-mfal-v3e_ime-cmf-concentrations.tif"
+        ),
+    )
+    spec = p.collection_spec
+    assert (spec.gas, spec.cmf_type, spec.ime_cmf_type) == ("co2", "mfa", "mfal")

@@ -113,6 +113,9 @@ show_error_codes = "True"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "cm_live: opt-in live Carbon Mapper API checks (set CARBONMAPPER_LIVE=1; rate-limited, keep the call budget small)",
+]
 
 [tool.ruff]
 target-version = "py39"

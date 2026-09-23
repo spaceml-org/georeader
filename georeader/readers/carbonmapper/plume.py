@@ -15,10 +15,11 @@ Handles payloads from **both** Carbon Mapper API formats:
 All fields except ``plume_id`` are optional so that the model can be
 constructed from either format without validation errors.
 
-**CH4 only for this PR.** The catalog model surface is gas-agnostic
-(``CMRawPlume.gas`` returns whatever the API gave us), but query
-helpers in :mod:`api_queries` are typed ``Literal["CH4"]`` to keep
-the supported-product surface explicit. CO2 lands in a follow-up.
+**CH4 and CO2.** The model is gas-agnostic (``CMRawPlume.gas``
+returns whatever the API gave us) and the query helpers in
+:mod:`api_queries` accept either gas (or ``None`` for both). CO2 splits
+its cmf_type across collection families — see
+:class:`~georeader.readers.carbonmapper.products.CMCollectionSpec`.
 
 **Version timeline.** Carbon Mapper bumps ``emission_version`` per
 processing-software release. ``v3a`` is the canonical STAC-exposed
@@ -210,9 +211,9 @@ class Collection(StrEnum):
     L2B_V3A = "l2b-ch4-mfa-v3a"
     #: L2B RGB sibling — true-colour rasters aligned to L2B_V3A scenes
     L2B_RGB_V3A = "l2b-rgb-v3a"
-    #: L3A vis v3c — REST-only, not in /stac/collections
+    #: L3A vis v3c — REST-only until 2026; STAC registers it since
     L3A_VIS_V3C = "l3a-vis-ch4-mfa-v3c"
-    #: L3A IME v3c — REST-only, not in /stac/collections
+    #: L3A IME v3c — REST-only until 2026; STAC registers it since
     L3A_IME_V3C = "l3a-ime-ch4-mfa-v3c"
 
     @property
@@ -235,13 +236,16 @@ class Collection(StrEnum):
 
 
 def _to_float(v: Any) -> float | None:
-    """Coerce *v* to float, returning ``None`` for missing/unconvertible values."""
+    """Coerce *v* to float, returning ``None`` for missing, unconvertible
+    or non-finite values (``NaN`` / ``inf`` — e.g. empty CSV cells —
+    would otherwise leak into JSON and DB writes)."""
     if v is None or v == "":
         return None
     try:
-        return float(v)
+        f = float(v)
     except (TypeError, ValueError):
         return None
+    return f if math.isfinite(f) else None
 
 
 def _parse_iso_datetime(val: str | None) -> datetime | None:
@@ -853,6 +857,36 @@ class CMRawPlume(BaseModel):
         ``emission_version`` (older CSV exports).
         """
         return self.emission_version
+
+    @property
+    def collection_spec(self) -> "CMCollectionSpec | None":
+        """This plume's resolved collection spec, or ``None``.
+
+        Resolves the ``(gas, cmf_type, version)`` triple naming the
+        collections this plume's assets live in — from the
+        :attr:`plume_tif` URL when present, else from the
+        ``gas`` / ``emission_cmf_type`` / ``emission_version`` fields.
+        Composes every product-family collection id without version
+        guessing (see
+        :class:`~georeader.readers.carbonmapper.products.CMCollectionSpec`).
+
+        Returns ``None`` when neither source is available (e.g. sparse
+        CSV exports without asset URLs).
+        """
+        from georeader.readers.carbonmapper.products import CMCollectionSpec
+
+        record = {
+            "plume_id": self.plume_id,
+            "plume_tif": self.plume_tif,
+            "con_tif": self.con_tif,
+            "gas": self.gas,
+            "cmf_type": self.emission_cmf_type,
+            "emission_version": self.emission_version,
+        }
+        try:
+            return CMCollectionSpec.from_plume_record(record)
+        except ValueError:
+            return None
 
     # ------------------------------------------------------------------ #
     # Serialisation                                                        #
