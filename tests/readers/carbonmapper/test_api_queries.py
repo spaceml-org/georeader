@@ -702,6 +702,21 @@ class TestSourceDetailDrift:
         "observation_dates": ["2019-10-06", "2020-01-01", "2026-03-11"],
     }
 
+    def test_get_source_for_plume_flattens_nested_shape(self, monkeypatch):
+        """`/catalog/source/plume/name/{id}` returns the same nested
+        shape; unflattened, its stats read as zero (plume_count=0,
+        persistence=0.0, emission None)."""
+        monkeypatch.setattr(
+            aq._dl, "get_source_for_plume_name",
+            lambda plume_id, token=None: self.NESTED,
+        )
+        src = aq.get_source_for_plume("tok", "tan20260311t190317c10s4001-D")
+        assert src.source_name == "CH4_1B2_250m_-104.11776_32.02621"
+        assert src.plume_count == 2
+        assert src.persistence == 0.75
+        assert src.emission_auto == 244.56
+        assert (src.point.x, src.point.y) == (-104.11776, 32.02621)
+
     def test_get_source_flattens_nested_shape(self, monkeypatch):
         monkeypatch.setattr(
             aq._dl, "get_source_by_name", lambda name, token=None: dict(self.NESTED),

@@ -339,6 +339,33 @@ def _scene_id_from_plume(plume_id: str) -> str:
     return plume_id.rsplit("-", 1)[0]
 
 
+def _flatten_source_detail(
+    raw: Mapping[str, Any], fallback_name: str | None,
+) -> Mapping[str, Any]:
+    """Flatten a source *detail* payload to a GeoJSON-feature shape.
+
+    ``/catalog/source/{name}`` and ``/catalog/source/plume/name/{id}``
+    both return the nested detail shape (since 2026-07): aggregate stats
+    under ``source``, the full plume records under ``plumes``, the
+    centroid under ``point``, plus detection/observation date lists.
+    :meth:`CMSource.from_geojson_feature` expects flat properties, so
+    unflattened stats would read as zero. Other shapes pass through.
+    """
+    if "source" not in raw or "plumes" not in raw:
+        return raw
+    stats = dict(raw.get("source") or {})
+    plumes = raw.get("plumes") or []
+    props = {
+        "source_name": raw.get("source_name", fallback_name),
+        **stats,
+        "plume_count": len(plumes),
+        "plume_ids": [p.get("plume_id") for p in plumes],
+        "detection_date_count": len(raw.get("detection_dates") or []),
+        "observation_date_count": len(raw.get("observation_dates") or []),
+    }
+    return {"properties": props, "geometry": raw.get("point")}
+
+
 def _spec_for_plume(token: str, plume_id: str) -> CMCollectionSpec | None:
     """Fetch the plume record and resolve its collection spec.
 
@@ -514,23 +541,7 @@ def get_source(token: str, source_name: str) -> CMSource:
         if _is_404(exc):
             raise CMSourceNotFound(cleaned) from exc
         raise
-    # 2026-07 API drift: /catalog/source/{name} now returns a nested
-    # detail shape — aggregate stats under `source`, the full plume
-    # records under `plumes`, centroid under `point`, plus
-    # detection/observation date lists. Flatten to the geojson-feature
-    # shape CMSource.from_geojson_feature expects.
-    if "source" in raw and "plumes" in raw:
-        stats = dict(raw.get("source") or {})
-        plumes = raw.get("plumes") or []
-        props = {
-            "source_name": raw.get("source_name", cleaned),
-            **stats,
-            "plume_count": len(plumes),
-            "plume_ids": [p.get("plume_id") for p in plumes],
-            "detection_date_count": len(raw.get("detection_dates") or []),
-            "observation_date_count": len(raw.get("observation_dates") or []),
-        }
-        raw = {"properties": props, "geometry": raw.get("point")}
+    raw = _flatten_source_detail(raw, cleaned)
     # The single-source endpoint can return either a Feature or properties
     # directly; coerce to a Feature shape so CMSource.from_geojson_feature
     # handles both.
@@ -1066,6 +1077,7 @@ def get_source_for_plume(
         raise
     if not raw:
         return None
+    raw = _flatten_source_detail(raw, None)
     if "geometry" not in raw and "properties" not in raw:
         feature = {
             "properties": dict(raw),
