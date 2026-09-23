@@ -60,7 +60,17 @@ Key Classes and Functions
 -------------------------
 - EMITImage: Main class for reading and processing EMIT data
 - download_product: Download EMIT products from NASA Earthdata
-- get_radiance_link, get_obs_link: Generate download URLs
+- get_radiance_link, get_obs_link, get_l2amask_link, get_ch4enhancement_link: Generate download URLs
+- parse_product_name: Parse EMIT product ids of either naming scheme
+
+Product Versions
+----------------
+NASA LP DAAC closed the v001 collections on 2026-08-31 and now publishes v002 (L2A mask: v003).
+v002 names drop the orbit/scene suffix and the L2A mask moved to its own collection with a
+different band layout. The link builders and mask methods handle both::
+
+    EMIT_L1B_RAD_001_20220827T060753_2223904_013  ->  mask in EMITL2ARFL.001, CH4ENH in EMITL2BCH4ENH.002
+    EMIT_L1B_RAD_002_20260921T044051              ->  mask in EMITL2AMASK.003, no CH4ENH
 
 Requirements
 ------------
@@ -97,12 +107,14 @@ References
 - NASA EMIT Mission: https://earth.jpl.nasa.gov/emit/
 - EMIT Data Resources: https://github.com/nasa/EMIT-Data-Resources
 - EMIT Utils: https://github.com/emit-sds/emit-utils/
-- LP DAAC Data Access: https://lpdaac.usgs.gov/products/emitl1bradv001/
+- LP DAAC Data Access: https://lpdaac.usgs.gov/products/emitl1bradv002/
 
 """
 import os
+import re
 import json
-from typing import Tuple, Optional, Any, Union, Dict
+from dataclasses import dataclass, replace
+from typing import Tuple, Optional, Any, Union, Dict, List, Sequence
 from georeader.readers.download_utils import download_product as download_product_base
 import rasterio
 import rasterio.windows
@@ -167,39 +179,145 @@ def get_headers() -> Optional[Dict[str, str]]:
     return headers
 
 
-def product_name_from_params(scene_fid:str, orbit:str, daac_scene_number:str)-> str:
+DAAC_URL = "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected"
+
+# EMIT product ids exist in two forms:
+#   v001: EMIT_L1B_RAD_001_20220827T060753_2223904_013  (acquisition, orbit, scene)
+#   v002: EMIT_L1B_RAD_002_20260921T044051              (NASA dropped the orbit/scene suffix)
+# The optional "V" tolerates ids such as EMIT_L2B_CH4ENH_V001_... seen in some catalogues.
+EMIT_PRODUCT_RE = re.compile(
+    r"^EMIT_(?P<level>L[0-9][A-Z]?)_(?P<product>[A-Z0-9]+)_V?(?P<version>\d{3})_"
+    r"(?P<dt>\d{8}T\d{6})(?:_(?P<orbit>\d{7})_(?P<scene>\d{3}))?$"
+)
+
+# Companion collection versions per L1B RAD version (OBS ships in the RAD granule).
+# - v001: the L2A mask file ships inside the L2A RFL v001 granule (MASK=None).
+#   CH4ENH v001 was emptied by NASA in 2024-11; CH4ENH v002 covers every v001 scene.
+# - v002: the mask is its own collection (L2A MASK v003) and there is no CH4ENH yet.
+L1B_COMPANIONS: Dict[str, Dict[str, Optional[str]]] = {
+    "001": {"RFL": "001", "MASK": None, "CH4ENH": "002"},
+    "002": {"RFL": "002", "MASK": "003", "CH4ENH": None},
+}
+
+# L1B RAD versions whose granule names carry the _<orbit>_<scene> suffix.
+L1B_VERSIONS_WITH_ORBIT_SCENE = ("001",)
+
+
+@dataclass(frozen=True)
+class EMITProductID:
     """
-    Return the product name from the scene_fid, daac_scene_number and orbit
+    Parsed EMIT product id. Works for both naming schemes and any level/product.
+
+    Attributes:
+        level (str): processing level, e.g. 'L1B', 'L2A', 'L2B'.
+        product (str): product short name, e.g. 'RAD', 'OBS', 'RFL', 'MASK', 'CH4ENH'.
+        version (str): three-digit collection version, e.g. '001', '002'.
+        dt (str): acquisition start 'YYYYmmddTHHMMSS'. It is the only field shared by
+            every product and version of the same scene.
+        orbit (Optional[str]): orbit number, e.g. '2223904'. None in v002+ names.
+        scene (Optional[str]): DAAC scene number, e.g. '013'. None in v002+ names.
+
+    Example:
+        >>> pid = parse_product_name('EMIT_L1B_RAD_002_20260921T044051.nc')
+        >>> pid.with_product('L2A', 'MASK', '003').name
+        'EMIT_L2A_MASK_003_20260921T044051'
+    """
+    level: str
+    product: str
+    version: str
+    dt: str
+    orbit: Optional[str] = None
+    scene: Optional[str] = None
+
+    @property
+    def acquisition(self) -> datetime:
+        """ Acquisition start as a timezone-aware UTC datetime. """
+        return datetime.strptime(self.dt, "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
+
+    @property
+    def name(self) -> str:
+        """ Product id without extension, e.g. 'EMIT_L1B_RAD_001_20220827T060753_2223904_013'. """
+        suffix = f"_{self.orbit}_{self.scene}" if self.orbit is not None else ""
+        return f"EMIT_{self.level}_{self.product}_{self.version}_{self.dt}{suffix}"
+
+    def with_product(self, level:str, product:str, version:Optional[str]=None) -> 'EMITProductID':
+        """ Id of another product of the same acquisition (keeps orbit and scene). """
+        return replace(self, level=level, product=product, version=version or self.version)
+
+
+def parse_product_name(name:str) -> EMITProductID:
+    """
+    Parse an EMIT product id, filename or path of either naming scheme.
+
+    Args:
+        name (str): product id, filename or path. e.g. 'EMIT_L1B_RAD_001_20220827T060753_2223904_013',
+            '/data/EMIT_L1B_RAD_002_20260921T044051.nc' or 'EMIT_L2A_MASK_003_20260921T044051.nc'.
+
+    Returns:
+        EMITProductID: parsed id.
+
+    Raises:
+        ValueError: if the name is not an EMIT product id.
+    """
+    stem = os.path.basename(str(name)).split(".")[0]
+    match = EMIT_PRODUCT_RE.match(stem)
+    if match is None:
+        raise ValueError(f"Not an EMIT product name: {name!r}")
+    return EMITProductID(**match.groupdict())
+
+
+def _l1b_radiance_id(product_path:str) -> EMITProductID:
+    return parse_product_name(product_path).with_product("L1B", "RAD")
+
+
+def _companion_version(rad:EMITProductID, product:str) -> Optional[str]:
+    if rad.version not in L1B_COMPANIONS:
+        raise ValueError(f"Unknown EMIT L1B version {rad.version!r} in {rad.name}. "
+                         f"Known versions: {sorted(L1B_COMPANIONS)}")
+    return L1B_COMPANIONS[rad.version][product]
+
+
+def product_name_from_params(scene_fid:str, orbit:Optional[str]=None,
+                             daac_scene_number:Optional[str]=None,
+                             version:str="001")-> str:
+    """
+    Return the L1B radiance product name from the scene_fid, orbit and daac_scene_number
 
     Args:
         scene_fid (str): scene_fid of the product. e.g. 'emit20220810t064957'
-        orbit (str): orbit of the product. e.g. '2222205'
-        daac_scene_number (str): daac_scene_number of the product. e.g. '033'
+        orbit (Optional[str]): orbit of the product. e.g. '2222205'. Required for v001, ignored for
+            versions whose names do not carry it (v002+).
+        daac_scene_number (Optional[str]): daac_scene_number of the product. e.g. '033'. Same rule as orbit.
+        version (str): L1B RAD collection version. Defaults to '001'.
 
     Returns:
-        str: product name. e.g. 'EMIT_L1B_RAD_001_20220810T064957_2222205_033'
+        str: product name. e.g. 'EMIT_L1B_RAD_001_20220810T064957_2222205_033' or
+            'EMIT_L1B_RAD_002_20220810T064957'
     """
     scenedate = scene_fid[4:].replace("t", "T")
-    return f"EMIT_L1B_RAD_001_{scenedate}_{orbit}_{daac_scene_number}"
+    if version not in L1B_VERSIONS_WITH_ORBIT_SCENE:
+        return EMITProductID("L1B", "RAD", version, scenedate).name
+    if orbit is None or daac_scene_number is None:
+        raise ValueError(f"EMIT L1B v{version} names need orbit and daac_scene_number")
+    return EMITProductID("L1B", "RAD", version, scenedate, orbit, daac_scene_number).name
 
 
-def split_product_name(product_name:str) -> Tuple[str, str, str, datetime]:
+def split_product_name(product_name:str) -> Tuple[str, Optional[str], Optional[str], datetime]:
     """
     Split the product name into its components
 
     Args:
         product_name (str): product name. e.g. 'EMIT_L1B_RAD_001_20220810T064957_2222205_033'
+            or 'EMIT_L1B_RAD_002_20220810T064957'
 
     Returns:
-        Tuple[str, str, str, str, str]: scene_fid, orbit, daac_scene_number, datetime
-            e.g. ('emit20220810t064957', '2222205', '033', datetime('2022-08-10T06:49:57'))
+        Tuple[str, Optional[str], Optional[str], datetime]: scene_fid, orbit, daac_scene_number, datetime
+            e.g. ('emit20220810t064957', '2222205', '033', datetime('2022-08-10T06:49:57')).
+            orbit and daac_scene_number are None for v002+ names.
     """
-    scene_fid = f"emit{product_name.split('_')[4]}".replace("T", "t")
-    date, orbit, daac_scene_number= product_name.split("_")[4:7]
-
-    dt = datetime.strptime(date, "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
-
-    return scene_fid, orbit, daac_scene_number, dt
+    pid = parse_product_name(product_name)
+    scene_fid = f"emit{pid.dt}".replace("T", "t")
+    return scene_fid, pid.orbit, pid.scene, pid.acquisition
 
 
 def download_product(link_down:str, filename:Optional[str]=None,
@@ -242,28 +360,21 @@ def get_radiance_link(product_path:str) -> str:
 
     Args:
         product_path: path to the product or filename of the product or product name with or without extension.
-            e.g. 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
+            Any EMIT product of the acquisition works. e.g. 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
 
     Example:
-        >>> product_path = 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
-        >>> link = get_radiance_link(product_path)
+        >>> get_radiance_link('EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc')
         'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/EMIT_L1B_RAD_001_20220827T060753_2223904_013/EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
+        >>> get_radiance_link('EMIT_L1B_RAD_002_20260921T044051.nc')
+        'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.002/EMIT_L1B_RAD_002_20260921T044051/EMIT_L1B_RAD_002_20260921T044051.nc'
     """
-    "EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc"
-    namefile = os.path.splitext(os.path.basename(product_path))[0]
-    product_id = os.path.splitext(namefile)[0]
-    content_id = product_id.split("_")
-    content_id[1] = "L1B"
-    content_id[2] = "RAD"
-    content_id[3] = content_id[3].replace("V", "")
-    product_id = "_".join(content_id)
-    link = f"https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/{product_id}/{product_id}.nc"
-    return link
+    rad = _l1b_radiance_id(product_path)
+    return f"{DAAC_URL}/EMITL1BRAD.{rad.version}/{rad.name}/{rad.name}.nc"
 
 
 def get_obs_link(product_path:str) -> str:
     """
-    Get the link to download a product from the EMIT website.
+    Get the link to download the observation (OBS) file, which ships in the L1B RAD granule.
     See: https://git.earthdata.nasa.gov/projects/LPDUR/repos/daac_data_download_python/browse
 
     Args:
@@ -271,82 +382,136 @@ def get_obs_link(product_path:str) -> str:
             e.g. 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
 
     Example:
-        >>> product_path = 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
-        >>> link = get_radiance_link(product_path)
+        >>> get_obs_link('EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc')
         'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/EMIT_L1B_RAD_001_20220827T060753_2223904_013/EMIT_L1B_OBS_001_20220827T060753_2223904_013.nc'
     """
-    namefile = os.path.splitext(os.path.basename(product_path))[0]
-
-    product_id = os.path.splitext(namefile)[0]
-    content_id = product_id.split("_")
-    content_id[1] = "L1B"
-    content_id[2] = "RAD"
-    content_id[3] = content_id[3].replace("V", "")
-    product_id = "_".join(content_id)
-
-    content_id[2] = "OBS"
-    namefile = "_".join(content_id)
-
-    link = f"https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL1BRAD.001/{product_id}/{namefile}.nc"
-    return link
+    rad = _l1b_radiance_id(product_path)
+    obs = rad.with_product("L1B", "OBS")
+    return f"{DAAC_URL}/EMITL1BRAD.{rad.version}/{rad.name}/{obs.name}.nc"
 
 
-def get_ch4enhancement_link(tile:str) -> str:
+def get_ch4enhancement_link(tile:str) -> Optional[str]:
     """
-    Get the link to download a product from the EMIT website.
+    Get the link to download the L2B CH4 enhancement of the acquisition.
     See: https://git.earthdata.nasa.gov/projects/LPDUR/repos/daac_data_download_python/browse
+
+    v001 L1B scenes point at CH4ENH v002 (NASA emptied CH4ENH v001 in 2024-11). There is no CH4ENH
+    product for v002 L1B scenes, so this returns None for them.
 
     Args:
         tile (str): path to the product or filename of the product with or without extension.
             e.g. 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
 
-    Example:
-        >>> product_path = 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
-        >>> link = get_radiance_link(product_path)
-        'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL2BCH4ENH.001/EMIT_L2B_CH4ENH_001_20220810T064957_2222205_033/EMIT_L2B_CH4ENH_001_20220810T064957_2222205_033.tif'
-    """
-    namefile = os.path.splitext(os.path.basename(tile))[0]
+    Returns:
+        Optional[str]: link, or None if no CH4ENH collection exists for this L1B version.
 
-    product_id = os.path.splitext(namefile)[0]
-    content_id = product_id.split("_")
-    content_id[1] = "L2B"
-    content_id[2] = "CH4ENH"
-    content_id[3] = content_id[3].replace("V", "")
-    product_id = "_".join(content_id)
-    link = f"https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL2BCH4ENH.001/{product_id}/{product_id}.tif"
-    return link
+    Example:
+        >>> get_ch4enhancement_link('EMIT_L1B_RAD_001_20220810T064957_2222205_033.nc')
+        'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL2BCH4ENH.002/EMIT_L2B_CH4ENH_002_20220810T064957_2222205_033/EMIT_L2B_CH4ENH_002_20220810T064957_2222205_033.tif'
+    """
+    rad = _l1b_radiance_id(tile)
+    version = _companion_version(rad, "CH4ENH")
+    if version is None:
+        return None
+    ch4 = rad.with_product("L2B", "CH4ENH", version)
+    return f"{DAAC_URL}/EMITL2BCH4ENH.{version}/{ch4.name}/{ch4.name}.tif"
 
 
 def get_l2amask_link(tile: str) -> str:
     """
-    Get the link to download a product from the EMIT website (https://search.earthdata.nasa.gov/search)
+    Get the link to download the L2A mask of the acquisition (https://search.earthdata.nasa.gov/search)
+
+    v001 L1B scenes: the mask file ships inside the L2A RFL v001 granule.
+    v002 L1B scenes: the mask is its own collection, L2A MASK v003.
 
     Args:
         tile (str): path to the product or filename of the L1B product with or without extension.
             e.g. 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
-        
+
     Returns:
         str: link to the L2A mask product
-    
-    Example:
-        >>> tile = 'EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc'
-        >>> link = get_l2amask_link(tile)
-        'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL2ARFL.001/EMIT_L2A_RFL_001_20220827T060753_2223904_013/EMIT_L2A_MASK_001_20220827T060753_2223904_013.nc'
-    """
-    namefile = os.path.splitext(os.path.basename(tile))[0]
-    namefile = namefile + ".nc"
 
-    product_id = os.path.splitext(namefile)[0]
-    content_id = product_id.split("_")
-    content_id[1] = "L2A"
-    content_id[2] = "RFL"
-    content_id[3] = content_id[3].replace("V", "")
-    product_id = "_".join(content_id)
-    
-    content_id[2] = "MASK"
-    namefilenew = "_".join(content_id) + ".nc"
-    link = f"https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL2ARFL.001/{product_id}/{namefilenew}"
-    return link
+    Example:
+        >>> get_l2amask_link('EMIT_L1B_RAD_001_20220827T060753_2223904_013.nc')
+        'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL2ARFL.001/EMIT_L2A_RFL_001_20220827T060753_2223904_013/EMIT_L2A_MASK_001_20220827T060753_2223904_013.nc'
+        >>> get_l2amask_link('EMIT_L1B_RAD_002_20260921T044051.nc')
+        'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/EMITL2AMASK.003/EMIT_L2A_MASK_003_20260921T044051/EMIT_L2A_MASK_003_20260921T044051.nc'
+    """
+    rad = _l1b_radiance_id(tile)
+    mask_version = _companion_version(rad, "MASK")
+    if mask_version is None:
+        rfl = rad.with_product("L2A", "RFL", _companion_version(rad, "RFL"))
+        mask = rfl.with_product("L2A", "MASK")
+        return f"{DAAC_URL}/EMITL2ARFL.{rfl.version}/{rfl.name}/{mask.name}.nc"
+    mask = rad.with_product("L2A", "MASK", mask_version)
+    return f"{DAAC_URL}/EMITL2AMASK.{mask_version}/{mask.name}/{mask.name}.nc"
+
+
+# L2A mask flags, matched by normalised label (lower case, single spaces). The band layout
+# differs between versions, so flags are never selected by position:
+#   v001: Cloud flag, Cirrus flag, Water flag, Spacecraft Flag, Dilated Cloud Flag, AOD550,
+#         H2O (g cm-2), Aggregate Flag
+#   v003: Cloud Flag, Cirrus Flag, Water Flag, Dilated Cloud Flag, SpecTf-Cloud Probability,
+#         SpecTf-Cloud Flag, SpecTf-Buffer Distance
+MASK_INVALID_FLAGS = ("cloud flag", "cirrus flag")
+MASK_INVALID_FLAGS_IF_PRESENT = ("spacecraft flag",)  # v001 only
+MASK_BUFFER_FLAGS = ("dilated cloud flag",)
+MASK_SPECTF_FLAGS = ("spectf-cloud flag",)  # v003 only
+
+
+def _normalise_mask_label(label:Any) -> str:
+    return " ".join(str(label).lower().split())
+
+
+def mask_band_index(mask_bands:Sequence[str], name:str, source:Optional[str]=None) -> int:
+    """
+    Index of the L2A mask band called ``name``, ignoring case and repeated whitespace.
+
+    Args:
+        mask_bands (Sequence[str]): band labels of the L2A mask file (``sensor_band_parameters/mask_bands``).
+        name (str): band label, e.g. 'Water flag' or 'Water Flag'.
+        source (Optional[str]): file name used in the error message.
+
+    Raises:
+        ValueError: if no band has that label.
+    """
+    labels = [_normalise_mask_label(b) for b in mask_bands]
+    wanted = _normalise_mask_label(name)
+    if wanted not in labels:
+        where = f" in {source}" if source else ""
+        raise ValueError(f"EMIT mask band {name!r} not found{where}. Bands: {list(mask_bands)}")
+    return labels.index(wanted)
+
+
+def mask_flag_indexes(mask_bands:Sequence[str], with_buffer:bool=True,
+                      include_spectf:bool=False, source:Optional[str]=None) -> List[int]:
+    """
+    Indexes of the L2A mask flags that mark a pixel as invalid, selected by label.
+
+    1. Always: Cloud flag and Cirrus flag, plus Spacecraft flag if the file has it (v001).
+    2. ``with_buffer``: Dilated Cloud Flag.
+    3. ``include_spectf``: SpecTf-Cloud Flag if the file has it (v003). The continuous
+       SpecTf-Cloud Probability band is never selected.
+
+    For a v001 file this returns [0, 1, 3] or [0, 1, 3, 4], the indexes georeader has always used.
+
+    Args:
+        mask_bands (Sequence[str]): band labels of the L2A mask file.
+        with_buffer (bool): add the dilated cloud flag. Defaults to True.
+        include_spectf (bool): add the SpecTf ML cloud flag when present. Defaults to False.
+        source (Optional[str]): file name used in the error message.
+
+    Raises:
+        ValueError: if a required flag is missing.
+    """
+    labels = [_normalise_mask_label(b) for b in mask_bands]
+    required = MASK_INVALID_FLAGS + (MASK_BUFFER_FLAGS if with_buffer else ())
+    optional = MASK_INVALID_FLAGS_IF_PRESENT + (MASK_SPECTF_FLAGS if include_spectf else ())
+    missing = [flag for flag in required if flag not in labels]
+    if missing:
+        where = f" in {source}" if source else ""
+        raise ValueError(f"EMIT mask flags {missing} not found{where}. Bands: {list(mask_bands)}")
+    return sorted(labels.index(flag) for flag in required + optional if flag in labels)
 
 
 class EMITImage:
@@ -749,7 +914,8 @@ class EMITImage:
 
         It caches the L2A mask file in the object. (self.nc_ds_l2amask)
 
-        See https://lpdaac.usgs.gov/products/emitl2arflv001/ for info about the L2A mask file.
+        See https://lpdaac.usgs.gov/products/emitl2arflv001/ (v001, mask inside the RFL granule) and
+        https://lpdaac.usgs.gov/products/emitl2amaskv003/ (v003) for info about the L2A mask file.
 
         Args:
             l2amaskfile (Optional[str], optional): Path to the L2A mask file. 
@@ -776,41 +942,52 @@ class EMITImage:
     
     @property
     def mask_bands(self) -> np.array:
-        """ Returns the mask bands -> ['Cloud flag', 'Cirrus flag', 'Water flag', 'Spacecraft Flag',
-       'Dilated Cloud Flag', 'AOD550', 'H2O (g cm-2)', 'Aggregate Flag'] """
+        """ Returns the mask band labels. The layout depends on the mask version:
+
+        - v001: ['Cloud flag', 'Cirrus flag', 'Water flag', 'Spacecraft Flag', 'Dilated Cloud Flag',
+          'AOD550', 'H2O (g cm-2)', 'Aggregate Flag']
+        - v003: ['Cloud Flag', 'Cirrus Flag', 'Water Flag', 'Dilated Cloud Flag',
+          'SpecTf-Cloud Probability', 'SpecTf-Cloud Flag', 'SpecTf-Buffer Distance']
+        """
         self.nc_ds_l2amask
         return self._mask_bands
     
-    def validmask(self, with_buffer:bool=True) -> GeoTensor:
+    def validmask(self, with_buffer:bool=True, include_spectf:bool=False) -> GeoTensor:
         """
         Return the validmask mask
 
-    
+        Args:
+            with_buffer (bool): also mask the dilated cloud flag. Defaults to True.
+            include_spectf (bool): also mask the SpecTf ML cloud flag (v003 masks only). Defaults to False.
+
         Returns:
             GeoTensor: bool mask. True means that the pixel is valid.
         """
 
-        validmask = ~self.invalid_mask_raw(with_buffer=with_buffer)
+        validmask = ~self.invalid_mask_raw(with_buffer=with_buffer, include_spectf=include_spectf)
 
         return self.georreference(validmask,
                                   fill_value_default=False)
     
-    def invalid_mask_raw(self, with_buffer:bool=True) -> NDArray:
+    def invalid_mask_raw(self, with_buffer:bool=True, include_spectf:bool=False) -> NDArray:
         """
         Returns the non georreferenced quality mask. True means that the pixel is not valid.
 
-        This mask is computed as the sum of the Cloud flag, Cirrus flag, Spacecraft flag and Dilated Cloud Flag.
+        This mask is computed as the sum of the Cloud flag, Cirrus flag, Spacecraft flag (v001 only)
+        and, with ``with_buffer``, the Dilated Cloud Flag. Flags are selected by label (see
+        ``mask_flag_indexes``) because the band layout changed between mask versions.
         True means that the pixel is not valid.
 
         From: https://github.com/nasa/EMIT-Data-Resources/blob/main/python/how-tos/How_to_use_EMIT_Quality_data.ipynb
         and https://github.com/nasa/EMIT-Data-Resources/blob/main/python/modules/emit_tools.py#L277
 
-
+        Args:
+            with_buffer (bool): also mask the dilated cloud flag. Defaults to True.
+            include_spectf (bool): also mask the SpecTf ML cloud flag (v003 masks only). Defaults to False.
         """
-        band_index =  [0,1,3]
-        if with_buffer:
-            band_index.append(4)
-        
+        band_index = mask_flag_indexes(self.mask_bands, with_buffer=with_buffer,
+                                       include_spectf=include_spectf, source=self.l2amaskfile)
+
         slice_y, slice_x = self.window_raw.toslices()
         mask_arr = self.nc_ds_l2amask['mask'].values[slice_y, slice_x, band_index]
         mask_arr = np.sum(mask_arr, axis=-1)
@@ -833,8 +1010,8 @@ class EMITImage:
     def mask(self, mask_name:str="cloud_mask") -> GeoTensor:
         """
         Return the mask layer with the given name.
-        Mask shall be one of self.mask_bands -> ['Cloud flag', 'Cirrus flag', 'Water flag', 'Spacecraft Flag',
-       'Dilated Cloud Flag', 'AOD550', 'H2O (g cm-2)', 'Aggregate Flag']
+        Mask shall be one of self.mask_bands; the lookup ignores case and repeated whitespace,
+        so 'Water flag' works on both v001 ('Water flag') and v003 ('Water Flag') masks.
 
         Args:
             mask_name (str, optional): Name of the mask. Defaults to "cloud_mask".
@@ -842,7 +1019,7 @@ class EMITImage:
         Returns:
             GeoTensor: mask
         """
-        band_index = self.mask_bands.tolist().index(mask_name)
+        band_index = mask_band_index(self.mask_bands, mask_name, source=self.l2amaskfile)
         slice_y, slice_x = self.window_raw.toslices()
         mask_arr = self.nc_ds_l2amask['mask'].values[slice_y, slice_x, band_index]
         return self.georreference(mask_arr,
@@ -1122,13 +1299,17 @@ class EMITImage:
 
 def valid_mask(filename:str, with_buffer:bool=False, 
                dst_crs:Optional[Any]="UTM", 
-               resolution_dst_crs:Optional[Union[float, Tuple[float, float]]]=60) -> Tuple[GeoTensor, float]:
+               resolution_dst_crs:Optional[Union[float, Tuple[float, float]]]=60,
+               include_spectf:bool=False) -> Tuple[GeoTensor, float]:
     """
     Loads the valid mask from the EMIT L2AMASK file.
 
     Args:
         filename (str): path to the L2AMASK file. e.g. EMIT_L2A_MASK_001_20220827T060753_2223904_013.nc
+            or EMIT_L2A_MASK_003_20260921T044051.nc
         with_buffer (bool, optional): If True, the buffer band is used to compute the valid mask. Defaults to False.
+        include_spectf (bool, optional): If True, the SpecTf ML cloud flag (v003 masks only) is also used.
+            Defaults to False.
 
     Returns:
         GeoTensor: valid mask
@@ -1169,19 +1350,19 @@ def valid_mask(filename:str, with_buffer:bool=False,
                                resolution_dst_crs=resolution_dst_crs)
     
     valid_glt = np.all(glt.values != glt.fill_value_default, axis=0)
-    xmin = np.min(glt.values[0, valid_glt])
-    ymin = np.min(glt.values[1, valid_glt])
+    xmin, ymin, xmax, ymax = _bounds_indexes_raw(glt.values, valid_glt) # values are 1-based!
 
     glt_relative = glt.copy()
     glt_relative.values[0, valid_glt] -= xmin
     glt_relative.values[1, valid_glt] -= ymin
-    # mask_bands = nc_ds["sensor_band_parameters"]["mask_bands"][:]
+    sensor_params = safe_open_netcdf(filename, cache=False, load=False, group='sensor_band_parameters')
+    mask_bands = sensor_params["mask_bands"].values
+    sensor_params.close()
+    band_index = mask_flag_indexes(mask_bands, with_buffer=with_buffer,
+                                   include_spectf=include_spectf, source=filename)
 
-    band_index =  [0,1,3]
-    if with_buffer:
-        band_index.append(4)
-    
-    mask_arr = nc_ds['mask'][:, :, band_index]
+    # Read the raw window the GLT references, so glt_relative indexes it from 0.
+    mask_arr = nc_ds['mask'].values[ymin-1:ymax, xmin-1:xmax][..., band_index]
     invalidmask_raw = np.sum(mask_arr, axis=-1)
     invalidmask_raw = (invalidmask_raw >= 1)
 
