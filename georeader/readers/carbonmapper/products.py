@@ -32,9 +32,24 @@ from a hardcoded version list. A live-API audit (2026-07) verified:
   record's own version and **probe** it, with older versions as backup —
   never assume the pairing in either direction;
 - the full asset sets per family (tables below), including the PNG
-  quicklooks the reader previously ignored;
-- ``/stac/collections`` stops at ``-v3a``: current-era collections
-  exist only in the asset-proxy namespace.
+  quicklooks the reader previously ignored.
+
+A 2026-09 re-check added two facts:
+
+- **CO2 splits its cmf_type across families.** The vis and L2B
+  collections are ``co2-mfa`` (``l3a-vis-co2-mfa-v3e``,
+  ``l2b-co2-mfa-v3e``) while the IME collection is ``co2-mfal``
+  (``l3a-ime-co2-mfal-v3e`` — the record's ``con_tif`` and its
+  ``cmf_type`` / ``emission_cmf_type`` fields name it). Earlier eras
+  published CO2 L2B as ``l2b-co2-mfal-v3{b,c,d}``, so CO2 L2B lookups
+  probe both cmf types. :class:`CMCollectionSpec` carries the IME
+  cmf_type separately (``ime_cmf_type``) and resolves it from the
+  record rather than composing it.
+- ``/stac/collections`` now registers every version through ``-v3e``
+  and serves items for current scenes (``l2b-ch4-mfa-v3e`` and
+  ``l2b-co2-mfa-v3e`` items for August-2026 scenes). The asset-proxy
+  URL derivation below remains the primary path because it needs no
+  catalog round-trip.
 """
 
 from __future__ import annotations
@@ -46,7 +61,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping
 
-import requests
+from georeader.readers.carbonmapper.download import _request
 
 if TYPE_CHECKING:
     from shapely.geometry.base import BaseGeometry
@@ -116,6 +131,11 @@ class CMCollectionSpec:
     families consistently — the 2026-07 audit verified pairing is
     same-version across L3A vis / L3A ime / L2B / L2B-RGB.
 
+    ``cmf_type`` names the vis and L2B collections. ``ime_cmf_type``
+    names the IME collection when it differs — CO2 publishes vis/L2B
+    as ``mfa`` but IME as ``mfal``. ``None`` means "same as
+    ``cmf_type``" (every CH4 run).
+
     >>> spec = CMCollectionSpec(version="v3d")
     >>> spec.collection_id(CMProductFamily.L3A_VIS)
     'l3a-vis-ch4-mfa-v3d'
@@ -123,16 +143,33 @@ class CMCollectionSpec:
     'l2b-ch4-mfa-v3d'
     >>> spec.collection_id(CMProductFamily.L2B_RGB)
     'l2b-rgb-v3d'
+    >>> co2 = CMCollectionSpec("v3e", "co2", "mfa", ime_cmf_type="mfal")
+    >>> co2.collection_id(CMProductFamily.L3A_IME)
+    'l3a-ime-co2-mfal-v3e'
     """
 
     version: str
     gas: str = "ch4"
     cmf_type: str = "mfa"
+    ime_cmf_type: str | None = None
+
+    def __repr__(self) -> str:
+        extra = (
+            f", ime_cmf_type={self.ime_cmf_type!r}"
+            if self.ime_cmf_type is not None else ""
+        )
+        return (
+            f"CMCollectionSpec(version={self.version!r}, gas={self.gas!r}, "
+            f"cmf_type={self.cmf_type!r}{extra})"
+        )
 
     def collection_id(self, family: CMProductFamily) -> str:
         """Collection id for one product family under this spec."""
+        cmf_type = self.cmf_type
+        if family is CMProductFamily.L3A_IME and self.ime_cmf_type:
+            cmf_type = self.ime_cmf_type
         return _FAMILY_PATTERNS[family].format(
-            gas=self.gas, cmf_type=self.cmf_type, version=self.version,
+            gas=self.gas, cmf_type=cmf_type, version=self.version,
         )
 
     @classmethod
@@ -167,38 +204,49 @@ class CMCollectionSpec:
     def from_plume_record(cls, record: Mapping[str, Any]) -> "CMCollectionSpec":
         """Resolve the spec from a ``/catalog/plume/{id}`` record.
 
-        Preferred source: the collection segment embedded in the
-        record's own ``plume_tif`` URL (authoritative — it names the
-        run the assets were actually published under). Fallback: the
-        ``gas`` + ``cmf_type`` + ``emission_version`` fields, which the
-        audit verified compose the same id.
+        1. Parse the vis collection from the record's ``plume_tif`` URL
+           — authoritative for ``version`` / ``gas`` / ``cmf_type``.
+        2. Parse the IME collection from the record's ``con_tif`` URL —
+           authoritative for the IME cmf_type (CO2: ``mfal``).
+        3. Fill whatever is still missing from the ``gas`` /
+           ``cmf_type`` (or ``emission_cmf_type``) / ``emission_version``
+           fields. The record's cmf_type field names the **IME**
+           collection: for CO2 it reads ``mfal`` while the vis and L2B
+           collections are ``mfa``, so a fields-only spec sets
+           ``cmf_type`` from the field and leaves the vis id unverified.
 
         Raises:
-            ValueError: If neither source is present on the record.
+            ValueError: If none of the three sources yields a version,
+                gas and cmf_type.
         """
-        plume_tif = record.get("plume_tif")
-        if plume_tif:
-            parsed = _parse_asset_url(str(plume_tif))
-            if parsed is not None:
-                try:
-                    return cls.from_collection_id(parsed.collection_id)
-                except ValueError:
-                    # Legacy families (`l3a-ch4-mf-v1` — pre vis/ime
-                    # split) don't parse; fall through to the fields.
-                    pass
-        gas = record.get("gas")
-        cmf_type = record.get("cmf_type") or record.get("emission_cmf_type")
-        version = record.get("emission_version")
-        if gas and cmf_type and version:
-            return cls(
-                version=str(version),
-                gas=str(gas).lower(),
-                cmf_type=str(cmf_type),
+        vis = _spec_from_asset_url(record.get("plume_tif"), CMProductFamily.L3A_VIS)
+        ime = _spec_from_asset_url(record.get("con_tif"), CMProductFamily.L3A_IME)
+        field_gas = record.get("gas")
+        field_cmf = record.get("cmf_type") or record.get("emission_cmf_type")
+        field_version = record.get("emission_version")
+
+        version = (vis or ime).version if (vis or ime) else field_version
+        gas = (vis or ime).gas if (vis or ime) else field_gas
+        cmf_type = vis.cmf_type if vis else (
+            ime.cmf_type if ime else field_cmf
+        )
+        ime_cmf_type = ime.cmf_type if ime else (
+            field_cmf if vis and field_cmf else None
+        )
+        if not (version and gas and cmf_type):
+            raise ValueError(
+                f"Cannot resolve a CMCollectionSpec for plume "
+                f"{record.get('plume_id')!r}: no parseable 'plume_tif' / "
+                "'con_tif' URL and no gas/cmf_type/emission_version fields."
             )
-        raise ValueError(
-            f"Cannot resolve a CMCollectionSpec for plume "
-            f"{record.get('plume_id')!r}: no parseable 'plume_tif' URL "
-            "and no gas/cmf_type/emission_version fields."
+        cmf_type = str(cmf_type)
+        if ime_cmf_type is not None and str(ime_cmf_type) == cmf_type:
+            ime_cmf_type = None
+        return cls(
+            version=str(version),
+            gas=str(gas).lower(),
+            cmf_type=cmf_type,
+            ime_cmf_type=None if ime_cmf_type is None else str(ime_cmf_type),
         )
 
 
@@ -236,6 +284,25 @@ def _parse_asset_url(url: str) -> _ParsedAssetURL | None:
         item_id=m.group("item"),
         key=m.group("key"),
     )
+
+
+def _spec_from_asset_url(
+    url: Any, family: CMProductFamily
+) -> CMCollectionSpec | None:
+    """Spec of an asset URL whose collection belongs to ``family``.
+
+    ``None`` when the URL is missing, doesn't match the asset pattern,
+    or names a collection of another (or a legacy, unparseable) family.
+    """
+    if not url:
+        return None
+    parsed = _parse_asset_url(str(url))
+    if parsed is None:
+        return None
+    m = _COLLECTION_ID_RE.match(parsed.collection_id)
+    if m is None or m.group("family") != family.value:
+        return None
+    return CMCollectionSpec.from_collection_id(parsed.collection_id)
 
 
 def parse_item_date(item_id: str) -> tuple[str, str, str]:
@@ -362,11 +429,15 @@ class CMRasterProduct(CMProduct):
         token: str | None = None,
         overview_level: int | None = None,
         http_timeout: float = 30.0,
-    ) -> "RasterioReader":
-        del token, http_timeout  # raster auth flows via GDAL_HTTP_HEADERS
+    ) -> RasterioReader:
+        del http_timeout  # GDAL applies its own HTTP timeouts
         from georeader.rasterio_reader import RasterioReader
 
-        return RasterioReader(str(path_or_url), overview_level=overview_level)
+        return RasterioReader(
+            str(path_or_url),
+            overview_level=overview_level,
+            rio_env_options=rio_env_options_for(str(path_or_url), token),
+        )
 
 
 class CMVectorProduct(CMProduct):
@@ -404,7 +475,7 @@ class CMTextProduct(CMProduct):
         sp = str(path_or_url)
         if sp.startswith(("http://", "https://")):
             headers = {"Authorization": f"Bearer {token}"} if token else {}
-            r = requests.get(sp, headers=headers, timeout=http_timeout)
+            r = _request("GET", sp, headers=headers, timeout=http_timeout)
             r.raise_for_status()
             return r.text
         return Path(sp).read_text()
@@ -425,7 +496,7 @@ class CMQuicklookProduct(CMProduct):
         sp = str(path_or_url)
         if sp.startswith(("http://", "https://")):
             headers = {"Authorization": f"Bearer {token}"} if token else {}
-            r = requests.get(sp, headers=headers, timeout=http_timeout)
+            r = _request("GET", sp, headers=headers, timeout=http_timeout)
             r.raise_for_status()
             return r.content
         return Path(sp).read_bytes()
@@ -437,11 +508,30 @@ def _fetch_json_or_file(
     sp = str(path_or_url)
     if sp.startswith(("http://", "https://")):
         headers = {"Authorization": f"Bearer {token}"} if token else {}
-        r = requests.get(sp, headers=headers, timeout=http_timeout)
+        r = _request("GET", sp, headers=headers, timeout=http_timeout)
         r.raise_for_status()
         return r.json()
     with open(sp, "r") as fh:
         return json.load(fh)
+
+
+def rio_env_options_for(path: str, token: str | None) -> dict[str, Any] | None:
+    """GDAL env options that authenticate one remote raster read.
+
+    Returns ``None`` (use georeader's defaults) for local paths or when
+    no token is given. Otherwise returns the defaults plus a
+    ``GDAL_HTTP_HEADERS`` Bearer header, which ``RasterioReader``
+    applies only inside its own ``rasterio.Env`` — the token is never
+    exported process-wide, so it is not sent to unrelated hosts.
+    """
+    if not token or not str(path).startswith(("http://", "https://")):
+        return None
+    from georeader.rasterio_reader import RIO_ENV_OPTIONS_DEFAULT
+
+    return {
+        **RIO_ENV_OPTIONS_DEFAULT,
+        "GDAL_HTTP_HEADERS": f"Authorization: Bearer {token}",
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -456,7 +546,7 @@ PLUME_TIF = CMRasterProduct(
 )
 PLUME_CONCENTRATIONS = CMRasterProduct(
     "plume-concentrations.tif", CMProductFamily.L3A_VIS,
-    "CH4 column density crop (ppm·m), thumbnail-grade (~41×48 px)",
+    "Gas column density crop (CH4 or CO2, ppm·m), thumbnail-grade (~41×48 px)",
 )
 PLUME_OUTLINE = CMVectorProduct(
     "plume-outline.geojson", CMProductFamily.L3A_VIS,
@@ -482,7 +572,7 @@ PLUME_RGB_PNG = CMQuicklookProduct(
 # L3A ime — the emission-integral products, keyed by plume_id
 IME_CONCENTRATIONS = CMRasterProduct(
     "ime-cmf-concentrations.tif", CMProductFamily.L3A_IME,
-    "IME-clipped CH4 column density (~11×11 px) — the emission_auto "
+    "IME-clipped gas column density (~11×11 px) — the emission_auto "
     "integrand (the record's con_tif field points here)",
 )
 IME_MASK = CMRasterProduct(
@@ -505,11 +595,11 @@ IME_MASK_PNG = CMQuicklookProduct(
 # L2B — whole-scene retrieval products keyed by scene name
 CMF = CMRasterProduct(
     "cmf.tif", CMProductFamily.L2B,
-    "CH4 matched-filter retrieval, orthorectified (ppm·m)",
+    "Matched-filter gas retrieval (CH4 or CO2), orthorectified (ppm·m)",
 )
 CMF_UNORTHO = CMRasterProduct(
     "cmf-unortho.tif", CMProductFamily.L2B,
-    "CH4 retrieval in raw sensor frame (pre-orthorectification)",
+    "Gas retrieval in raw sensor frame (pre-orthorectification)",
 )
 UNCERTAINTY = CMRasterProduct(
     "uncertainty.tif", CMProductFamily.L2B,
@@ -521,7 +611,8 @@ UNCERTAINTY_UNORTHO = CMRasterProduct(
 )
 ARTIFACT_MASK = CMRasterProduct(
     "artifact-mask.tif", CMProductFamily.L2B,
-    "Geometric-anomaly flag layer (NOT a cloud mask)",
+    "Geometric-anomaly flag layer (NOT a cloud mask). Optional — absent "
+    "from many scenes, including every v3e scene checked in 2026-09",
 )
 UAS = CMTextProduct(
     "uas.txt", CMProductFamily.L2B,

@@ -264,3 +264,59 @@ class TestProductSelection:
     def test_selected_but_absent_returns_none(self):
         img = CMPlumeImage(plume_id=PID_V3D, urls={})
         assert img.ime_concentrations is None
+
+
+# ─── CO2 cmf_type split + scoped raster auth ─────────────────────────
+
+
+class TestIMECmfType:
+    def test_ime_family_uses_override(self):
+        spec = CMCollectionSpec("v3e", "co2", "mfa", ime_cmf_type="mfal")
+        assert spec.collection_id(P.CMProductFamily.L3A_VIS) == "l3a-vis-co2-mfa-v3e"
+        assert spec.collection_id(P.CMProductFamily.L3A_IME) == "l3a-ime-co2-mfal-v3e"
+        assert spec.collection_id(P.CMProductFamily.L2B) == "l2b-co2-mfa-v3e"
+
+    def test_fields_only_record_names_ime_collection(self):
+        """Without URLs, the record's cmf_type field (IME-named) is used."""
+        spec = CMCollectionSpec.from_plume_record(
+            {"gas": "CO2", "cmf_type": "mfal", "emission_version": "v3e"},
+        )
+        assert spec.collection_id(P.CMProductFamily.L3A_IME) == "l3a-ime-co2-mfal-v3e"
+
+    def test_same_cmf_type_collapses_override(self):
+        spec = CMCollectionSpec.from_plume_record({
+            "plume_tif": (
+                f"{CM_API_ASSET_BASE}/l3a-vis-ch4-mfa-v3d/2026/06/23/"
+                "tan20260623t124240c80s4001-A/"
+                "tan20260623t124240c80s4001-A_l3a-vis-ch4-mfa-v3d_plume.tif"
+            ),
+            "cmf_type": "mfa",
+        })
+        assert spec.ime_cmf_type is None
+
+
+class TestRasterAuthScoping:
+    def test_rio_env_options_for_remote_with_token(self):
+        env = P.rio_env_options_for("https://cm/x.tif", "tok")
+        assert env["GDAL_HTTP_HEADERS"] == "Authorization: Bearer tok"
+
+    @pytest.mark.parametrize("path, token", [
+        ("/local/x.tif", "tok"), ("https://cm/x.tif", None),
+    ])
+    def test_rio_env_options_for_defaults(self, path, token):
+        assert P.rio_env_options_for(path, token) is None
+
+    def test_raster_product_open_passes_token(self, monkeypatch):
+        """`token=` used to be discarded (`del token`), so bundle reads
+        only authenticated when the caller set a global GDAL env var."""
+        import georeader.rasterio_reader as rr
+
+        seen = {}
+
+        def fake_reader(path, **kw):
+            seen.update(kw)
+            return object()
+
+        monkeypatch.setattr(rr, "RasterioReader", fake_reader)
+        P.PLUME_TIF.open("https://cm/x_plume.tif", token="tok")
+        assert seen["rio_env_options"]["GDAL_HTTP_HEADERS"] == "Authorization: Bearer tok"

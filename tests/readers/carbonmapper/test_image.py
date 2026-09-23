@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 import rasterio
+import requests
 from rasterio.transform import from_bounds as t_from_bounds
 
 from georeader.rasterio_reader import RasterioReader
@@ -23,7 +24,6 @@ from georeader.readers.carbonmapper.plume import (
     CMRawPlume,
     Collection,
 )
-
 
 # ─── Fixtures ───────────────────────────────────────────────────────
 
@@ -58,6 +58,85 @@ def _catalog_response(plume_id: str, vis_coll: str) -> dict:
         "plume_id": plume_id,
         "plume_tif": _signed_cdn_url(vis_coll, plume_id),
     }
+
+
+def _status_response(status: int) -> MagicMock:
+    """Fake ``requests.Response`` with ``status``; ``raise_for_status``
+    raises ``HTTPError`` for 4xx/5xx like the real one."""
+    resp = MagicMock(spec=requests.Response)
+    resp.status_code = status
+    resp.headers = {}
+
+    def _raise():
+        if status >= 400:
+            raise requests.HTTPError(f"{status}", response=resp)
+
+    resp.raise_for_status.side_effect = _raise
+    return resp
+
+
+#: A v3e CO2 plume as the live catalog returned it (2026-09): vis and
+#: L2B collections are `co2-mfa`, the IME collection is `co2-mfal`, and
+#: the record's cmf_type fields say `mfal`.
+PID_CO2 = "tan20260823t091609c53s4001-A"
+
+
+def _co2_record(*, with_con_tif: bool = True) -> dict:
+    rec = {
+        "plume_id": PID_CO2,
+        "gas": "CO2",
+        "cmf_type": "mfal",
+        "emission_cmf_type": "mfal",
+        "emission_version": "v3e",
+        "plume_tif": _signed_cdn_url("l3a-vis-co2-mfa-v3e", PID_CO2),
+    }
+    if with_con_tif:
+        rec["con_tif"] = (
+            "https://catalog.carbonmapper.org/l3a-ime-co2-mfal-v3e/2026/08/23/"
+            f"{PID_CO2}/{PID_CO2}_l3a-ime-co2-mfal-v3e_ime-cmf-concentrations.tif"
+            "?Expires=1&Signature=x"
+        )
+    return rec
+
+
+class TestCO2Derivation:
+    """CO2 splits cmf_type across families — deriving the IME URLs from
+    the vis collection 404'd for every CO2 plume (verified live)."""
+
+    @pytest.mark.parametrize("with_con_tif", [True, False])
+    def test_ime_products_use_mfal_collection(self, with_con_tif):
+        from georeader.readers.carbonmapper.products import ALL_PLUME_PRODUCTS
+
+        urls = _derive_asset_urls(
+            _co2_record(with_con_tif=with_con_tif), ALL_PLUME_PRODUCTS,
+        )
+        for key, url in urls.items():
+            expected = (
+                "l3a-ime-co2-mfal-v3e" if key.startswith("ime-")
+                else "l3a-vis-co2-mfa-v3e"
+            )
+            assert f"/{expected}/" in url and f"_{expected}_" in url, (key, url)
+
+    def test_spec_carries_both_cmf_types(self):
+        from georeader.readers.carbonmapper.products import CMCollectionSpec
+
+        spec = CMCollectionSpec.from_plume_record(_co2_record())
+        assert spec == CMCollectionSpec("v3e", "co2", "mfa", ime_cmf_type="mfal")
+
+    def test_ch4_spec_has_no_ime_override(self):
+        from georeader.readers.carbonmapper.products import CMCollectionSpec
+
+        rec = _catalog_response(PID_V3C, "l3a-vis-ch4-mfa-v3c")
+        rec.update(gas="CH4", cmf_type="mfa", emission_version="v3c")
+        spec = CMCollectionSpec.from_plume_record(rec)
+        assert spec == CMCollectionSpec("v3c", "ch4", "mfa")
+        assert "ime_cmf_type" not in repr(spec)
+
+    def test_from_cmrawplume_uses_con_tif(self):
+        raw = CMRawPlume(**_co2_record())
+        img = CMPlumeImage.from_cmrawplume(raw, token="tok")
+        assert "l3a-ime-co2-mfal-v3e" in img.urls["ime-cmf-concentrations.tif"]
+        assert img.spec.ime_cmf_type == "mfal"
 
 
 # ─── _cdn_to_api ────────────────────────────────────────────────────
@@ -312,30 +391,36 @@ class TestFromCmRawPlume:
 
 class TestFromPlumeId:
     def test_one_round_trip(self):
-        with patch("requests.get") as mock_get:
-            mock_get.return_value.json.return_value = _catalog_response(
-                PID_V3A, "l3a-vis-ch4-mfa-v3a",
-            )
-            mock_get.return_value.raise_for_status = MagicMock()
+        with patch(
+            "georeader.readers.carbonmapper.download.get_plume_by_id",
+            return_value=_catalog_response(PID_V3A, "l3a-vis-ch4-mfa-v3a"),
+        ) as mock_get:
             img = CMPlumeImage.from_plume_id(PID_V3A, token="tok")
 
-        # One HTTP call to /catalog/plume/{id}
-        assert mock_get.call_count == 1
-        assert "/catalog/plume/" + PID_V3A in mock_get.call_args[0][0]
-        assert mock_get.call_args[1]["headers"] == {
-            "Authorization": "Bearer tok",
-        }
+        # One catalog call to /catalog/plume/{id}, authenticated.
+        mock_get.assert_called_once_with(PID_V3A, token="tok")
         assert img.plume_id == PID_V3A
         assert set(img.urls) == set(CM_PLUME_IMAGE_ASSETS)
 
     def test_v3c_handled_transparently(self):
-        with patch("requests.get") as mock_get:
-            mock_get.return_value.json.return_value = _catalog_response(
-                PID_V3C, "l3a-vis-ch4-mfa-v3c",
-            )
-            mock_get.return_value.raise_for_status = MagicMock()
+        with patch(
+            "georeader.readers.carbonmapper.download.get_plume_by_id",
+            return_value=_catalog_response(PID_V3C, "l3a-vis-ch4-mfa-v3c"),
+        ):
             img = CMPlumeImage.from_plume_id(PID_V3C, token="tok")
         assert "v3c" in img.urls["plume.tif"]
+
+    def test_uuid_input_uses_record_plume_id(self):
+        """The endpoint accepts a UUID; the bundle must still carry the
+        colloquial plume_id so `.scene_id` / `.tile` work."""
+        uuid = "3f2b8a1c-1234-4cde-9abc-0123456789ab"
+        with patch(
+            "georeader.readers.carbonmapper.download.get_plume_by_id",
+            return_value=_catalog_response(PID_V3C, "l3a-vis-ch4-mfa-v3c"),
+        ):
+            img = CMPlumeImage.from_plume_id(uuid, token="tok")
+        assert img.plume_id == PID_V3C
+        assert img.scene_id == PID_V3C.rsplit("-", 1)[0]
 
 
 class TestFromStacItem:
@@ -360,6 +445,18 @@ class TestFromStacItem:
         assert "plume-concentrations.tif" in img.urls
         assert "plume-outline.geojson" in img.urls
         assert "ime-cmf-concentrations.tif" not in img.urls
+
+    def test_accepts_extensionless_asset_keys(self):
+        item = {
+            "id": PID_V3A,
+            "assets": {
+                "plume": {"href": "https://x/plume.tif"},
+                "plume-outline": {"href": "https://x/plume-outline.geojson"},
+            },
+        }
+        img = CMPlumeImage.from_stac_item(item)
+        assert img.urls["plume.tif"] == "https://x/plume.tif"
+        assert img.urls["plume-outline.geojson"] == "https://x/plume-outline.geojson"
 
     def test_with_ime_sibling(self):
         vis = self._stac_item(PID_V3A)
@@ -483,11 +580,11 @@ class TestImeOutline:
             plume_id=PID_V3A,
             urls={
                 "plume.tif": str(plume_path),
-                "ime-cmf-outline.geojson": "https://bogus.invalid/x.geojson",
+                "ime-cmf-outline.geojson": "https://cm.invalid/x.geojson",
             },
-            http_timeout=0.001,
         )
-        assert img.ime_outline is None
+        with patch("requests.get", return_value=_status_response(404)):
+            assert img.ime_outline is None
 
 
 # ─── Outline canonical / vectorize fallback ────────────────────────
@@ -538,7 +635,7 @@ class TestOutlineCanonical:
     def test_outline_logs_warning_on_geojson_fetch_error(
         self, tmp_path, caplog,
     ):
-        """Bad URL → warning logged + falls back to alpha."""
+        """Outline 404 → warning logged + falls back to alpha."""
         import logging
         plume_path = tmp_path / "plume.tif"
         _write_rgba_geotiff(plume_path)
@@ -546,17 +643,41 @@ class TestOutlineCanonical:
             plume_id=PID_V3A,
             urls={
                 "plume.tif": str(plume_path),
-                "plume-outline.geojson": "https://bogus.invalid/x.geojson",
+                "plume-outline.geojson": "https://cm.invalid/x.geojson",
             },
-            http_timeout=0.001,   # force quick failure
         )
-        with caplog.at_level(logging.WARNING):
+        with caplog.at_level(logging.WARNING), patch(
+            "requests.get", return_value=_status_response(404),
+        ):
             geom = img.outline
         assert geom is not None      # fallback succeeded
         assert any(
             "outline GeoJSON fetch failed" in r.message
             for r in caplog.records
         )
+
+    @pytest.mark.parametrize("status", [401, 429, 503])
+    def test_outline_transient_error_raises_and_is_not_cached(
+        self, tmp_path, status, monkeypatch,
+    ):
+        """A throttled / failed outline fetch must NOT be replaced by
+        the alpha fallback — `cached_property` would keep that inferior
+        polygon forever. It raises, and the next access retries."""
+        from georeader.readers.carbonmapper import download as _dl
+
+        monkeypatch.setattr(_dl, "_sleep", lambda s: None)
+        plume_path = tmp_path / "plume.tif"
+        _write_rgba_geotiff(plume_path)
+        img = CMPlumeImage(
+            plume_id=PID_V3A,
+            urls={
+                "plume.tif": str(plume_path),
+                "plume-outline.geojson": "https://cm.invalid/x.geojson",
+            },
+        )
+        with patch("requests.get", return_value=_status_response(status)), pytest.raises(requests.HTTPError):
+            _ = img.outline
+        assert "outline" not in img.__dict__   # nothing cached
 
 
 # ─── Repr ──────────────────────────────────────────────────────────

@@ -15,14 +15,15 @@ from the record's own ``plume_tif`` URL via
 nothing is guessed from hardcoded version lists, so the wrapper works
 for any gas / cmf_type / version CM publishes (v3a, v3c, v3d, …).
 
-Why URL derivation instead of STAC: ``/stac/collections`` stops at
-``-v3a`` (plumes 2023-10 → 2025-12); every newer collection exists
-only in the asset-proxy namespace and is reachable via direct asset
-URLs from ``/catalog/plume/{id}``. A STAC-only wrapper would miss all
-current data. :meth:`CMPlumeImage.from_plume_id` derives all asset
-URLs from the REST catalog response (which has signed CDN URLs for
-any version) and rewrites them to the Bearer-aware api gateway form
-so the URLs don't expire (verified against the live API, 2026-07).
+Why URL derivation instead of STAC: until 2026 the STAC registry
+stopped at ``-v3a`` and newer collections were reachable only via
+direct asset URLs. STAC now registers current versions too (re-checked
+2026-09), but deriving from the plume record still needs no extra
+catalog round-trip and works for every version.
+:meth:`CMPlumeImage.from_plume_id` derives all asset URLs from the REST
+catalog response (which has signed CDN URLs for any version) and
+rewrites them to the Bearer-aware api gateway form so the URLs don't
+expire.
 
 Outline GeoJSON is the canonical source for the plume polygon; if
 the fetch fails (network / 404 / malformed body), we fall back to
@@ -117,18 +118,20 @@ def _derive_asset_urls(
 
     Resolves the :class:`~georeader.readers.carbonmapper.products.CMCollectionSpec`
     from the record's own ``plume_tif`` URL (authoritative — it names
-    the run the assets were published under; verified same-version
-    across the vis/ime families in the 2026-07 audit), then composes
-    one asset-proxy URL per selected product. Translates the signed
+    the run the assets were published under) and its ``con_tif`` URL
+    (authoritative for the IME collection, which for CO2 uses a
+    different cmf_type than the vis collection), then composes one
+    asset-proxy URL per selected product. Translates the signed
     CDN host to the api.carbonmapper.org gateway form so Bearer auth
     applies and the URL doesn't expire.
 
     Args:
         catalog_plume: The ``/catalog/plume/{id}`` (or annotated-list
-            item) mapping. Only ``plume_tif`` and ``plume_id`` are
-            consulted; other URL fields (``con_tif``, ``rgb_png``, …)
-            are ignored — deriving every asset from one spec avoids
-            version-mismatch bugs.
+            item) mapping. ``plume_tif`` seeds every URL; ``con_tif``
+            and the ``gas`` / ``cmf_type`` / ``emission_version``
+            fields only name the IME collection. Other URL fields
+            (``rgb_png``, …) are ignored — deriving every asset from
+            one spec avoids version-mismatch bugs.
         products: Which products to derive URLs for. Defaults to
             :data:`~georeader.readers.carbonmapper.products.DEFAULT_PLUME_PRODUCTS`
             (the 7 GeoTIFF/GeoJSON assets). Pass
@@ -160,18 +163,19 @@ def _derive_asset_urls(
         )
 
     # The vis products reuse the record's own collection id verbatim
-    # (no recomposition drift). The IME sibling collection is composed
-    # via the spec — but only when the record's collection is a real
-    # `l3a-vis-*` id. Legacy families (`l3a-ch4-mf-v1`, pre vis/ime
-    # split) have no IME sibling: those keys are omitted and the ime_*
-    # properties return None.
+    # (no recomposition drift). The IME sibling collection comes from
+    # the record-resolved spec (con_tif first — CO2 IME is `mfal` while
+    # its vis collection is `mfa`) — but only when the record's
+    # collection is a real `l3a-vis-*` id. Legacy families
+    # (`l3a-ch4-mf-v1`, pre vis/ime split) have no IME sibling: those
+    # keys are omitted and the ime_* properties return None.
     ime_collection: Optional[str] = None
-    try:
-        spec = CMCollectionSpec.from_collection_id(parsed.collection_id)
-        if parsed.collection_id == spec.collection_id(CMProductFamily.L3A_VIS):
-            ime_collection = spec.collection_id(CMProductFamily.L3A_IME)
-    except ValueError:
-        pass
+    spec = _spec_or_none(catalog_plume)
+    if (
+        spec is not None
+        and parsed.collection_id == spec.collection_id(CMProductFamily.L3A_VIS)
+    ):
+        ime_collection = spec.collection_id(CMProductFamily.L3A_IME)
 
     out: dict[str, str] = {}
     for product in products:
@@ -353,19 +357,18 @@ class CMPlumeImage:
             overview_level, http_timeout: See class attributes.
 
         Raises:
-            requests.HTTPError: On REST failure (404 etc.).
+            requests.HTTPError: On REST failure (404 etc.; 429 is
+                retried first).
             ValueError: If the response lacks the ``plume_tif`` URL the
                 derivation needs.
         """
-        r = requests.get(
-            f"https://api.carbonmapper.org/api/v1/catalog/plume/{plume_id}",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=http_timeout,
-        )
-        r.raise_for_status()
-        record = r.json()
+        from georeader.readers.carbonmapper import download as _dl
+
+        record = _dl.get_plume_by_id(plume_id, token=token)
+        # The endpoint accepts a UUID too; the colloquial id (which the
+        # tile bridge needs to derive the scene name) is on the record.
         return cls(
-            plume_id=plume_id,
+            plume_id=str(record.get("plume_id") or plume_id),
             urls=_derive_asset_urls(record, products),
             token=token,
             overview_level=overview_level, http_timeout=http_timeout,
@@ -397,6 +400,7 @@ class CMPlumeImage:
             )
         seed = {
             "plume_tif": raw.plume_tif,
+            "con_tif": raw.con_tif,
             "plume_id": raw.plume_id,
             "gas": raw.gas,
             "cmf_type": raw.emission_cmf_type,
@@ -424,11 +428,12 @@ class CMPlumeImage:
     ) -> CMPlumeImage:
         """Build from STAC items (vis + optional ime sibling).
 
-        Use when the caller is driving STAC search directly. History
-        only — ``/stac/collections`` stops at v3a (plumes ≤ 2025-12);
-        use :meth:`from_plume_id` for anything newer. Pass both the vis
-        and ime items if you have them (recommended); the ime sibling
-        provides the ``ime-*`` product URLs.
+        Use when the caller is driving STAC search directly. STAC
+        registers every version through v3e (re-checked 2026-09), but
+        :meth:`from_plume_id` needs no search and works for any version.
+        Pass both the vis and ime items if you have them (recommended);
+        the ime sibling provides the ``ime-*`` product URLs. Asset keys
+        are accepted with or without their file extension.
         """
         plume_id = str(item.get("id", ""))
         urls: dict[str, str] = {}
@@ -439,7 +444,11 @@ class CMPlumeImage:
             )
             if source is None:
                 continue
-            href = (source.get("assets") or {}).get(product.key, {}).get("href")
+            # STAC items key assets with the extension (`plume.tif`);
+            # accept the extension-less form too.
+            assets = source.get("assets") or {}
+            asset = assets.get(product.key) or assets.get(product.band) or {}
+            href = asset.get("href") if isinstance(asset, Mapping) else None
             if href:
                 urls[product.key] = href
         spec: Optional[CMCollectionSpec] = None
@@ -551,6 +560,10 @@ class CMPlumeImage:
         except CMProductNotSelected:
             raise
         except Exception as exc:
+            if _is_transient(exc):
+                # Don't cache a fallback polygon for a throttled / failed
+                # request — let the next access retry the canonical path.
+                raise
             _log.warning(
                 "outline GeoJSON fetch failed for plume %s (%s); "
                 "falling back to band-4 alpha vectorize",
@@ -577,6 +590,8 @@ class CMPlumeImage:
         except CMProductNotSelected:
             raise
         except Exception as exc:
+            if _is_transient(exc):
+                raise
             _log.warning(
                 "ime-cmf-outline.geojson fetch failed for plume %s (%s)",
                 self.plume_id, exc,
@@ -851,6 +866,18 @@ class CMPlumeImage:
 # ─────────────────────────────────────────────────────────────────────
 #  GeoJSON parsing helper (private)
 # ─────────────────────────────────────────────────────────────────────
+
+
+def _is_transient(exc: BaseException) -> bool:
+    """``True`` for failures worth retrying rather than falling back on:
+    connection errors, timeouts, and HTTP 401 / 429 / 5xx responses.
+    404 and malformed bodies are permanent — the fallback is correct."""
+    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+        return True
+    if isinstance(exc, requests.HTTPError):
+        status = getattr(exc.response, "status_code", None)
+        return status in (401, 429) or (status is not None and status >= 500)
+    return False
 
 
 def _parse_geojson_to_geometry(data: Any) -> Optional[BaseGeometry]:
