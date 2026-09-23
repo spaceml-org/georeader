@@ -96,6 +96,16 @@ jobs:
           EARTHENGINE_SERVICE_ACCOUNT_KEY: ${{ secrets.EARTHENGINE_SERVICE_ACCOUNT_KEY }}
         run: poetry run pytest --nbmake docs/ -v --nbmake-timeout=600 --nbmake-kernel=georeader
 
+      # Live Carbon Mapper drift checks (~7 API calls). The tokenless half
+      # always runs; the credentialed half skips when the secrets are unset.
+      - name: Run live Carbon Mapper checks
+        env:
+          CARBONMAPPER_LIVE: "1"
+          CARBONMAPPER_TOKEN: ${{ secrets.CARBONMAPPER_TOKEN }}
+          CARBONMAPPER_EMAIL: ${{ secrets.CARBONMAPPER_EMAIL }}
+          CARBONMAPPER_PASSWORD: ${{ secrets.CARBONMAPPER_PASSWORD }}
+        run: poetry run pytest -m cm_live tests/readers/carbonmapper/test_live.py -v -rs
+
       # Remove the label again so re-adding it re-triggers the suite (like marsml).
       # Skipped on manual dispatch (no PR number).
       - name: Remove integration-tests label
