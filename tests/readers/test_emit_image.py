@@ -222,8 +222,8 @@ class TestCloneStatePropagation:
     def test_clone_constructors_do_not_reopen_netcdf_handles(self):
         """Clone constructors should reuse parent handles and avoid new opens."""
         with mock.patch(
-            "georeader.readers.emit.safe_open_netcdf",
-            wraps=emit.safe_open_netcdf,
+            "georeader.readers.emit.image.safe_open_netcdf",
+            wraps=emit.image.safe_open_netcdf,
         ) as open_netcdf:
             base = emit.EMITImage(str(_FIXTURE_RAD))
             # Parent creation opens root + location + sensor_band_parameters.

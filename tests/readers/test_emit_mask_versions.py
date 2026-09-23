@@ -241,7 +241,7 @@ def test_v002_downloads_v003_mask_when_missing(tmp_path, v002_dir, monkeypatch):
         shutil.copy(v002_dir / f"EMIT_L2A_MASK_003_{_DT}.nc", filename)
         return filename
 
-    monkeypatch.setattr(emit, "download_product", fake_download)
+    monkeypatch.setattr(emit.image, "download_product", fake_download)
     image = emit.EMITImage(str(rad))
     assert image.mask_bands.tolist() == V003_LABELS
     assert calls == [(
