@@ -47,6 +47,7 @@ nav:
     - Advanced:
       - VSIL cache problem: advanced/error_read_write_in_remote_path.md
       - RasterioReader bytes-path knobs: advanced/bytes_path_knobs.ipynb
+      - AsyncGeoTIFFReader — async COG reads: advanced/async_geotiff_reader.ipynb
 plugins:
   - search
   # - social  # Disabled: requires mkdocs-material[imaging] with PIL and cairosvg
