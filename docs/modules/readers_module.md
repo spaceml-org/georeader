@@ -117,7 +117,7 @@ Key features:
 - Irregular grid georeferencing through GLT (Geographic Lookup Table)
 - Support for the observation geometry information (solar and viewing angles)
 - Integration with L2A mask products for cloud and shadow detection
-- Quality-aware analysis with cloud, cirrus, and spacecraft flag masks
+- Quality-aware analysis with cloud, cirrus, and spacecraft flag masks, selected by label for every mask version
 - Conversion from radiance (μW/cm²/sr/nm) to top-of-atmosphere reflectance
 - Support for downloading data from NASA DAAC portals
 - Automatic detection and use of appropriate UTM projection
@@ -126,17 +126,34 @@ Key features:
 
 - [Working with EMIT images](../emit_explore.ipynb)
 
+### Product versions
+
+NASA LP DAAC closed the EMIT v001 collections on 2026-08-31 and now publishes v002, with the L2A mask in its own v003 collection. The reader handles both: `parse_product_name` accepts either naming scheme, the link builders pick the companion collection from the L1B version, and `EMITImage` selects L2A mask flags by label.
+
+| L1B RAD id | L2A mask | L2B CH4 enhancement |
+|---|---|---|
+| `EMIT_L1B_RAD_001_20220827T060753_2223904_013` | `EMITL2ARFL.001/.../EMIT_L2A_MASK_001_..._2223904_013.nc` (inside the RFL granule) | `EMITL2BCH4ENH.002` (v001 was emptied in 2024-11) |
+| `EMIT_L1B_RAD_002_20220827T060753` | `EMITL2AMASK.003/.../EMIT_L2A_MASK_003_20220827T060753.nc` | none (`get_ch4enhancement_link` returns `None`) |
+
+v002 names drop the `_<orbit>_<scene>` suffix, so the acquisition start is the only field shared by every product and version of a scene. The v003 mask has a different band layout (no Spacecraft flag; new SpecTf ML cloud bands). `validmask()` and `percentage_clear` use Cloud and Cirrus (plus Spacecraft on v001) and, with the buffer, the Dilated Cloud flag. Pass `include_spectf=True` to also use the SpecTf cloud flag.
+
 ### API Reference
 
 ::: georeader.readers.emit
     options:
       members:
         - EMITImage
+        - EMITProductID
+        - parse_product_name
+        - product_name_from_params
+        - split_product_name
         - download_product
         - get_radiance_link
         - get_obs_link
         - get_ch4enhancement_link
         - get_l2amask_link
+        - mask_flag_indexes
+        - mask_band_index
         - valid_mask
 
 ## EnMAP Reader
