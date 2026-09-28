@@ -3,7 +3,7 @@ name: Notebook integration tests
 # Runs the docs/ notebooks as integration tests. Kept separate from the unit
 # tests so it can be (a) run on demand and (b) non-blocking — several notebooks
 # hit external services (public buckets, Hugging Face, PyPI/GitHub) that can be
-# flaky, and that should never block a merge. docs/conftest.py skips any notebook
+# flaky, and that should never block a merge. conftest.py (repo root) skips any notebook
 # whose data/credentials are absent.
 #
 # These notebooks are expensive, so they do NOT run on every push. Instead they
@@ -72,13 +72,13 @@ jobs:
         run: poetry run python -m ipykernel install --user --name georeader --display-name "Python (georeader)"
 
       # Notebooks whose data/credentials are absent are skipped by
-      # docs/conftest.py; the LFS-backed ones (Proba-V + Sentinel-2, AVIRIS) and
+      # conftest.py (repo root); the LFS-backed ones (Proba-V + Sentinel-2, AVIRIS) and
       # the public-network ones run. To also run the credentialed notebooks, wire
       # the relevant secrets here as env vars (see examples/README.md).
       - name: Run notebook integration tests
         # All credentials are repo *secrets* (masked in logs, not exposed in this
         # public repo). Configure the ones you have to run the corresponding
-        # gated notebooks; the rest are skipped by docs/conftest.py.
+        # gated notebooks; the rest are skipped by conftest.py.
         env:
           # Azure (PRISMA / EnMAP)
           SAS_TOKEN: ${{ secrets.SAS_TOKEN }}
@@ -90,7 +90,9 @@ jobs:
           CARBONMAPPER_TOKEN: ${{ secrets.CARBONMAPPER_TOKEN }}
           # Earth Engine: service-account key (raw JSON); no Cloud project needed
           EARTHENGINE_SERVICE_ACCOUNT_KEY: ${{ secrets.EARTHENGINE_SERVICE_ACCOUNT_KEY }}
-        run: poetry run pytest --nbmake docs/ -v --nbmake-timeout=600 --nbmake-kernel=georeader
+        # docs/ in full, plus the one notebooks/ file that directly uses the
+        # async reader (the rest of notebooks/ is untested exploratory material).
+        run: poetry run pytest --nbmake docs/ notebooks/Sentinel-2/read_s2_safe_element84_cloud.ipynb -v --nbmake-timeout=600 --nbmake-kernel=georeader
 
       # Remove the label again so re-adding it re-triggers the suite (like marsml).
       # Skipped on manual dispatch (no PR number).
