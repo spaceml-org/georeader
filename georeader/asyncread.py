@@ -59,6 +59,7 @@ from georeader.read import (
     _build_no_intersect_result,
     _reproject_finalize,
     _reproject_setup,
+    _tile_grid,
     _window_intersects_data,
     apply_anti_aliasing,
     calculate_transform_window,
@@ -82,9 +83,11 @@ async def read_from_window(
     :class:`AsyncGeoData` inputs. The async path has two branches:
 
     1. **No-intersection branch (pure CPU, no ``await``):** if the requested
-       window does not overlap the data extent, the function returns a
-       synthetic padded array / :class:`GeoTensor` (when ``boundless=True``)
-       or ``None`` (when ``boundless=False``) directly. No I/O happens.
+       window does not overlap the data extent, the function returns ``None``
+       when ``boundless=False``, or the fill-valued array / :class:`GeoTensor`
+       when a flag asks for materialised data. No I/O happens. Without
+       either flag it still returns a lazy view, whose ``load()`` gives the
+       fill tensor, so ``await view.load()`` works for every window.
     2. **Intersecting branch:** constructs the windowed view via the
        reader's sync ``read_from_window`` (no I/O — just a view object),
        then ``await``s ``view.load()`` only when materialisation is
@@ -131,8 +134,11 @@ async def read_from_window(
         full parameter treatment.
     """
     # No-intersection branch: handled entirely in CPU via shared helpers.
-    # No await — we never reach the reader's I/O.
-    if not _window_intersects_data(data_in, window):
+    # No await — we never reach the reader's I/O. The lazy boundless path
+    # skips it so callers always get a view to `await view.load()`; the
+    # view's load() returns the fill tensor.
+    lazy = not (return_only_data or trigger_load)
+    if not (lazy and boundless) and not _window_intersects_data(data_in, window):
         return _build_no_intersect_result(data_in, window, boundless, return_only_data)
 
     # `AsyncGeoData.read_from_window` is **sync** by contract — it returns
@@ -438,6 +444,8 @@ async def read_reproject(
     # Branch 2 — Non-intersecting. Return the nodata-filled destination
     # without any I/O.
     if plan.nonintersecting:
+        if return_only_data:
+            return plan.destination
         return GeoTensor(
             plan.destination,
             transform=plan.dst_transform,
@@ -510,7 +518,7 @@ async def read_reproject_like(
     """
     shape_out = data_like.shape[-2:]
     if resolution_dst is not None:
-        if isinstance(resolution_dst, float):
+        if isinstance(resolution_dst, numbers.Number):
             resolution_dst = (resolution_dst, resolution_dst)
         resolution_data_like = data_like.res
         shape_out = (
@@ -555,9 +563,9 @@ async def read_to_crs(
         return_only_data: See :func:`read_reproject`.
 
     Returns:
-        :class:`GeoTensor` in ``dst_crs``. When ``data_in.crs == dst_crs``
-        the function short-circuits and returns ``data_in`` unchanged (no
-        I/O, no warp).
+        :class:`GeoTensor` in ``dst_crs``, or its ``np.ndarray`` when
+        ``return_only_data=True``. When ``data_in.crs == dst_crs`` the data
+        is loaded as is, without a warp.
 
     Example:
         >>> # UTM 31N → Web Mercator
@@ -569,7 +577,9 @@ async def read_to_crs(
         :func:`read_reproject_like`: when you have a template grid to match.
     """
     if window_utils.compare_crs(data_in.crs, dst_crs):
-        return data_in
+        # Nothing to warp, but still return loaded data, not the lazy reader.
+        gt = data_in if isinstance(data_in, GeoTensor) else await data_in.load()
+        return gt.values if return_only_data else gt
 
     window_data, dst_transform = calculate_transform_window(data_in, dst_crs, resolution_dst_crs)
 
@@ -665,10 +675,16 @@ async def resize(
         # the shared helper only ever sees in-memory data. Upsampling is
         # a no-op for the filter, so the reader stays lazy in that case.
         downsampling = any(r_or < r_dst for r_or, r_dst in zip(resolution_or, resolution_dst))
-        if downsampling and not isinstance(data_in, GeoTensor):
+        loaded_here = downsampling and not isinstance(data_in, GeoTensor)
+        if loaded_here:
             src = await data_in.load()
+        # A tensor loaded here is private, so filter it in place rather than
+        # holding a second full-extent copy. A caller's GeoTensor is copied.
         src = apply_anti_aliasing(
-            src, anti_aliasing_sigma=anti_aliasing_sigma, resolution_dst=resolution_dst
+            src,
+            anti_aliasing_sigma=anti_aliasing_sigma,
+            resolution_dst=resolution_dst,
+            inplace=loaded_here,
         )
 
     return await read_reproject(
@@ -815,23 +831,9 @@ async def read_from_tile(
         )
         window_data = rasterio.windows.Window(0, 0, width=out_shape[1], height=out_shape[0])
     else:
-        if resolution_dst_crs is not None:
-            if isinstance(resolution_dst_crs, numbers.Number):
-                resolution_dst_crs = (abs(resolution_dst_crs), abs(resolution_dst_crs))
-
-        # Destination grid over the TILE's extent (mirrors the sync
-        # `read.read_from_tile`) — not the whole raster's, which is what
-        # `calculate_transform_window` would compute.
-        polygon_crs_data = window_utils.polygon_to_crs(
-            polygon_crs_webmercator, WEB_MERCATOR_CRS, data.crs
+        dst_transform, window_data = _tile_grid(
+            data, polygon_crs_webmercator, dst_crs, resolution_dst_crs
         )
-        bounds_crs_data = polygon_crs_data.bounds
-
-        in_height, in_width = data.shape[-2:]
-        dst_transform, width, height = rasterio.warp.calculate_default_transform(
-            data.crs, dst_crs, in_width, in_height, *bounds_crs_data, resolution=resolution_dst_crs
-        )
-        window_data = rasterio.windows.Window(0, 0, width=width, height=height)
 
     gt = await read_reproject(
         data, dst_crs=dst_crs, dst_transform=dst_transform, window_out=window_data

@@ -28,6 +28,7 @@ async_geotiff = pytest.importorskip("async_geotiff")
 obstore = pytest.importorskip("obstore")
 
 from georeader import asyncread, read  # noqa: E402
+from georeader.abstract_reader import AsyncGeoData  # noqa: E402
 from georeader.async_geotiff_reader import AsyncGeoTIFFReader  # noqa: E402
 from georeader.geotensor import GeoTensor  # noqa: E402
 from georeader.rasterio_reader import RasterioReader  # noqa: E402
@@ -133,10 +134,27 @@ class TestAsyncReadFromWindow:
     async def test_boundless_no_intersection_returns_padded(self, async_reader, sync_reader):
         # Window far outside the raster extent in pixel coords.
         window = rasterio.windows.Window(col_off=10_000, row_off=10_000, width=64, height=64)
-        async_gt = await asyncread.read_from_window(async_reader, window, boundless=True)
+        async_gt = await asyncread.read_from_window(
+            async_reader, window, boundless=True, trigger_load=True
+        )
         sync_gt = read.read_from_window(sync_reader, window, boundless=True)
         assert async_gt.shape == sync_gt.shape == (3, 64, 64)
         # Both paths produce the synthetic fill — exact equality on the values.
+        assert np.array_equal(np.asarray(async_gt.values), np.asarray(sync_gt.values))
+
+    @pytest.mark.asyncio
+    async def test_lazy_no_intersection_returns_view(self, async_reader, sync_reader):
+        """The lazy path returns a view for disjoint windows too.
+
+        Regression test: it used to return a finished GeoTensor, so the
+        documented ``await view.load()`` failed on off-edge tiles.
+        """
+        window = rasterio.windows.Window(col_off=10_000, row_off=10_000, width=64, height=64)
+        view = await asyncread.read_from_window(async_reader, window)
+        assert isinstance(view, AsyncGeoData)
+        async_gt = await view.load()
+        sync_gt = read.read_from_window(sync_reader, window, boundless=True)
+        assert async_gt.transform == sync_gt.transform
         assert np.array_equal(np.asarray(async_gt.values), np.asarray(sync_gt.values))
 
     @pytest.mark.asyncio
@@ -318,6 +336,19 @@ class TestAsyncReadReproject:
         assert async_gt.shape == sync_gt.shape
         assert np.array_equal(np.asarray(async_gt.values), np.asarray(sync_gt.values))
 
+    @pytest.mark.asyncio
+    async def test_reproject_nonintersecting_return_only_data(self, async_reader):
+        """The disjoint branch honours ``return_only_data`` like the others."""
+        out = await asyncread.read_reproject(
+            async_reader,
+            dst_crs="EPSG:32601",
+            bounds=(200000.0, 1000000.0, 210000.0, 1010000.0),
+            resolution_dst_crs=100.0,
+            return_only_data=True,
+        )
+        # GeoTensor passes isinstance(..., np.ndarray), so check the exact type.
+        assert type(out) is np.ndarray
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # read_reproject_like
@@ -341,6 +372,17 @@ class TestAsyncReadReprojectLike:
         out = await asyncread.read_reproject_like(async_reader, template, return_only_data=True)
         assert isinstance(out, np.ndarray) and not isinstance(out, GeoTensor)
 
+    @pytest.mark.asyncio
+    async def test_int_resolution(self, async_reader):
+        """``resolution_dst`` given as an int behaves like the same float."""
+        template = await async_reader.load()
+        out_int = await asyncread.read_reproject_like(async_reader, template, resolution_dst=20)
+        out_float = await asyncread.read_reproject_like(
+            async_reader, template, resolution_dst=20.0
+        )
+        assert out_int.res == out_float.res == (20.0, 20.0)
+        assert np.array_equal(np.asarray(out_int.values), np.asarray(out_float.values))
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # read_to_crs
@@ -357,10 +399,15 @@ class TestAsyncReadToCrs:
         )
 
     @pytest.mark.asyncio
-    async def test_same_crs_returns_input(self, async_reader):
+    async def test_same_crs_loads_without_warp(self, async_reader, sync_reader):
+        """Same CRS: the data is loaded as is, never the lazy reader itself."""
         out = await asyncread.read_to_crs(async_reader, dst_crs="EPSG:32631")
-        # Same-CRS short-circuit: returns the reader itself, unloaded.
-        assert out is async_reader
+        assert isinstance(out, GeoTensor)
+        assert out.transform == sync_reader.transform
+        assert np.array_equal(np.asarray(out.values), sync_reader.load().values)
+
+        arr = await asyncread.read_to_crs(async_reader, dst_crs="EPSG:32631", return_only_data=True)
+        assert type(arr) is np.ndarray
 
     @pytest.mark.asyncio
     async def test_to_web_mercator(self, async_reader, sync_reader):
@@ -410,6 +457,32 @@ class TestAsyncResize:
         assert np.allclose(
             np.asarray(async_gt.values), np.asarray(sync_gt.values), atol=1.0
         )
+
+    @pytest.mark.asyncio
+    async def test_resize_anti_aliasing_leaves_caller_tensor_intact(self, async_reader):
+        """Only a tensor ``resize`` loaded itself is filtered in place."""
+        pytest.importorskip("scipy")
+        gt = await async_reader.load()
+        before = np.array(gt.values, copy=True)
+        await asyncread.resize(gt, resolution_dst=20.0)
+        assert np.array_equal(np.asarray(gt.values), before)
+
+    def test_apply_anti_aliasing_inplace(self, cog_fixture):
+        """``inplace=True`` filters the given tensor; the default filters a copy."""
+        pytest.importorskip("scipy")
+        with rasterio.open(cog_fixture["abs_path"]) as src:
+            gt = GeoTensor(
+                src.read().astype(np.float32), transform=src.transform, crs=src.crs
+            )
+        before = np.array(gt.values, copy=True)
+
+        copied = read.apply_anti_aliasing(gt, resolution_dst=20.0)
+        assert copied is not gt
+        assert np.array_equal(np.asarray(gt.values), before)
+
+        filtered = read.apply_anti_aliasing(gt, resolution_dst=20.0, inplace=True)
+        assert filtered is gt
+        assert np.allclose(np.asarray(gt.values), np.asarray(copied.values))
 
     @pytest.mark.asyncio
     async def test_resize_upsample_with_anti_aliasing_noop(self, async_reader, sync_reader):
@@ -488,3 +561,9 @@ class TestAsyncReadFromTile:
         res_x = abs(async_gt.transform.a)
         assert abs(async_gt.bounds[0] - tb.left) <= res_x
         assert async_gt.bounds[2] >= tb.right - res_x
+        # The pixel size matches the raster's own resolution in Web Mercator,
+        # not the tile/raster extent ratio.
+        native_3857, _, _ = rasterio.warp.calculate_default_transform(
+            "EPSG:32631", "EPSG:3857", 256, 256, *cog_fixture["bounds"]
+        )
+        assert res_x == pytest.approx(abs(native_3857.a), rel=0.05)
