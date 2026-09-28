@@ -19,7 +19,7 @@ include = [
 
 [tool.poetry.dependencies]
 python = ">=3.11,<4.0"
-rasterio = ">=1"
+rasterio = ">=1.4"
 numpy = ">=1"
 shapely = ">=2"
 geopandas = ">=1"
