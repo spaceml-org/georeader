@@ -90,6 +90,42 @@ def cog_with_nodata_and_overviews():
     shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+@pytest.fixture(scope="module")
+def cog_with_internal_mask():
+    """A 64x64 uint16 COG with nodata=7 and an internal mask band.
+
+    async-geotiff only returns ``RasterArray.mask`` when the file has a mask
+    band, so this is the fixture that exercises the masked-fill branch of
+    ``_rasterarray_to_geotensor``. The top-left 4x4 block is masked out.
+    """
+    from rasterio.shutil import copy as rio_copy
+
+    tmpdir = tempfile.mkdtemp()
+    fname = "masked.tif"
+    src_path = os.path.join(tmpdir, "src.tif")
+    path = os.path.join(tmpdir, fname)
+
+    data = np.arange(3 * 64 * 64, dtype=np.uint16).reshape(3, 64, 64)
+    mask = np.full((64, 64), 255, dtype=np.uint8)
+    mask[:4, :4] = 0
+    with rasterio.Env(GDAL_TIFF_INTERNAL_MASK=True):
+        with rasterio.open(
+            src_path, "w",
+            driver="GTiff", height=64, width=64, count=3, dtype=data.dtype,
+            crs="EPSG:32631", transform=from_origin(500000.0, 4600000.0, 10.0, 10.0),
+            nodata=7,
+        ) as dst:
+            dst.write(data)
+            dst.write_mask(mask)
+        rio_copy(src_path, path, driver="COG", BLOCKSIZE=32)
+
+    store = obstore.store.LocalStore(prefix=tmpdir)
+    yield {"store": store, "fname": fname, "abs_path": path, "tmpdir": tmpdir}
+
+    import shutil
+    shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 class TestAsyncGeoTIFFReader:
     """Smoke + parity tests for AsyncGeoTIFFReader."""
 
@@ -345,6 +381,24 @@ class TestAsyncGeoTIFFReader:
         assert gt.values.shape == (3, 16, 16)
         # The rightmost 10 cols (250..256 is 6 valid, then 10 padded) are -9999.
         assert (gt.values[:, :, 6:] == -9999).all()
+
+    @pytest.mark.asyncio
+    async def test_masked_fill_keeps_integer_dtype(self, cog_with_internal_mask):
+        """Masked pixels are filled with nodata without promoting the dtype.
+
+        async-geotiff reports nodata as a Python float, so an uncast
+        ``np.where`` turned uint16 data into float64.
+        """
+        reader = await AsyncGeoTIFFReader.open(
+            cog_with_internal_mask["fname"], store=cog_with_internal_mask["store"],
+        )
+        gt = await reader.load()
+
+        assert gt.values.dtype == reader.dtype == np.uint16
+        assert (gt.values[:, :4, :4] == 7).all()
+        with rasterio.open(cog_with_internal_mask["abs_path"]) as src:
+            expected = src.read()
+        assert np.array_equal(gt.values[:, 4:, 4:], expected[:, 4:, 4:])
 
     # ----------------------------------------------- coverage gap #5
     @pytest.mark.asyncio

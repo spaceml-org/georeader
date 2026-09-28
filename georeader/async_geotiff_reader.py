@@ -354,6 +354,7 @@ class AsyncGeoTIFFReader(AsyncGeoData):
         """
         raster_window = self._raster_window
         target_window = self.window_focus if self.window_focus is not None else raster_window
+        fill = self.fill_value_default  # nodata, or 0 when the COG has none
 
         if boundless:
             if not rasterio.windows.intersect([raster_window, target_window]):
@@ -362,12 +363,12 @@ class AsyncGeoTIFFReader(AsyncGeoData):
                 # off-the-edge tile must not kill an asyncio.gather batch
                 # of window reads. (Whether this inherited silent-fill
                 # contract is ideal is tracked in issue #76.)
-                values = np.full(self.shape, self.fill_value_default, dtype=self.dtype)
+                values = np.full(self.shape, fill, dtype=self.dtype)
                 return GeoTensor(
                     values,
                     transform=self.transform,
                     crs=self.crs,
-                    fill_value_default=self.fill_value_default,
+                    fill_value_default=fill,
                 )
             slice_dict, pad_width = window_utils.get_slice_pad(raster_window, target_window)
             inner_window = rasterio.windows.Window.from_slices(
@@ -375,9 +376,6 @@ class AsyncGeoTIFFReader(AsyncGeoData):
             )
             inner_gt = await self._fetch_window(inner_window)
             if any(p != 0 for p in pad_width["x"] + pad_width["y"]):
-                # Fall back to 0 when the COG has no explicit nodata —
-                # matches rasterio's C-level boundless padding default.
-                fill = self.fill_value_default if self.fill_value_default is not None else 0
                 inner_gt = inner_gt.pad(
                     pad_width=pad_width,
                     mode="constant",
@@ -548,7 +546,9 @@ def _rasterarray_to_geotensor(
     data: np.ndarray = arr.data
     if arr.mask is not None and fill_value is not None:
         invalid = np.broadcast_to(~arr.mask, data.shape)
-        data = np.where(invalid, fill_value, data)
+        # Cast the fill to the data dtype: async-geotiff reports nodata as a
+        # Python float, which would promote integer data to float64.
+        data = np.where(invalid, data.dtype.type(fill_value), data)
     return GeoTensor(
         values=data,
         transform=arr.transform,
