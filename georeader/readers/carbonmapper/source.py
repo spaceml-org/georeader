@@ -142,7 +142,8 @@ class CMSource:
     emission_uncertainty_auto: float | None = None
     first_observation: datetime | None = None
     last_observation: datetime | None = None
-    raw: dict = field(default_factory=dict)
+    # Excluded from the hash (a dict isn't hashable); still compared.
+    raw: dict = field(default_factory=dict, hash=False)
 
     @classmethod
     def from_geojson_feature(cls, feature: dict) -> "CMSource":
