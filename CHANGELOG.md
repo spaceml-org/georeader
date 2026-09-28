@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.4.0](https://github.com/spaceml-org/georeader/compare/v2.3.5...v2.4.0) (2026-09-28)
+
+
+### Features
+
+* **emit:** version-aware EMIT product names, DAAC links and mask flags (v002/v003) ([edf75a0](https://github.com/spaceml-org/georeader/commit/edf75a038ef952a2b34ceb625c286c9bd7ff77f3))
+
+
+### Documentation
+
+* **emit:** compare EMIT v001 and v002 and tour the other EMIT products ([808549b](https://github.com/spaceml-org/georeader/commit/808549b7115289f48f45a2c74167e4e7978c5518))
+* **emit:** document EMIT product versions and extend the EMIT notebook ([5f3cc97](https://github.com/spaceml-org/georeader/commit/5f3cc9732a9f87f9202bd43c0b31a059d6516216))
+* **emit:** document EMIT product versions in the readers reference ([e03b198](https://github.com/spaceml-org/georeader/commit/e03b198a0ce750b70c0d01f1ad73cb67bf3ce37b))
+
 ## [2.3.5](https://github.com/spaceml-org/georeader/compare/v2.3.4...v2.3.5) (2026-07-06)
 
 
