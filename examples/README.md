@@ -76,6 +76,7 @@ skipped.
 | **NASA Earthdata** (EMIT) | `emit_explore`, `simultaneous_prisma_emit` | `EARTHDATA_TOKEN` (bearer token from <https://urs.earthdata.nasa.gov/profile>) **or** `~/.georeader/auth_emit.json` `{"user": "...", "password": "..."}` |
 | **Carbon Mapper** | `carbonmapper/api_explore`, `carbonmapper/products_explore` | `CARBONMAPPER_TOKEN` (or `CARBONMAPPER_EMAIL` + `CARBONMAPPER_PASSWORD`) **or** `~/.georeader/auth_carbonmapper.json` |
 | **Google Earth Engine** | `run_in_gee_image`, `s2_mosaic_from_gee`, `convert_to_radiance` | `EARTHENGINE_SERVICE_ACCOUNT_KEY` — a service-account JSON key, as a file path or raw JSON (no Cloud project required). Auth is wired by `georeader.readers.ee_image.initialize()`. |
+| **AWS** (Element 84) | `notebooks/Sentinel-2/read_s2_safe_element84_cloud` | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` **or** `~/.aws/credentials`. The L1C assets are on the requester-pays `s3://sentinel-s2-l1c` bucket, so reads are billed to that account. |
 
 ## `cloudsen12_models`
 

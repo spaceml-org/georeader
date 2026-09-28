@@ -90,9 +90,12 @@ jobs:
           CARBONMAPPER_TOKEN: ${{ secrets.CARBONMAPPER_TOKEN }}
           # Earth Engine: service-account key (raw JSON); no Cloud project needed
           EARTHENGINE_SERVICE_ACCOUNT_KEY: ${{ secrets.EARTHENGINE_SERVICE_ACCOUNT_KEY }}
-        # docs/ in full, plus the one notebooks/ file that directly uses the
-        # async reader (the rest of notebooks/ is untested exploratory material).
-        run: poetry run pytest --nbmake docs/ notebooks/Sentinel-2/read_s2_safe_element84_cloud.ipynb -v --nbmake-timeout=600 --nbmake-kernel=georeader
+          # AWS (Element 84 notebook): the L1C assets are on the requester-pays
+          # s3://sentinel-s2-l1c bucket, so reads are billed to this account.
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        # The notebook list (NOTEBOOK_TEST_PATHS) lives in the Makefile only.
+        run: make test-notebooks
 
       # Remove the label again so re-adding it re-triggers the suite (like marsml).
       # Skipped on manual dispatch (no PR number).
