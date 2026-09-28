@@ -522,6 +522,16 @@ def test_read_from_tile_native_resolution(reader_and_materialize, test_raster_pa
     assert chip_out.bounds[2] >= tb.right - res_x
     assert chip_out.bounds[1] <= tb.bottom + res_y
 
+    # The pixel size must match the raster's own resolution in Web Mercator.
+    # Sizing the grid from the whole raster's pixel count made it scale with
+    # the tile/raster extent ratio instead (about 4x too coarse here).
+    with rasterio.open(test_raster_path) as src:
+        native_3857, _, _ = rasterio.warp.calculate_default_transform(
+            src.crs, "EPSG:3857", src.width, src.height, *src.bounds
+        )
+    assert res_x == pytest.approx(abs(native_3857.a), rel=0.05)
+    assert res_y == pytest.approx(abs(native_3857.e), rel=0.05)
+
 
 def test_read_from_tile_native_resolution_explicit_res(reader_and_materialize, test_raster_path):
     """``out_shape=None`` + ``resolution_dst_crs`` pins the output pixel size."""
@@ -535,6 +545,59 @@ def test_read_from_tile_native_resolution_explicit_res(reader_and_materialize, t
 
     assert chip_out is not None
     assert chip_out.res == (40.0, 40.0)
+
+
+def test_read_window_async_disjoint_returns_lazy_view(test_raster_path):
+    """An async reader gets a lazy view back even when the window misses the data.
+
+    Callers write ``view = read.read_from_window(...); await view.load()``,
+    so returning a finished GeoTensor on off-edge tiles broke that pattern.
+    """
+    pytest.importorskip("async_geotiff")
+    obstore = pytest.importorskip("obstore")
+    from georeader.abstract_reader import AsyncGeoData
+    from georeader.async_geotiff_reader import AsyncGeoTIFFReader
+
+    store = obstore.store.LocalStore(prefix=os.path.dirname(test_raster_path))
+    reader = asyncio.run(AsyncGeoTIFFReader.open(os.path.basename(test_raster_path), store=store))
+    window = rasterio.windows.Window(col_off=1000, row_off=1000, width=16, height=8)
+
+    view = read.read_from_window(reader, window)
+
+    assert isinstance(view, AsyncGeoData)
+    gt = asyncio.run(view.load())
+    assert gt.shape == (reader.shape[0], 8, 16)
+    assert (gt.values == reader.fill_value_default).all()
+    assert gt.transform == rasterio.windows.transform(window, reader.transform)
+
+
+def test_read_reproject_nonintersecting_return_only_data(test_raster_path):
+    """A destination grid outside the source still honours ``return_only_data``."""
+    with rasterio.open(test_raster_path) as src:
+        gt = GeoTensor(src.read(), transform=src.transform, crs=src.crs, fill_value_default=0)
+        far_bounds = (
+            src.bounds.left + 1e6, src.bounds.bottom, src.bounds.right + 1e6, src.bounds.top
+        )
+
+    out = read.read_reproject(
+        gt, dst_crs=gt.crs, bounds=far_bounds, resolution_dst_crs=20.0, return_only_data=True
+    )
+
+    # GeoTensor passes isinstance(..., np.ndarray), so check the exact type.
+    assert type(out) is np.ndarray
+    assert (out == 0).all()
+
+
+def test_read_reproject_like_int_resolution(test_raster_path):
+    """``resolution_dst`` given as an int behaves like the same float."""
+    with rasterio.open(test_raster_path) as src:
+        gt = GeoTensor(src.read(), transform=src.transform, crs=src.crs, fill_value_default=0)
+
+    out_int = read.read_reproject_like(gt, gt, resolution_dst=20)
+    out_float = read.read_reproject_like(gt, gt, resolution_dst=20.0)
+
+    assert out_int.res == out_float.res == (20.0, 20.0)
+    assert np.array_equal(out_int.values, out_float.values)
 
 
 def test_read_reproject_fast_path_fill_value_none(test_raster_path):

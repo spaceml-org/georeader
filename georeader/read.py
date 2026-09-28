@@ -626,7 +626,10 @@ def read_from_window(
 
     # Handle case where window doesn't intersect data at all (pure CPU; no I/O).
     # Shared with asyncread.read_from_window via the private helpers.
-    if not _window_intersects_data(data_in, window):
+    # Async readers skip it on the boundless path: their view's `load()`
+    # returns the fill tensor, so the caller can always `await view.load()`.
+    lazy_async_view = boundless and isinstance(data_in, AsyncGeoData)
+    if not lazy_async_view and not _window_intersects_data(data_in, window):
         return _build_no_intersect_result(data_in, window, boundless, return_only_data)
 
     # Read data from window using the reader's method (handles padding automatically)
@@ -1047,7 +1050,7 @@ def read_reproject_like(
 
     shape_out = data_like.shape[-2:]
     if resolution_dst is not None:
-        if isinstance(resolution_dst, float):
+        if isinstance(resolution_dst, numbers.Number):
             resolution_dst = (resolution_dst, resolution_dst)
 
         resolution_data_like = data_like.res
@@ -1910,6 +1913,8 @@ def read_reproject(
     # disjoint; return the already-allocated nodata-filled destination
     # without ever touching the reader.
     if plan.nonintersecting:
+        if return_only_data:
+            return plan.destination
         return GeoTensor(
             plan.destination,
             transform=plan.dst_transform,
@@ -1937,6 +1942,49 @@ def read_reproject(
 
     return _reproject_finalize(geotensor_in, plan, resampling=resampling, return_only_data=return_only_data)
 
+
+def _tile_grid(
+    data: GeoDataBase,
+    polygon_crs_webmercator: Polygon,
+    dst_crs: Any,
+    resolution_dst_crs: Optional[Union[float, Tuple[float, float]]],
+) -> Tuple[rasterio.Affine, rasterio.windows.Window]:
+    """Return ``(dst_transform, window)`` of a grid covering a tile in ``dst_crs``.
+
+    1. Reproject the tile to ``dst_crs``; the grid starts at its top-left corner.
+    2. Use ``resolution_dst_crs`` when given. Otherwise take the resolution that
+       ``calculate_default_transform`` picks for the tile's size in ``data``'s
+       pixels, which is ``data``'s native resolution expressed in ``dst_crs``.
+    3. Size the window to cover the tile at that resolution.
+
+    Shared by ``read_from_tile`` and ``asyncread.read_from_tile``.
+    """
+    left, bottom, right, top = window_utils.polygon_to_crs(
+        polygon_crs_webmercator, WEB_MERCATOR_CRS, dst_crs
+    ).bounds
+
+    if resolution_dst_crs is None:
+        bounds_crs_data = window_utils.polygon_to_crs(
+            polygon_crs_webmercator, WEB_MERCATOR_CRS, data.crs
+        ).bounds
+        # calculate_default_transform keeps the pixel count it is given, so
+        # pass the tile's size in source pixels, not the whole raster's.
+        tile_window = rasterio.windows.from_bounds(*bounds_crs_data, transform=data.transform)
+        in_width = max(1, ceil(abs(tile_window.width)))
+        in_height = max(1, ceil(abs(tile_window.height)))
+        default_transform, _, _ = rasterio.warp.calculate_default_transform(
+            data.crs, dst_crs, in_width, in_height, *bounds_crs_data
+        )
+        resolution_dst_crs = (abs(default_transform.a), abs(default_transform.e))
+    elif isinstance(resolution_dst_crs, numbers.Number):
+        resolution_dst_crs = (abs(resolution_dst_crs), abs(resolution_dst_crs))
+
+    res_x, res_y = resolution_dst_crs
+    dst_transform = rasterio.transform.from_origin(left, top, res_x, res_y)
+    # Round before ceil so float noise (256.0000001) doesn't add a pixel.
+    width = ceil(round((right - left) / res_x, window_utils.PIXEL_PRECISION))
+    height = ceil(round((top - bottom) / res_y, window_utils.PIXEL_PRECISION))
+    return dst_transform, rasterio.windows.Window(0, 0, width=width, height=height)
 
 def read_from_tile(
     data: GeoData,
@@ -2113,18 +2161,7 @@ def read_from_tile(
         dst_transform = rasterio.transform.from_bounds(*bounds_dst, width=out_shape[1], height=out_shape[0])
         window_data = rasterio.windows.Window(0, 0, width=out_shape[1], height=out_shape[0])
     else:
-        if resolution_dst_crs is not None:
-            if isinstance(resolution_dst_crs, numbers.Number):
-                resolution_dst_crs = (abs(resolution_dst_crs), abs(resolution_dst_crs))
-
-        polygon_crs_data = window_utils.polygon_to_crs(polygon_crs_webmercator, WEB_MERCATOR_CRS, data.crs)
-        bounds_crs_data = polygon_crs_data.bounds
-
-        in_height, in_width = data.shape[-2:]
-        dst_transform, width, height = rasterio.warp.calculate_default_transform(
-            data.crs, dst_crs, in_width, in_height, *bounds_crs_data, resolution=resolution_dst_crs
-        )
-        window_data = rasterio.windows.Window(0, 0, width=width, height=height)
+        dst_transform, window_data = _tile_grid(data, polygon_crs_webmercator, dst_crs, resolution_dst_crs)
 
     return read_reproject(data, dst_crs=dst_crs, dst_transform=dst_transform, window_out=window_data)
 
