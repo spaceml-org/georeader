@@ -28,6 +28,11 @@ def read_from_tileserver(tile_server:str, geometry:Union[Polygon, MultiPolygon],
 
     Returns:
         GeoTensor: GeoTensor with the tile
+
+    Raises:
+        requests.HTTPError: if the tile server answers any tile with an HTTP error
+            (e.g. 404 where it has no imagery). The message names the status and the
+            tile URL.
     """
     if not georeader.compare_crs(crs_geometry, "EPSG:4326"):
         geometry = window_utils.polygon_to_crs(geometry, crs_geometry, "EPSG:4326")
@@ -50,6 +55,9 @@ def read_from_tileserver(tile_server:str, geometry:Union[Polygon, MultiPolygon],
 
     def read_tile(tile):
         rsp = requests.get(tile_server.format(x=tile.x, y=tile.y, z=tile.z))
+        # A missing tile comes back as an HTML error page; fail with the status and URL
+        # instead of a PIL decode error.
+        rsp.raise_for_status()
         img = Image.open(BytesIO(rsp.content))
         xmin, ymin, xmax, ymax = window_utils.normalize_bounds(mercantile.xy_bounds(tile))
         img_np = np.array(img).transpose(2,0,1)
