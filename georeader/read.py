@@ -1077,6 +1077,7 @@ def apply_anti_aliasing(
     data_in: GeoData,
     anti_aliasing_sigma: Optional[Union[float, np.ndarray]] = None,
     resolution_dst: Optional[Union[float, Tuple[float, float]]] = None,
+    inplace: bool = False,
 ) -> GeoTensor:
     """
     Apply anti-aliasing to `data_in` assuming it will be downsampled to `resolution_dst`.
@@ -1087,6 +1088,8 @@ def apply_anti_aliasing(
                 By default, this value is chosen as (s - 1) / 2 where s is the downsampling factor, where s > 1. Defaults to None.
         resolution_dst (Optional[Union[float, Tuple[float, float]]], optional): spatial resolution in data_in crs. Defaults
             to None.
+        inplace (bool, optional): If True and ``data_in`` is a GeoTensor, filter it in place instead
+            of filtering a copy. Use it only for a tensor the caller owns. Defaults to False.
 
     Returns:
         GeoTensor: GeoTensor with anti-aliasing applied
@@ -1106,7 +1109,8 @@ def apply_anti_aliasing(
 
         # Copy or load the tensor in memory
         if isinstance(data_in, GeoTensor):
-            data_in = data_in.copy()
+            if not inplace:
+                data_in = data_in.copy()
         else:
             data_in = data_in.load()
 
