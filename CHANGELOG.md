@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.1](https://github.com/spaceml-org/georeader/compare/v2.4.0...v2.4.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **tileserver:** raise HTTPError when a tile request fails ([#97](https://github.com/spaceml-org/georeader/issues/97)) ([c6f7379](https://github.com/spaceml-org/georeader/commit/c6f7379d63b18a1073b5915f737a50f9521c1813))
+
 ## [2.4.0](https://github.com/spaceml-org/georeader/compare/v2.3.5...v2.4.0) (2026-09-28)
 
 
