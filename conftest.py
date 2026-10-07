@@ -1,7 +1,9 @@
 """
-Pytest configuration for the notebook integration tests under ``docs/``.
+Pytest configuration for the notebook integration tests: the ``docs/`` tree
+plus the one ``notebooks/`` file that directly uses the async reader
+(``read_s2_safe_element84_cloud.ipynb``).
 
-The notebooks in this folder double as integration tests: ``make test-notebooks``
+These notebooks double as integration tests: ``make test-notebooks``
 executes them with ``pytest --nbmake``. Most of them need a large raster, a
 cloud credential, or network access that is not always available, so each
 notebook is *skipped automatically* unless everything it needs is present. This
@@ -44,8 +46,8 @@ from pathlib import Path
 
 import pytest
 
-# Resolve examples/ relative to this file (docs/conftest.py -> repo root -> examples/)
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+# Resolve examples/ relative to this file (conftest.py lives at the repo root)
+_REPO_ROOT = Path(__file__).resolve().parent
 _EXAMPLES_DIR = _REPO_ROOT / "examples"
 
 # Load credentials/config from a repo-root .env file if present (and python-dotenv
@@ -109,8 +111,18 @@ class Requirement:
         return " OR ".join(bits)
 
 
-# Keyed by notebook basename (basenames are unique across docs/).
+# Keyed by notebook basename (basenames are unique across the tested notebooks).
 NOTEBOOK_REQUIREMENTS: dict[str, list[Requirement]] = {
+    # --- notebooks/: the Element 84 STAC search targets the sentinel-2-l1c
+    # collection, whose assets live on the requester-pays s3://sentinel-s2-l1c
+    # bucket — reading them needs real AWS credentials (the async fan-out cell
+    # reads the anonymous sentinel-cogs bucket, but the sync cells come first).
+    "read_s2_safe_element84_cloud.ipynb": [
+        Requirement(
+            env=["AWS_ACCESS_KEY_ID"],
+            paths=["~/.aws/credentials"],
+        ),
+    ],
     # --- PRISMA / EnMAP: local file or Azure download -----------------------
     "prisma_with_cloudsen12.ipynb": [
         Requirement(
