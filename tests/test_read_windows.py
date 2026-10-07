@@ -275,21 +275,27 @@ class TestCalculateTransformWindow:
     """Tests for calculate_transform_window function."""
 
     def test_same_crs(self, sample_geodata):
-        """Test calculating transform for same CRS."""
+        """Test calculating transform for same CRS.
+
+        Pins the return ORDER — ``(window, transform)`` — which two call
+        sites historically unpacked backwards (the function's annotation
+        used to promise the reverse).
+        """
         dst_crs = "EPSG:32631"
 
-        transform, window = read.calculate_transform_window(sample_geodata, dst_crs, resolution_dst_crs=1.0)
+        window, transform = read.calculate_transform_window(sample_geodata, dst_crs, resolution_dst_crs=1.0)
 
-        assert transform is not None
-        assert window is not None
+        assert isinstance(window, rasterio.windows.Window)
+        assert isinstance(transform, rasterio.Affine)
 
     def test_different_crs(self, sample_geodata_10m):
         """Test calculating transform for different CRS."""
         dst_crs = "EPSG:4326"
 
-        transform, window = read.calculate_transform_window(sample_geodata_10m, dst_crs)
+        window, transform = read.calculate_transform_window(sample_geodata_10m, dst_crs)
 
-        assert transform is not None
+        assert isinstance(window, rasterio.windows.Window)
+        assert isinstance(transform, rasterio.Affine)
 
 
 class TestResize:
