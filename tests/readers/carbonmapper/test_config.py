@@ -468,3 +468,58 @@ class TestRefreshAccessToken:
         assert result == "tok-only"
         assert cfg.token == "tok-only"
         assert cfg.extra.get("refresh") is None
+
+
+# --- get_token expiry handling ---
+
+
+def _jwt(exp: float | None) -> str:
+    """Unsigned JWT with an optional ``exp`` claim (signature ignored)."""
+    import base64
+
+    def b64(obj) -> str:
+        raw = json.dumps(obj).encode()
+        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+    claims = {} if exp is None else {"exp": exp}
+    return f"{b64({'alg': 'none'})}.{b64(claims)}.sig"
+
+
+class TestGetTokenExpiry:
+    """Long ETL runs used to die when the JWT expired — nothing renewed it."""
+
+    def test_valid_token_returned_without_network(self):
+        import time
+
+        tok = _jwt(time.time() + 3600)
+        with patch("georeader.readers.carbonmapper.download.refresh_token") as r, \
+             patch("georeader.readers.carbonmapper.download.obtain_token") as o:
+            assert CarbonMapperConfig(token=tok).get_token() == tok
+        r.assert_not_called()
+        o.assert_not_called()
+
+    def test_non_jwt_token_returned_as_is(self):
+        assert CarbonMapperConfig(token="opaque").get_token() == "opaque"
+
+    @patch("georeader.readers.carbonmapper.download.refresh_token")
+    def test_expired_token_renewed_with_refresh_token(self, mock_refresh):
+        mock_refresh.return_value = {"access": "fresh", "refresh": "r2"}
+        cfg = CarbonMapperConfig(token=_jwt(0), refresh="r1")
+        assert cfg.get_token() == "fresh"
+        mock_refresh.assert_called_once_with("r1")
+        assert cfg.extra["refresh"] == "r2"
+
+    @patch("georeader.readers.carbonmapper.download.obtain_token")
+    @patch("georeader.readers.carbonmapper.download.refresh_token")
+    def test_rejected_refresh_falls_back_to_credentials(self, mock_refresh, mock_obtain):
+        mock_refresh.side_effect = RuntimeError("401")
+        mock_obtain.return_value = {"access": "relogin"}
+        cfg = CarbonMapperConfig(
+            token=_jwt(0), refresh="r1", email="a@b.com", password="pw",
+        )
+        assert cfg.get_token() == "relogin"
+        mock_obtain.assert_called_once_with("a@b.com", "pw")
+
+    def test_expired_without_renewal_source_returns_stale_token(self):
+        stale = _jwt(0)
+        assert CarbonMapperConfig(token=stale).get_token() == stale

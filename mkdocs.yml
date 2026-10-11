@@ -43,7 +43,8 @@ nav:
       - PRISMA cloud detection: prisma_with_cloudsen12.ipynb
     - Carbon Mapper:
       - API + typed models: carbonmapper/api_explore.ipynb
-      - Products: carbonmapper/products_explore.ipynb
+      - Products (reference): carbonmapper/products_reference.ipynb
+      - Products (quickstart): carbonmapper/products_quickstart.ipynb
     - Advanced:
       - VSIL cache problem: advanced/error_read_write_in_remote_path.md
 plugins:
