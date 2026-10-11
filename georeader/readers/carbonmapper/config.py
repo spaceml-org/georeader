@@ -40,9 +40,11 @@ References
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -80,6 +82,27 @@ _ENV_PASSWORD = "CARBONMAPPER_PASSWORD"
 # ``SET-PASSWORD`` style of ``emit.py``.
 _PLACEHOLDER_EMAIL = "SET-EMAIL"
 _PLACEHOLDER_PASSWORD = "SET-PASSWORD"
+
+
+#: Renew a JWT this many seconds before its ``exp`` claim, so a token
+#: doesn't expire between :meth:`CarbonMapperConfig.get_token` and use.
+TOKEN_EXPIRY_MARGIN_S = 60.0
+
+
+def _jwt_expiry(token: str) -> float | None:
+    """The ``exp`` claim (Unix seconds) of a JWT, or ``None`` if ``token``
+    isn't a JWT with a numeric ``exp``. Decodes the payload only — no
+    signature check; the API validates the token itself."""
+    parts = token.split(".")
+    if len(parts) != 3:
+        return None
+    payload = parts[1] + "=" * (-len(parts[1]) % 4)
+    try:
+        claims = json.loads(base64.urlsafe_b64decode(payload))
+    except (ValueError, TypeError):
+        return None
+    exp = claims.get("exp") if isinstance(claims, dict) else None
+    return float(exp) if isinstance(exp, (int, float)) else None
 
 
 def _create_placeholder_config() -> Path:
@@ -444,11 +467,18 @@ class CarbonMapperConfig:
     def get_token(self) -> str | None:
         """Return the best available bearer token.
 
-        If :attr:`token` is set, it is returned directly.  Otherwise
-        ``None`` is returned — callers that need a fresh token should call
-        :meth:`refresh_access_token` or
-        :func:`~georeader.readers.carbonmapper.download.obtain_token`
-        with :attr:`email` and :attr:`password`.
+        1. No :attr:`token` → return ``None`` — callers that need one
+           call :meth:`refresh_access_token` (or
+           :func:`~georeader.readers.carbonmapper.download.obtain_token`).
+        2. :attr:`token` is not a readable JWT, or expires more than
+           :data:`TOKEN_EXPIRY_MARGIN_S` from now → return it as is.
+        3. It has expired (or is about to): renew it with the stored
+           refresh token (``extra["refresh"]``) when there is one, else
+           with :attr:`email` / :attr:`password`, and return the new
+           access token.
+        4. If neither renewal source exists (or the refresh token is
+           rejected and no credentials are set), return the stale token
+           — the API's 401 then tells the caller why.
 
         Returns
         -------
@@ -462,6 +492,32 @@ class CarbonMapperConfig:
         >>> if token is None:
         ...     token = cfg.refresh_access_token()
         """
+        if not self.token:
+            return None
+        expiry = _jwt_expiry(self.token)
+        if expiry is None or expiry - time.time() > TOKEN_EXPIRY_MARGIN_S:
+            return self.token
+
+        refresh = self.extra.get("refresh")
+        if refresh:
+            from georeader.readers.carbonmapper.download import refresh_token
+
+            try:
+                tokens = refresh_token(refresh)
+            except Exception as exc:
+                logger.warning("Carbon Mapper token refresh failed (%s)", exc)
+            else:
+                self.token = tokens["access"]
+                if tokens.get("refresh"):
+                    self.extra["refresh"] = tokens["refresh"]
+                logger.info("Carbon Mapper access token refreshed")
+                return self.token
+        if self.email and self.password:
+            return self.refresh_access_token()
+        logger.warning(
+            "Carbon Mapper access token has expired and no refresh token or "
+            "credentials are configured to renew it."
+        )
         return self.token
 
     def refresh_access_token(self) -> str:
