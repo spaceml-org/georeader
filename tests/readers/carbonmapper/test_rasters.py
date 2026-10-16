@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -11,7 +12,7 @@ from rasterio.transform import from_bounds as t_from_bounds
 from shapely.geometry import box
 
 from georeader.geotensor import GeoTensor
-from georeader.rasterio_reader import RasterioReader
+from georeader.rasterio_reader import RIO_ENV_OPTIONS_DEFAULT, RasterioReader
 
 from georeader.readers.carbonmapper.api_queries import (
     CMSceneNotPublished,
@@ -374,6 +375,43 @@ class TestCMImageRasterRepr:
     def test_str_equals_repr(self, tmp_path):
         ir = CMImageRaster.from_local(_make_l2b_dir(tmp_path))
         assert str(ir) == repr(ir)
+
+    def test_repr_hides_rio_env_options(self, tmp_path):
+        ir = CMImageRaster.from_local(_make_l2b_dir(tmp_path))
+        ir.rio_env_options = {"AZURE_STORAGE_SAS_TOKEN": "secret-token"}
+        assert "secret-token" not in repr(ir)
+
+
+# ─── rio_env_options ────────────────────────────────────────────────
+
+
+class TestCMImageRasterRioEnvOptions:
+    def test_band_readers_get_the_options(self, tmp_path):
+        opts = {"GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR", "AZURE_STORAGE_ACCOUNT": "acct"}
+        ir = replace(CMImageRaster.from_local(_make_l2b_dir(tmp_path)), rio_env_options=opts)
+        assert ir.cmf.rio_env_options == opts
+        assert ir.artifact_mask.rio_env_options == opts
+
+    def test_default_options_when_none(self, tmp_path):
+        ir = CMImageRaster.from_local(_make_l2b_dir(tmp_path))
+        assert ir.cmf.rio_env_options == RIO_ENV_OPTIONS_DEFAULT
+
+    def test_with_rgb_keeps_the_options(self):
+        import datetime as _dt
+        rgb_item = CMTileItem(
+            scene_id="tan-foo",
+            collection="l2b-rgb-v3a",
+            datetime=_dt.datetime(2025, 1, 1, tzinfo=_dt.timezone.utc),
+            platform="Tanager1", bbox=(0, 0, 1, 1), geometry=box(0, 0, 1, 1),
+            asset_urls={"rgb.tif": "https://x/rgb.tif"},
+            properties={}, raw={},
+        )
+        opts = {"AZURE_STORAGE_ACCOUNT": "acct"}
+        ir = CMImageRaster(
+            scene_id="tan-foo", asset_paths={"cmf": "https://x/cmf.tif"},
+            rio_env_options=opts,
+        ).with_rgb(rgb_item)
+        assert ir.rio_env_options == opts
 
 
 # ─── URL-pattern helpers ─────────────────────────────────────────────
