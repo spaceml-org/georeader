@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.2](https://github.com/spaceml-org/georeader/compare/v2.4.1...v2.4.2) (2026-10-19)
+
+
+### Bug Fixes
+
+* **carbonmapper:** CMImageRaster forwards rio_env_options to its band readers ([#101](https://github.com/spaceml-org/georeader/issues/101)) ([a932efa](https://github.com/spaceml-org/georeader/commit/a932efae3340c0c4796d25129a73e0d8ed1fe772))
+
 ## [2.4.1](https://github.com/spaceml-org/georeader/compare/v2.4.0...v2.4.1) (2026-10-07)
 
 
