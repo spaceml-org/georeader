@@ -29,7 +29,7 @@ import os
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import Iterable, Mapping, Optional, Sequence, cast
+from typing import Any, Iterable, Mapping, Optional, Sequence, cast
 
 import requests
 from shapely.geometry import box
@@ -213,11 +213,15 @@ class CMImageRaster:
             accessor returns ``None``.
         overview_level: Forwarded to ``RasterioReader``. ``None`` for
             full resolution; integer for COG overviews (faster previews).
+        rio_env_options: GDAL options forwarded to every band's
+            ``RasterioReader`` (e.g. a storage account's credentials).
+            ``None`` uses georeader's defaults.
     """
 
     scene_id: str
     asset_paths: Mapping[str, PathLike]
     overview_level: Optional[int] = None
+    rio_env_options: Optional[dict[str, Any]] = None
 
     # ---- Constructors --------------------------------------------------
 
@@ -282,6 +286,7 @@ class CMImageRaster:
             scene_id=self.scene_id,
             asset_paths=new_paths,
             overview_level=self.overview_level,
+            rio_env_options=self.rio_env_options,
         )
 
     @classmethod
@@ -603,7 +608,10 @@ class CMImageRaster:
         path = self.asset_paths.get(band)
         if path is None:
             raise KeyError(f"Asset {band!r} not present on {self.scene_id}")
-        return RasterioReader(str(path), overview_level=self.overview_level)
+        return RasterioReader(
+            str(path), overview_level=self.overview_level,
+            rio_env_options=self.rio_env_options,
+        )
 
     def _open_optional(self, band: str) -> Optional[RasterioReader]:
         if self.asset_paths.get(band) is None:
