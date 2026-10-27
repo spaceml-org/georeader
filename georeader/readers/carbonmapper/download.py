@@ -812,6 +812,7 @@ def stac_get_items(
     collection_id: str,
     *,
     limit: int = 10,
+    offset: int | None = None,
     bbox: tuple[float, float, float, float] | None = None,
     datetime_range: str | None = None,
     token: str | None = None,
@@ -826,6 +827,10 @@ def stac_get_items(
         ``"l4a-combined-ch4-v3a"`` or ``"l2b-rgb-v3a"``.
     limit:
         Maximum number of items to return.
+    offset:
+        Number of items to skip, for paging through a collection larger
+        than *limit* (see :func:`paginate_stac_items`). Defaults to None,
+        the first page.
     bbox:
         Bounding-box spatial filter as
         ``(west_lon, south_lat, east_lon, north_lat)`` in WGS 84.
@@ -848,10 +853,85 @@ def stac_get_items(
     ...     print(feat["id"], feat.get("properties", {}).get("datetime"))
     """
     params: dict[str, Any] = {"limit": limit}
+    if offset:
+        params["offset"] = offset
     params.update(_stac_bbox_param(bbox))
     if datetime_range:
         params["datetime"] = datetime_range
     return cast(dict, _get(f"{STAC_URL}/collections/{collection_id}/items", params=params, token=token))
+
+
+def paginate_stac_items(
+    collection_id: str,
+    *,
+    page_size: int = 100,
+    max_items: int | None = None,
+    bbox: tuple[float, float, float, float] | None = None,
+    datetime_range: str | None = None,
+    pause_s: float = 0.0,
+    token: str | None = None,
+) -> list[dict]:
+    """
+    Auto-paginate through the items of a STAC collection.
+
+    Repeatedly calls :func:`stac_get_items` with increasing offsets until
+    the page has no ``"next"`` link, the page is empty or *max_items*
+    features have been collected.
+
+    Parameters
+    ----------
+    collection_id:
+        Identifier of the STAC collection, e.g. ``"l4a-combined-ch4-v3a"``.
+    page_size:
+        Number of items to request per call. Carbon Mapper rejects a
+        ``limit`` above 100 on some collections with HTTP 400, hence the
+        default.
+    max_items:
+        Maximum total number of features to return. Defaults to None, the
+        whole collection.
+    bbox:
+        Bounding-box spatial filter as
+        ``(west_lon, south_lat, east_lon, north_lat)`` in WGS 84.
+    datetime_range:
+        RFC 3339 time interval string.
+    pause_s:
+        Seconds to sleep before each call, to stay under the API rate
+        limit. Defaults to 0.
+    token:
+        Optional Bearer token for authenticated requests (required for
+        private collections).
+
+    Returns
+    -------
+    list[dict]
+        A flat list of GeoJSON Features (same schema as
+        ``stac_get_items()["features"]``), up to *max_items* entries.
+
+    Examples
+    --------
+    >>> features = paginate_stac_items("l4a-combined-ch4-v3a", max_items=250)
+    >>> print(f"Collected {len(features)} items")
+    """
+    features: list[dict] = []
+    offset = 0
+    while max_items is None or len(features) < max_items:
+        limit = page_size if max_items is None else min(page_size, max_items - len(features))
+        if pause_s:
+            time.sleep(pause_s)
+        page = stac_get_items(
+            collection_id,
+            limit=limit,
+            offset=offset,
+            bbox=bbox,
+            datetime_range=datetime_range,
+            token=token,
+        )
+        batch = page.get("features", [])
+        features.extend(batch)
+        if not batch or not any(link.get("rel") == "next" for link in page.get("links", [])):
+            break
+        offset += len(batch)
+    return features
 
 
 def stac_get_item(
